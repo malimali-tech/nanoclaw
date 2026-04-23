@@ -23,6 +23,7 @@ import {
   PreCompactHookInput,
 } from '@anthropic-ai/claude-agent-sdk';
 import { fileURLToPath } from 'url';
+import { resolveProvider } from './providers.js';
 
 interface ContainerInput {
   prompt: string;
@@ -435,6 +436,12 @@ async function runQuery(
     log(`Additional directories: ${extraDirs.join(', ')}`);
   }
 
+  const providerCfg = resolveProvider();
+  log(
+    `LLM provider = ${providerCfg.meta.provider}` +
+      (providerCfg.meta.model ? ` (${providerCfg.meta.model})` : ''),
+  );
+
   for await (const message of query({
     prompt: stream,
     options: {
@@ -470,7 +477,9 @@ async function runQuery(
         'NotebookEdit',
         'mcp__nanoclaw__*',
       ],
-      env: sdkEnv,
+      env: { ...sdkEnv, ...providerCfg.env },
+      pathToClaudeCodeExecutable: providerCfg.pathToClaudeCodeExecutable,
+      executable: providerCfg.executable,
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       settingSources: ['project', 'user'],
