@@ -253,6 +253,20 @@ async function buildContainerArgs(
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
 
+  // Forward LLM provider selection + Gemini credentials (when applicable).
+  // Validation happens inside the container (providers.ts), so the host only
+  // forwards whatever env exists in process.env.
+  const llmProvider = process.env.NANOCLAW_LLM_PROVIDER ?? 'openclaude';
+  args.push('-e', `NANOCLAW_LLM_PROVIDER=${llmProvider}`);
+  if (llmProvider === 'openclaude') {
+    if (process.env.GEMINI_API_KEY) {
+      args.push('-e', `GEMINI_API_KEY=${process.env.GEMINI_API_KEY}`);
+    }
+    if (process.env.GEMINI_MODEL) {
+      args.push('-e', `GEMINI_MODEL=${process.env.GEMINI_MODEL}`);
+    }
+  }
+
   // OneCLI gateway handles credential injection — containers never see real secrets.
   // The gateway intercepts HTTPS traffic and injects API keys or OAuth tokens.
   const onecliApplied = await onecli.applyContainerConfig(args, {
