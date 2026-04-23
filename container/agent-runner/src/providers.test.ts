@@ -48,4 +48,11 @@ describe('resolveProvider', () => {
       /anthropic.*openclaude/,
     );
   });
+
+  it('treats whitespace-only GEMINI_API_KEY as missing', () => {
+    assert.throws(
+      () => resolveProvider({ GEMINI_API_KEY: '   ' }),
+      /GEMINI_API_KEY/,
+    );
+  });
 });
