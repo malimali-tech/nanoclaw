@@ -25,6 +25,8 @@ Single Node.js process with skill-based channel system. Channels (WhatsApp, Tele
 
 API keys, secret keys, OAuth tokens, and auth credentials are managed by the OneCLI gateway — which handles secret injection into containers at request time, so no keys or tokens are ever passed to containers directly. Run `onecli --help`.
 
+NanoClaw selects its LLM provider via `NANOCLAW_LLM_PROVIDER` (default `openclaude`, fallback `anthropic`). When using `openclaude`, `GEMINI_API_KEY` and optional `GEMINI_MODEL` are read from project `.env` (loaded via Node's `--env-file-if-exists`) and forwarded into the agent container. The `anthropic` path continues to use OneCLI for credential injection as before.
+
 ## Skills
 
 Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full taxonomy and guidelines.

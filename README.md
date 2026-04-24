@@ -185,7 +185,9 @@ We don't want configuration sprawl. Every user should customize NanoClaw so that
 
 **Can I use third-party or open-source models?**
 
-Yes. NanoClaw supports any Claude API-compatible model endpoint. Set these environment variables in your `.env` file:
+Yes, through either of two mechanisms.
+
+**1. Anthropic-compatible endpoints** (same Claude CLI, different upstream):
 
 ```bash
 ANTHROPIC_BASE_URL=https://your-api-endpoint.com
@@ -197,7 +199,15 @@ This allows you to use:
 - Open-source models hosted on [Together AI](https://together.ai), [Fireworks](https://fireworks.ai), etc.
 - Custom model deployments with Anthropic-compatible APIs
 
-Note: The model must support the Anthropic API format for best compatibility.
+**2. Swap the CLI binary to [openclaude](https://github.com/Gitlawb/openclaude)** (unlocks native Gemini, OpenAI, Ollama, etc.):
+
+```bash
+NANOCLAW_LLM_PROVIDER=openclaude            # default; set to anthropic to fall back
+GEMINI_API_KEY=your-gemini-key
+# GEMINI_MODEL=gemini-3.1-pro-preview       # optional; see .env.example
+```
+
+See [`.env.example`](.env.example) for the full contract. The `anthropic` fallback continues to use the official `@anthropic-ai/claude-code` CLI with OneCLI credentials.
 
 **How do I debug issues?**
 
