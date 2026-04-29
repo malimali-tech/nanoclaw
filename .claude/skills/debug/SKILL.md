@@ -97,7 +97,22 @@ Sessions are managed by `SessionPool` (`src/agent/session-pool.ts`) keyed per-gr
 
 If an MCP server fails to start, the agent may exit. Check `logs/nanoclaw.log` for MCP initialization errors. MCP servers are configured in `src/agent/`. Any binaries the server needs must be on the host PATH.
 
-### 5. Channel not connecting
+### 5. Docker sandbox not running
+
+Only relevant when `runtime: 'docker'` is set in `config/sandbox.default.json`. Symptom: agent fails to handle messages with an error mentioning `Docker sandbox container 'nanoclaw-sandbox'` not found or stopped.
+
+**Fix:**
+
+```bash
+./scripts/sandbox.sh status   # see current state
+./scripts/sandbox.sh create   # if missing
+./scripts/sandbox.sh start    # if stopped
+docker info                   # verify the daemon is reachable at all
+```
+
+If Docker itself is unreachable, start Docker Desktop (macOS) or `sudo systemctl start docker` (Linux). NanoClaw does not auto-create the container; the user owns its lifecycle via `scripts/sandbox.sh`.
+
+### 6. Channel not connecting
 
 Channels self-register at startup (see `src/channels/registry.ts`). They auto-enable when their credentials are present in `.env`. After any `.env` change, restart the service.
 
