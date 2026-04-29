@@ -2,6 +2,8 @@
 
 Original requirements and design decisions from the project creator.
 
+> **Note (pi-mono migration, 2026-04):** The "Container Isolation" architecture decision below is historical. NanoClaw now runs `@mariozechner/pi-coding-agent` in-process on the host and sandboxes bash commands at the OS level via `sandbox-exec` (macOS) / `bubblewrap` (Linux). See [`docs/plans/2026-04-29-pi-mono-host-agent-design.md`](plans/2026-04-29-pi-mono-host-agent-design.md) for the current design. The philosophy sections (small codebase, AI-native, skills over features) still apply.
+
 ---
 
 ## Why This Exists

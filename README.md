@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  An AI assistant that runs agents securely in their own containers. Lightweight, built to be easily understood and completely customized for your needs.
+  A lightweight personal AI assistant. Runs an in-process pi-coding-agent on the host, with bash commands sandboxed via `sandbox-exec` / `bubblewrap`. Built to be easily understood and completely customized for your needs.
 </p>
 
 <p align="center">
@@ -37,7 +37,7 @@
 
 [OpenClaw](https://github.com/openclaw/openclaw) is an impressive project, but I wouldn't have been able to sleep if I had given complex software I didn't understand full access to my life. OpenClaw has nearly half a million lines of code, 53 config files, and 70+ dependencies. Its security is at the application level (allowlists, pairing codes) rather than true OS-level isolation. Everything runs in one Node process with shared memory.
 
-NanoClaw provides that same core functionality, but in a codebase small enough to understand: one process and a handful of files. Claude agents run in their own Linux containers with filesystem isolation, not merely behind permission checks.
+NanoClaw provides that same core functionality, but in a codebase small enough to understand: one process and a handful of files. The coding agent runs in-process via [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent), and bash commands are isolated at the OS level using `sandbox-exec` (macOS) or `bubblewrap` (Linux) — not merely behind permission checks.
 
 ## Quick Start
 
@@ -57,7 +57,7 @@ claude
 
 </details>
 
-Then run `/setup`. Claude Code handles everything: dependencies, authentication, container setup and service configuration.
+Then run `/setup`. Claude Code handles everything: dependencies, authentication, sandbox configuration, and service setup.
 
 > **Note:** Commands prefixed with `/` (like `/setup`, `/add-whatsapp`) are [Claude Code skills](https://code.claude.com/docs/en/skills). Type them inside the `claude` CLI prompt, not in your regular terminal. If you don't have Claude Code installed, get it at [claude.com/product/claude-code](https://claude.com/product/claude-code).
 
@@ -65,7 +65,7 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 
 **Small enough to understand.** One process, a few source files and no microservices. If you want to understand the full NanoClaw codebase, just ask Claude Code to walk you through it.
 
-**Secure by isolation.** Agents run in Linux containers (Apple Container on macOS, or Docker) and they can only see what's explicitly mounted. Bash access is safe because commands run inside the container, not on your host.
+**Secure by isolation.** Bash commands from the agent run inside an OS-level sandbox — `sandbox-exec` on macOS, `bubblewrap` on Linux — configured by `config/sandbox.default.json` with optional per-group overrides. Filesystem and network access are restricted by policy, not just by permission checks.
 
 **Built for the individual user.** NanoClaw isn't a monolithic framework; it's software that fits each user's exact needs. Instead of becoming bloatware, NanoClaw is designed to be bespoke. You make your own fork and have Claude Code modify it to match your needs.
 
@@ -78,17 +78,17 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 
 **Skills over features.** Instead of adding features (e.g. support for Telegram) to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) like `/add-telegram` that transform your fork. You end up with clean code that does exactly what you need.
 
-**Best harness, best model.** NanoClaw runs on the Claude Agent SDK, which means you're running Claude Code directly. Claude Code is highly capable and its coding and problem-solving capabilities allow it to modify and expand NanoClaw and tailor it to each user.
+**Pi-coding-agent in-process.** NanoClaw embeds [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) directly — no subprocess, no container build. The provider is selected via standard environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …) or `~/.pi/agent/auth.json`.
 
 ## What It Supports
 
 - **Multi-channel messaging** - Talk to your assistant from WhatsApp, Telegram, Discord, Slack, or Gmail. Add channels with skills like `/add-whatsapp` or `/add-telegram`. Run one or many at the same time.
-- **Isolated group context** - Each group has its own `CLAUDE.md` memory, isolated filesystem, and runs in its own container sandbox with only that filesystem mounted to it.
+- **Isolated group context** - Each group has its own `CLAUDE.md` memory and working directory; bash commands are sandboxed with a per-group sandbox profile.
 - **Main channel** - Your private channel (self-chat) for admin control; every group is completely isolated
-- **Scheduled tasks** - Recurring jobs that run Claude and can message you back
+- **Scheduled tasks** - Recurring jobs that run the agent and can message you back
 - **Web access** - Search and fetch content from the Web
-- **Container isolation** - Agents are sandboxed in Docker (macOS/Linux), [Docker Sandboxes](docs/docker-sandboxes.md) (micro VM isolation), or Apple Container (macOS)
-- **Credential security** - Agents never hold raw API keys. Outbound requests route through [OneCLI's Agent Vault](https://github.com/onecli/onecli), which injects credentials at request time and enforces per-agent policies and rate limits.
+- **OS-level sandbox** - Bash commands run via `sandbox-exec` (macOS) or `bubblewrap` (Linux); rules live in `config/sandbox.default.json` with per-group overrides at `groups/<group>/.pi/sandbox.json`
+- **Multi-provider** - Pi-coding-agent supports Anthropic, OpenAI, Gemini, and more — configure via env vars or `~/.pi/agent/auth.json`
 - **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks
 - **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
 
@@ -142,42 +142,45 @@ Skills we'd like to see:
 - macOS, Linux, or Windows (via WSL2)
 - Node.js 20+
 - [Claude Code](https://claude.ai/download)
-- [Apple Container](https://github.com/apple/container) (macOS) or [Docker](https://docker.com/products/docker-desktop) (macOS/Linux)
+- macOS: `sandbox-exec` (built-in). Linux: `bubblewrap` (`apt install bubblewrap` / `dnf install bubblewrap`).
 
 ## Architecture
 
 ```
-Channels --> SQLite --> Polling loop --> Container (Claude Agent SDK) --> Response
+Channels --> SQLite --> Polling loop --> pi-coding-agent (in-process, sandboxed bash) --> Response
 ```
 
-Single Node.js process. Channels are added via skills and self-register at startup — the orchestrator connects whichever ones have credentials present. Agents execute in isolated Linux containers with filesystem isolation. Only mounted directories are accessible. Per-group message queue with concurrency control. IPC via filesystem.
+Single Node.js process. Channels are added via skills and self-register at startup — the orchestrator connects whichever ones have credentials present. The agent runs in-process via `@mariozechner/pi-coding-agent`; bash commands are wrapped in `sandbox-exec` (macOS) or `bubblewrap` (Linux) using rules from `config/sandbox.default.json` (with optional per-group overrides). Per-group message queue with concurrency control.
 
-For the full architecture details, see the [documentation site](https://docs.nanoclaw.dev/concepts/architecture).
+For the full architecture details, see the [pi-mono migration design doc](docs/plans/2026-04-29-pi-mono-host-agent-design.md).
 
 Key files:
 - `src/index.ts` - Orchestrator: state, message loop, agent invocation
 - `src/channels/registry.ts` - Channel registry (self-registration at startup)
-- `src/ipc.ts` - IPC watcher and task processing
 - `src/router.ts` - Message formatting and outbound routing
 - `src/group-queue.ts` - Per-group queue with global concurrency limit
-- `src/container-runner.ts` - Spawns streaming agent containers
+- `src/agent/run.ts` - In-process pi-coding-agent runtime entry point
+- `src/agent/extension.ts` - NanoClaw IPC tools as a pi extension
+- `src/agent/session-pool.ts` - Per-group AgentSession pool with idle TTL
+- `src/agent/sandbox-config.ts` - Sandbox config loader (default + per-group override)
 - `src/task-scheduler.ts` - Runs scheduled tasks
 - `src/db.ts` - SQLite operations (messages, groups, sessions, state)
 - `groups/*/CLAUDE.md` - Per-group memory
+- `config/sandbox.default.json` - Default sandbox profile (network/filesystem rules)
 
 ## FAQ
 
-**Why Docker?**
+**Why no containers?**
 
-Docker provides cross-platform support (macOS, Linux and even Windows via WSL2) and a mature ecosystem. On macOS, you can optionally switch to Apple Container via `/convert-to-apple-container` for a lighter-weight native runtime. For additional isolation, [Docker Sandboxes](docs/docker-sandboxes.md) run each container inside a micro VM.
+NanoClaw used to spawn one Linux container per agent invocation. The pi-mono migration moved to host-side execution with OS-level sandboxing of bash commands (`sandbox-exec` on macOS, `bubblewrap` on Linux). It's faster, has no per-message cold start, and the security boundary still isolates filesystem and network access at the kernel level.
 
 **Can I run this on Linux or Windows?**
 
-Yes. Docker is the default runtime and works on macOS, Linux, and Windows (via WSL2). Just run `/setup`.
+Yes. macOS uses the built-in `sandbox-exec`. Linux requires `bubblewrap` (`apt install bubblewrap` / `dnf install bubblewrap`). Windows works via WSL2 (Linux path). Just run `/setup`.
 
 **Is this secure?**
 
-Agents run in containers, not behind application-level permission checks. They can only access explicitly mounted directories. Credentials never enter the container — outbound API requests route through [OneCLI's Agent Vault](https://github.com/onecli/onecli), which injects authentication at the proxy level and supports rate limits and access policies. You should still review what you're running, but the codebase is small enough that you actually can. See the [security documentation](https://docs.nanoclaw.dev/concepts/security) for the full security model.
+Bash commands from the agent run in an OS-level sandbox with restricted filesystem and network access — defined declaratively in `config/sandbox.default.json` with per-group overrides. You can audit and tighten the rules. The codebase is small enough that you can review the entire surface area, including how the sandbox is invoked.
 
 **Why no configuration files?**
 
@@ -185,40 +188,15 @@ We don't want configuration sprawl. Every user should customize NanoClaw so that
 
 **Can I use third-party or open-source models?**
 
-Yes, through either of two mechanisms.
-
-**1. Anthropic-compatible endpoints** (same Claude CLI, different upstream):
+Yes. NanoClaw delegates provider selection to `@mariozechner/pi-coding-agent`. Set the standard env vars for whichever provider you want:
 
 ```bash
-ANTHROPIC_BASE_URL=https://your-api-endpoint.com
-ANTHROPIC_AUTH_TOKEN=your-token-here
+ANTHROPIC_API_KEY=...     # Anthropic
+OPENAI_API_KEY=...        # OpenAI / OpenAI-compatible (DeepSeek, Qwen, etc.)
+GEMINI_API_KEY=...        # Google Gemini
 ```
 
-This allows you to use:
-- Local models via [Ollama](https://ollama.ai) with an API proxy
-- Open-source models hosted on [Together AI](https://together.ai), [Fireworks](https://fireworks.ai), etc.
-- Custom model deployments with Anthropic-compatible APIs
-
-**2. Swap the CLI binary to [openclaude](https://github.com/Gitlawb/openclaude)** (unlocks native Gemini, OpenAI, Ollama, etc.):
-
-```bash
-NANOCLAW_LLM_PROVIDER=openclaude            # default; set to anthropic to fall back
-NANOCLAW_LLM_API_KEY=your-gemini-key
-# NANOCLAW_LLM_MODEL=gemini-3.1-pro-preview # optional
-```
-
-**3. Run the agent loop in-process via [`@codeany/open-agent-sdk`](https://github.com/codeany-ai/open-agent-sdk-typescript)** (no claude-code CLI subprocess; OpenAI-compatible endpoints only — DeepSeek, Qwen, GPT, etc.):
-
-```bash
-NANOCLAW_LLM_PROVIDER=open-agent-sdk
-NANOCLAW_LLM_API_KEY=sk-...
-NANOCLAW_LLM_MODEL=deepseek-chat                  # default; e.g. deepseek-reasoner, gpt-4o
-NANOCLAW_LLM_BASE_URL=https://api.deepseek.com/v1 # OpenAI-compatible endpoint
-```
-
-`container/build.sh` vendors the SDK from a sibling `open-agent-sdk-typescript/` checkout; set `OPEN_AGENT_SDK_PATH` to override.
-
-All three providers read the same `NANOCLAW_LLM_API_KEY` / `NANOCLAW_LLM_MODEL` / `NANOCLAW_LLM_BASE_URL` trio — `providers.ts` translates them to each upstream package's native names. The `anthropic` provider gets credentials via OneCLI instead and ignores the API_KEY var. See [`.env.example`](.env.example) for the full contract.
+You can also keep credentials in `~/.pi/agent/auth.json`. For OpenAI-compatible local or self-hosted endpoints, override the base URL via the corresponding pi-mono env var (e.g. `OPENAI_BASE_URL`). See the [pi-coding-agent docs](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) for the full provider list and configuration options.
 
 **How do I debug issues?**
 
