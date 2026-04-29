@@ -17,13 +17,14 @@ import { loadSandboxConfig } from './sandbox-config.js';
 import { nanoclawExtension } from './extension.js';
 import type { ExtensionCtx } from './types.js';
 
-const IDLE_MS = parseInt(process.env.NANOCLAW_AGENT_IDLE_TTL_MS ?? '600000', 10);
+const IDLE_MS_RAW = parseInt(process.env.NANOCLAW_AGENT_IDLE_TTL_MS ?? '', 10);
+const IDLE_MS = Number.isFinite(IDLE_MS_RAW) && IDLE_MS_RAW > 0 ? IDLE_MS_RAW : 600000;
 const log = (m: string) => logger.info(`[agent] ${m}`);
 
 interface PooledSession extends DisposableSession {
   session: AgentSession;
   routerBuffer: string;
-  flushTimer?: NodeJS.Timeout;
+  sendChain: Promise<void>;
 }
 
 type SharedPorts = Pick<
@@ -87,8 +88,9 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
   const pooled: PooledSession = {
     session,
     routerBuffer: '',
+    sendChain: Promise.resolve(),
     dispose: async () => {
-      if (pooled.flushTimer) clearTimeout(pooled.flushTimer);
+      await pooled.sendChain;
       await flushBuffer(pooled, ctx);
       session.dispose();
     },
@@ -101,7 +103,7 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
     ) {
       pooled.routerBuffer += event.assistantMessageEvent.delta;
     } else if (event.type === 'turn_end' || event.type === 'agent_end') {
-      void flushBuffer(pooled, ctx);
+      pooled.sendChain = pooled.sendChain.then(() => flushBuffer(pooled, ctx));
     }
   });
 
@@ -120,19 +122,12 @@ async function flushBuffer(p: PooledSession, ctx: ExtensionCtx): Promise<void> {
 }
 
 let pool: SessionPool<PooledSession> | null = null;
-let sharedPorts: SharedPorts | null = null;
 
 export function configureAgent(ports: SharedPorts): void {
-  sharedPorts = ports;
   pool = new SessionPool<PooledSession>({
     factory: async (key) => {
-      const [groupFolder, chatJid, mainFlag] = key.split('|');
-      const ctx = buildCtx({
-        groupFolder,
-        chatJid,
-        isMain: mainFlag === '1',
-        ports,
-      });
+      const [groupFolder, chatJid, isMain] = JSON.parse(key) as [string, string, boolean];
+      const ctx = buildCtx({ groupFolder, chatJid, isMain, ports });
       return buildSession(ctx);
     },
     idleMs: IDLE_MS,
@@ -145,16 +140,12 @@ export async function handleMessage(args: {
   isMain: boolean;
   text: string;
 }): Promise<void> {
-  if (!pool || !sharedPorts) {
+  if (!pool) {
     throw new Error('agent not configured; call configureAgent first');
   }
-  const key = `${args.groupFolder}|${args.chatJid}|${args.isMain ? '1' : '0'}`;
+  const key = JSON.stringify([args.groupFolder, args.chatJid, args.isMain]);
   const pooled = await pool.getOrCreate(key);
-  if (pooled.session.isStreaming) {
-    await pooled.session.steer(args.text);
-  } else {
-    await pooled.session.prompt(args.text);
-  }
+  await pooled.session.prompt(args.text, { streamingBehavior: 'steer' });
 }
 
 export async function shutdownAgent(): Promise<void> {
