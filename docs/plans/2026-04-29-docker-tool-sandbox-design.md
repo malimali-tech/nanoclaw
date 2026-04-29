@@ -73,7 +73,7 @@ NanoClaw's startup verifies container reachability via `status`. If absent or st
 | Container path | Host path | Mode | Rationale |
 |---|---|---|---|
 | `/workspace/project` | repo root | RO | `main` agent can read NanoClaw source for self-modification (read-only by design) |
-| `/workspace/project/.env` | `tmpfs` (empty) | overlay | Shadows host `.env` so the container cannot read LLM keys |
+| `/workspace/project/.env` | `store/.sandbox-empty-env` (zero-byte file, RO bind) | RO | Shadows host `.env` so the container cannot read LLM keys. Tmpfs would be cleaner but Docker only mounts tmpfs onto directories, not files. |
 | `/workspace/store` | `repo/store` | RW | `main` writes to `messages.db`; non-`main` should not need it (cwd-restricted via `--workdir`) |
 | `/workspace/groups` | `repo/groups` | RW | each group's working dir |
 | `/workspace/global` | `repo/groups/global` | RW | shared memory across groups |
