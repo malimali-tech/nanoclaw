@@ -203,11 +203,22 @@ This allows you to use:
 
 ```bash
 NANOCLAW_LLM_PROVIDER=openclaude            # default; set to anthropic to fall back
-GEMINI_API_KEY=your-gemini-key
-# GEMINI_MODEL=gemini-3.1-pro-preview       # optional; see .env.example
+NANOCLAW_LLM_API_KEY=your-gemini-key
+# NANOCLAW_LLM_MODEL=gemini-3.1-pro-preview # optional
 ```
 
-See [`.env.example`](.env.example) for the full contract. The `anthropic` fallback continues to use the official `@anthropic-ai/claude-code` CLI with OneCLI credentials.
+**3. Run the agent loop in-process via [`@codeany/open-agent-sdk`](https://github.com/codeany-ai/open-agent-sdk-typescript)** (no claude-code CLI subprocess; OpenAI-compatible endpoints only — DeepSeek, Qwen, GPT, etc.):
+
+```bash
+NANOCLAW_LLM_PROVIDER=open-agent-sdk
+NANOCLAW_LLM_API_KEY=sk-...
+NANOCLAW_LLM_MODEL=deepseek-chat                  # default; e.g. deepseek-reasoner, gpt-4o
+NANOCLAW_LLM_BASE_URL=https://api.deepseek.com/v1 # OpenAI-compatible endpoint
+```
+
+`container/build.sh` vendors the SDK from a sibling `open-agent-sdk-typescript/` checkout; set `OPEN_AGENT_SDK_PATH` to override.
+
+All three providers read the same `NANOCLAW_LLM_API_KEY` / `NANOCLAW_LLM_MODEL` / `NANOCLAW_LLM_BASE_URL` trio — `providers.ts` translates them to each upstream package's native names. The `anthropic` provider gets credentials via OneCLI instead and ignores the API_KEY var. See [`.env.example`](.env.example) for the full contract.
 
 **How do I debug issues?**
 

@@ -22,8 +22,9 @@ import {
   HookCallback,
   PreCompactHookInput,
 } from '@anthropic-ai/claude-agent-sdk';
+import { createAgent as createOpenAgent } from '@codeany/open-agent-sdk';
 import { fileURLToPath } from 'url';
-import { resolveProvider } from './providers.js';
+import { resolveProvider, type ProviderConfig } from './providers.js';
 
 interface ContainerInput {
   prompt: string;
@@ -384,6 +385,47 @@ async function runQuery(
   lastAssistantUuid?: string;
   closedDuringQuery: boolean;
 }> {
+  const providerCfg = resolveProvider();
+  log(
+    `LLM provider = ${providerCfg.meta.provider}` +
+      (providerCfg.meta.model ? ` (${providerCfg.meta.model})` : ''),
+  );
+
+  // Load global CLAUDE.md as additional system context (shared across all groups)
+  const globalClaudeMdPath = '/workspace/global/CLAUDE.md';
+  let globalClaudeMd: string | undefined;
+  if (!containerInput.isMain && fs.existsSync(globalClaudeMdPath)) {
+    globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
+  }
+
+  // Discover additional directories mounted at /workspace/extra/*
+  const extraDirs: string[] = [];
+  const extraBase = '/workspace/extra';
+  if (fs.existsSync(extraBase)) {
+    for (const entry of fs.readdirSync(extraBase)) {
+      const fullPath = path.join(extraBase, entry);
+      if (fs.statSync(fullPath).isDirectory()) {
+        extraDirs.push(fullPath);
+      }
+    }
+  }
+  if (extraDirs.length > 0) {
+    log(`Additional directories: ${extraDirs.join(', ')}`);
+  }
+
+  if (providerCfg.sdkConfig) {
+    return runQueryOpenAgentSdk({
+      prompt,
+      sessionId,
+      mcpServerPath,
+      containerInput,
+      sdkEnv,
+      providerCfg,
+      globalClaudeMd,
+      extraDirs,
+    });
+  }
+
   const stream = new MessageStream();
   stream.push(prompt);
 
@@ -412,35 +454,6 @@ async function runQuery(
   let lastAssistantUuid: string | undefined;
   let messageCount = 0;
   let resultCount = 0;
-
-  // Load global CLAUDE.md as additional system context (shared across all groups)
-  const globalClaudeMdPath = '/workspace/global/CLAUDE.md';
-  let globalClaudeMd: string | undefined;
-  if (!containerInput.isMain && fs.existsSync(globalClaudeMdPath)) {
-    globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
-  }
-
-  // Discover additional directories mounted at /workspace/extra/*
-  // These are passed to the SDK so their CLAUDE.md files are loaded automatically
-  const extraDirs: string[] = [];
-  const extraBase = '/workspace/extra';
-  if (fs.existsSync(extraBase)) {
-    for (const entry of fs.readdirSync(extraBase)) {
-      const fullPath = path.join(extraBase, entry);
-      if (fs.statSync(fullPath).isDirectory()) {
-        extraDirs.push(fullPath);
-      }
-    }
-  }
-  if (extraDirs.length > 0) {
-    log(`Additional directories: ${extraDirs.join(', ')}`);
-  }
-
-  const providerCfg = resolveProvider();
-  log(
-    `LLM provider = ${providerCfg.meta.provider}` +
-      (providerCfg.meta.model ? ` (${providerCfg.meta.model})` : ''),
-  );
 
   for await (const message of query({
     prompt: stream,
@@ -547,6 +560,191 @@ async function runQuery(
   }
 
   ipcPolling = false;
+  log(
+    `Query done. Messages: ${messageCount}, results: ${resultCount}, lastAssistantUuid: ${lastAssistantUuid || 'none'}, closedDuringQuery: ${closedDuringQuery}`,
+  );
+  return { newSessionId, lastAssistantUuid, closedDuringQuery };
+}
+
+const OPEN_AGENT_TOOLS = [
+  'Bash',
+  'Read',
+  'Write',
+  'Edit',
+  'Glob',
+  'Grep',
+  'NotebookEdit',
+  'WebSearch',
+  'WebFetch',
+  'Agent',
+  'SendMessage',
+  'TeamCreate',
+  'TeamDelete',
+  'TaskCreate',
+  'TaskList',
+  'TaskUpdate',
+  'TaskGet',
+  'TaskStop',
+  'TaskOutput',
+  'TodoWrite',
+  'ToolSearch',
+  'Skill',
+  'mcp__nanoclaw__*',
+];
+
+/**
+ * Run the agent loop using @codeany/open-agent-sdk in-process — no claude-code
+ * CLI subprocess. Mirrors the Anthropic-SDK path's high-level behavior:
+ *   - one outer call drains all user messages that arrive during the turn
+ *   - close sentinel ends the loop
+ *   - emits the same OUTPUT markers
+ */
+async function runQueryOpenAgentSdk(args: {
+  prompt: string;
+  sessionId: string | undefined;
+  mcpServerPath: string;
+  containerInput: ContainerInput;
+  sdkEnv: Record<string, string | undefined>;
+  providerCfg: ProviderConfig;
+  globalClaudeMd: string | undefined;
+  extraDirs: string[];
+}): Promise<{
+  newSessionId?: string;
+  lastAssistantUuid?: string;
+  closedDuringQuery: boolean;
+}> {
+  const {
+    prompt,
+    sessionId,
+    mcpServerPath,
+    containerInput,
+    sdkEnv,
+    providerCfg,
+    globalClaudeMd,
+    extraDirs,
+  } = args;
+  const sdk = providerCfg.sdkConfig!;
+
+  const agent = createOpenAgent({
+    apiType: sdk.apiType,
+    model: sdk.model,
+    apiKey: sdk.apiKey,
+    baseURL: sdk.baseURL,
+    cwd: '/workspace/group',
+    additionalDirectories: extraDirs.length > 0 ? extraDirs : undefined,
+    resume: sessionId,
+    appendSystemPrompt: globalClaudeMd,
+    allowedTools: OPEN_AGENT_TOOLS,
+    env: { ...sdkEnv, ...providerCfg.env },
+    permissionMode: 'bypassPermissions',
+    persistSession: true,
+    mcpServers: {
+      nanoclaw: {
+        command: 'node',
+        args: [mcpServerPath],
+        env: {
+          NANOCLAW_CHAT_JID: containerInput.chatJid,
+          NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
+          NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
+        },
+      },
+    },
+  });
+
+  let newSessionId: string | undefined;
+  let lastAssistantUuid: string | undefined;
+  let messageCount = 0;
+  let resultCount = 0;
+  let closedDuringQuery = false;
+  const pendingPrompts: string[] = [];
+
+  let ipcPolling = true;
+  const pollIpcDuringQuery = () => {
+    if (!ipcPolling) return;
+    if (shouldClose()) {
+      log('Close sentinel detected during query, ending stream');
+      closedDuringQuery = true;
+      ipcPolling = false;
+      return;
+    }
+    const messages = drainIpcInput();
+    for (const text of messages) {
+      log(`Buffering IPC message for next turn (${text.length} chars)`);
+      pendingPrompts.push(text);
+    }
+    setTimeout(pollIpcDuringQuery, IPC_POLL_MS);
+  };
+  setTimeout(pollIpcDuringQuery, IPC_POLL_MS);
+
+  try {
+    let nextPrompt: string | null = prompt;
+    while (nextPrompt !== null) {
+      for await (const message of agent.query(nextPrompt)) {
+        messageCount++;
+        const msgType =
+          message.type === 'system'
+            ? `system/${(message as { subtype?: string }).subtype}`
+            : message.type;
+        log(`[msg #${messageCount}] type=${msgType}`);
+
+        if (message.type === 'assistant' && 'uuid' in message && message.uuid) {
+          lastAssistantUuid = message.uuid;
+        }
+
+        if (message.type === 'system' && message.subtype === 'init') {
+          newSessionId = (message as { session_id?: string }).session_id;
+          log(`Session initialized: ${newSessionId}`);
+        }
+
+        if (
+          message.type === 'system' &&
+          (message as { subtype?: string }).subtype === 'task_notification'
+        ) {
+          const tn = message as {
+            task_id: string;
+            status: string;
+            message?: string;
+          };
+          log(
+            `Task notification: task=${tn.task_id} status=${tn.status}${tn.message ? ` message=${tn.message}` : ''}`,
+          );
+        }
+
+        if (message.type === 'result') {
+          resultCount++;
+          const textResult =
+            'result' in message ? (message as { result?: string }).result : null;
+          log(
+            `Result #${resultCount}: subtype=${(message as { subtype?: string }).subtype}${textResult ? ` text=${textResult.slice(0, 200)}` : ''}`,
+          );
+          writeOutput({
+            status: 'success',
+            result: textResult || null,
+            newSessionId,
+          });
+        }
+
+        if (closedDuringQuery) break;
+      }
+
+      if (closedDuringQuery) break;
+
+      if (pendingPrompts.length > 0) {
+        nextPrompt = pendingPrompts.splice(0).join('\n');
+        log(`Continuing with buffered IPC prompt (${nextPrompt.length} chars)`);
+      } else {
+        nextPrompt = null;
+      }
+    }
+  } finally {
+    ipcPolling = false;
+    try {
+      await agent.close();
+    } catch (err) {
+      log(`agent.close() error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   log(
     `Query done. Messages: ${messageCount}, results: ${resultCount}, lastAssistantUuid: ${lastAssistantUuid || 'none'}, closedDuringQuery: ${closedDuringQuery}`,
   );

@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { resolveProvider } from './providers.js';
 
 describe('resolveProvider', () => {
-  it('defaults to openclaude + gemini-3.1-pro-preview when no env is set', () => {
-    const cfg = resolveProvider({ GEMINI_API_KEY: 'test-key' });
+  it('defaults to openclaude + gemini-3.1-pro-preview when only API key is set', () => {
+    const cfg = resolveProvider({ NANOCLAW_LLM_API_KEY: 'test-key' });
     assert.equal(cfg.meta.provider, 'openclaude');
     assert.equal(cfg.meta.model, 'gemini-3.1-pro-preview');
     assert.equal(cfg.executable, 'node');
@@ -18,10 +18,10 @@ describe('resolveProvider', () => {
     assert.equal(cfg.env.GEMINI_MODEL, 'gemini-3.1-pro-preview');
   });
 
-  it('honours GEMINI_MODEL override', () => {
+  it('honours NANOCLAW_LLM_MODEL override for openclaude', () => {
     const cfg = resolveProvider({
-      GEMINI_API_KEY: 'k',
-      GEMINI_MODEL: 'gemini-3.1-flash-lite',
+      NANOCLAW_LLM_API_KEY: 'k',
+      NANOCLAW_LLM_MODEL: 'gemini-3.1-flash-lite',
     });
     assert.equal(cfg.meta.model, 'gemini-3.1-flash-lite');
     assert.equal(cfg.env.GEMINI_MODEL, 'gemini-3.1-flash-lite');
@@ -35,24 +35,63 @@ describe('resolveProvider', () => {
     assert.deepEqual(cfg.env, {});
   });
 
-  it('throws when provider=openclaude but GEMINI_API_KEY is missing', () => {
+  it('throws when provider=openclaude but NANOCLAW_LLM_API_KEY is missing', () => {
     assert.throws(
       () => resolveProvider({ NANOCLAW_LLM_PROVIDER: 'openclaude' }),
-      /GEMINI_API_KEY/,
+      /NANOCLAW_LLM_API_KEY/,
     );
   });
 
   it('throws on unknown provider value', () => {
     assert.throws(
       () => resolveProvider({ NANOCLAW_LLM_PROVIDER: 'gmini' }),
-      /anthropic.*openclaude/,
+      /anthropic.*openclaude.*open-agent-sdk/,
     );
   });
 
-  it('treats whitespace-only GEMINI_API_KEY as missing', () => {
+  it('treats whitespace-only NANOCLAW_LLM_API_KEY as missing', () => {
     assert.throws(
-      () => resolveProvider({ GEMINI_API_KEY: '   ' }),
-      /GEMINI_API_KEY/,
+      () => resolveProvider({ NANOCLAW_LLM_API_KEY: '   ' }),
+      /NANOCLAW_LLM_API_KEY/,
+    );
+  });
+
+  it('returns sdkConfig for provider=open-agent-sdk with defaults', () => {
+    const cfg = resolveProvider({
+      NANOCLAW_LLM_PROVIDER: 'open-agent-sdk',
+      NANOCLAW_LLM_API_KEY: 'sk-test',
+    });
+    assert.equal(cfg.meta.provider, 'open-agent-sdk');
+    assert.equal(cfg.meta.model, 'deepseek-chat');
+    assert.equal(cfg.pathToClaudeCodeExecutable, undefined);
+    assert.equal(cfg.executable, undefined);
+    assert.equal(cfg.sdkConfig?.apiType, 'openai-completions');
+    assert.equal(cfg.sdkConfig?.model, 'deepseek-chat');
+    assert.equal(cfg.sdkConfig?.apiKey, 'sk-test');
+    assert.equal(cfg.sdkConfig?.baseURL, undefined);
+    assert.equal(cfg.env.CODEANY_API_KEY, 'sk-test');
+    assert.equal(cfg.env.CODEANY_API_TYPE, 'openai-completions');
+    assert.equal(cfg.env.CODEANY_MODEL, 'deepseek-chat');
+    assert.equal(cfg.env.CODEANY_BASE_URL, undefined);
+  });
+
+  it('passes through NANOCLAW_LLM_MODEL / NANOCLAW_LLM_BASE_URL for open-agent-sdk', () => {
+    const cfg = resolveProvider({
+      NANOCLAW_LLM_PROVIDER: 'open-agent-sdk',
+      NANOCLAW_LLM_API_KEY: 'sk-test',
+      NANOCLAW_LLM_MODEL: 'deepseek-reasoner',
+      NANOCLAW_LLM_BASE_URL: 'https://api.deepseek.com/v1',
+    });
+    assert.equal(cfg.sdkConfig?.apiType, 'openai-completions');
+    assert.equal(cfg.sdkConfig?.model, 'deepseek-reasoner');
+    assert.equal(cfg.sdkConfig?.baseURL, 'https://api.deepseek.com/v1');
+    assert.equal(cfg.env.CODEANY_BASE_URL, 'https://api.deepseek.com/v1');
+  });
+
+  it('throws when provider=open-agent-sdk but NANOCLAW_LLM_API_KEY is missing', () => {
+    assert.throws(
+      () => resolveProvider({ NANOCLAW_LLM_PROVIDER: 'open-agent-sdk' }),
+      /NANOCLAW_LLM_API_KEY/,
     );
   });
 });

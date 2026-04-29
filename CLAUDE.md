@@ -25,7 +25,7 @@ Single Node.js process with skill-based channel system. Channels (WhatsApp, Tele
 
 API keys, secret keys, OAuth tokens, and auth credentials are managed by the OneCLI gateway — which handles secret injection into containers at request time, so no keys or tokens are ever passed to containers directly. Run `onecli --help`.
 
-NanoClaw selects its LLM provider via `NANOCLAW_LLM_PROVIDER` (default `openclaude`, fallback `anthropic`). When using `openclaude`, `GEMINI_API_KEY` and optional `GEMINI_MODEL` are read from project `.env` (loaded via Node's `--env-file-if-exists`) and forwarded into the agent container. The `anthropic` path continues to use OneCLI for credential injection as before.
+NanoClaw selects its LLM provider via `NANOCLAW_LLM_PROVIDER` (default `openclaude`, alternates `anthropic` and `open-agent-sdk`). All providers share a unified credential contract: `NANOCLAW_LLM_API_KEY` / `NANOCLAW_LLM_MODEL` / `NANOCLAW_LLM_BASE_URL`, read from project `.env` (loaded via Node's `--env-file-if-exists`) and forwarded into the agent container. `container/agent-runner/src/providers.ts` translates these to each upstream package's native names (`GEMINI_*` for openclaude, `CODEANY_*` for open-agent-sdk). The `anthropic` provider continues to use OneCLI for credential injection (ignores the API_KEY var). The `open-agent-sdk` provider runs `@codeany/open-agent-sdk` in-process (no claude-code CLI subprocess), is locked to OpenAI-compatible endpoints, and is vendored by `container/build.sh` from a sibling `open-agent-sdk-typescript/` checkout (override with `OPEN_AGENT_SDK_PATH`).
 
 ## Skills
 
