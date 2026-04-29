@@ -98,11 +98,34 @@ Implements pi-coding-agent's pluggable Operations:
 
 Wired into pi-coding-agent at `src/agent/run.ts:bootstrapSandbox` — branch on the new `runtime` config to call `bootstrapDockerSandbox()` instead of `bootstrapNativeSandbox()`.
 
-### Issue #243 risk and spike-first delivery
+### SDK override mechanism (validated by Phase 0 spike, commit 2d53170)
 
-[Upstream Issue #243](https://github.com/openclaw/openclaw/issues/243) reports that the pi-coding-agent SDK "ignores tool implementations passed to tools and substitutes its own built-in versions". The official `examples/extensions/sandbox/index.ts` works around this for bash by *replacing* the registered tool with a sandboxed copy via the extensions API.
+`@mariozechner/pi-coding-agent` 0.70.6 has **no top-level `bashOperations` (or any other tool) option** on `createAgentSession`. The only path that lets us inject custom `Operations` is:
 
-**Implementation order makes the first task a spike**: write a 30-line throwaway extension that overrides `BashOperations` and verifies the override is honored at runtime. If it is, proceed with the design. If not, the design switches to "register replacement tools (`bash_sandboxed`) and disable the built-ins" — same end state, more boilerplate.
+1. Pass `noTools: 'builtin'` to `createAgentSession`, which disables ALL default tools (`read`, `bash`, `edit`, `write`, plus the rest).
+2. Pass `customTools` containing tool definitions we built ourselves, including the non-sandboxed ones we still want default behavior for.
+
+So even though the design selected "all tools sandboxed" (Q1 = option 2), the structural cost is the same: we rebuild every tool definition. There is no "override only bash, leave the rest default" path through the public SDK.
+
+Concretely, `src/agent/run.ts` will switch from its current zero-option `createAgentSession({ … })` to:
+
+```ts
+createAgentSession({
+  …existing fields,
+  noTools: 'builtin',
+  customTools: [
+    createBashToolDefinition(cwd, { operations: dockerOps.bash }),
+    createReadToolDefinition(cwd, { operations: dockerOps.read }),
+    createEditToolDefinition(cwd, { operations: dockerOps.edit }),
+    createWriteToolDefinition(cwd, { operations: dockerOps.write }),
+    createGrepToolDefinition(cwd, { operations: dockerOps.grep }),
+    createFindToolDefinition(cwd, { operations: dockerOps.find }),
+    createLsToolDefinition(cwd, { operations: dockerOps.ls }),
+  ],
+});
+```
+
+Each `create<Tool>ToolDefinition` factory and its `<Tool>Operations` interface live in `node_modules/@mariozechner/pi-coding-agent/dist/core/tools/<tool>.d.ts`. Issue #243 (which originally motivated the spike) is therefore irrelevant to nanoclaw: there's nothing to override on the default surface; we always rebuild.
 
 ### NanoClaw extension tools stay on host
 

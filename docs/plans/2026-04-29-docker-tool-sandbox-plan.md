@@ -14,6 +14,8 @@
 
 ## Phase 0 — Spike: prove tool-override path works
 
+**Outcome (commit `2d53170`)**: override path works **only** via `noTools: 'builtin'` + a full `customTools` rebuild (every tool, not just bash). There is no public option to override `BashOperations` while keeping default builtins. This means Phase 3 must build adapters for ALL seven tools (already planned), and Phase 4.2's wiring uses the `noTools+customTools` shape shown in the design doc. Issue #243 is moot: we're not relying on operations injection through default tools.
+
 The whole design depends on pi-coding-agent honoring our `Operations` overrides. Issue #243 says it sometimes doesn't. Verify before building anything else. **If the spike fails, stop and revise the design** (replacement-tool strategy instead of Operations override).
 
 ### Task 0.1: Write a probe extension that overrides BashOperations
