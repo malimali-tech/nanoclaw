@@ -4,27 +4,30 @@ import assert from 'node:assert/strict';
 import { resolveProvider } from './providers.js';
 
 describe('resolveProvider', () => {
-  it('defaults to openclaude + gemini-3.1-pro-preview when only API key is set', () => {
+  it('defaults to openclaude + deepseek-chat when only API key is set', () => {
     const cfg = resolveProvider({ NANOCLAW_LLM_API_KEY: 'test-key' });
     assert.equal(cfg.meta.provider, 'openclaude');
-    assert.equal(cfg.meta.model, 'gemini-3.1-pro-preview');
+    assert.equal(cfg.meta.model, 'deepseek-chat');
     assert.equal(cfg.executable, 'node');
     assert.match(
       cfg.pathToClaudeCodeExecutable ?? '',
       /@gitlawb\/openclaude\/dist\/cli\.mjs$/,
     );
-    assert.equal(cfg.env.CLAUDE_CODE_USE_GEMINI, '1');
-    assert.equal(cfg.env.GEMINI_API_KEY, 'test-key');
-    assert.equal(cfg.env.GEMINI_MODEL, 'gemini-3.1-pro-preview');
+    assert.equal(cfg.env.CLAUDE_CODE_USE_OPENAI, '1');
+    assert.equal(cfg.env.OPENAI_API_KEY, 'test-key');
+    assert.equal(cfg.env.OPENAI_MODEL, 'deepseek-chat');
+    assert.equal(cfg.env.OPENAI_BASE_URL, undefined);
   });
 
-  it('honours NANOCLAW_LLM_MODEL override for openclaude', () => {
+  it('honours NANOCLAW_LLM_MODEL and BASE_URL overrides for openclaude', () => {
     const cfg = resolveProvider({
       NANOCLAW_LLM_API_KEY: 'k',
-      NANOCLAW_LLM_MODEL: 'gemini-3.1-flash-lite',
+      NANOCLAW_LLM_MODEL: 'deepseek-reasoner',
+      NANOCLAW_LLM_BASE_URL: 'https://api.deepseek.com/v1',
     });
-    assert.equal(cfg.meta.model, 'gemini-3.1-flash-lite');
-    assert.equal(cfg.env.GEMINI_MODEL, 'gemini-3.1-flash-lite');
+    assert.equal(cfg.meta.model, 'deepseek-reasoner');
+    assert.equal(cfg.env.OPENAI_MODEL, 'deepseek-reasoner');
+    assert.equal(cfg.env.OPENAI_BASE_URL, 'https://api.deepseek.com/v1');
   });
 
   it('returns empty overrides for provider=anthropic', () => {

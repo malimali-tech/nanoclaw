@@ -176,7 +176,6 @@ export class FeishuChannel implements Channel {
     console.log(
       `[feishu] inbound chat_id=${msg.chat_id} msg_id=${msg.message_id}`,
     );
-    this.channelOpts.onMessage(jid, normalized);
     this.channelOpts.onChatMetadata(
       jid,
       timestamp,
@@ -184,6 +183,7 @@ export class FeishuChannel implements Channel {
       'feishu',
       msg.chat_type === 'group',
     );
+    this.channelOpts.onMessage(jid, normalized);
   }
 
   private parseTimestamp(createTime: string | undefined): string {

@@ -23,7 +23,7 @@ export interface ProviderConfig {
   sdkConfig?: OpenAgentSdkConfig;
 }
 
-const DEFAULT_GEMINI_MODEL = 'gemini-3.1-pro-preview';
+const DEFAULT_OPENCLAUDE_MODEL = 'deepseek-chat';
 const OPEN_AGENT_API_TYPE: OpenAgentApiType = 'openai-completions';
 const DEFAULT_OPEN_AGENT_MODEL = 'deepseek-chat';
 
@@ -89,20 +89,49 @@ function readUnifiedEnv(sourceEnv: NodeJS.ProcessEnv, provider: LlmProvider) {
 function buildOpenclaudeConfig(
   sourceEnv: NodeJS.ProcessEnv,
 ): ProviderConfig {
-  const { apiKey, model: modelOverride } = readUnifiedEnv(sourceEnv, 'openclaude');
-  const model = modelOverride || DEFAULT_GEMINI_MODEL;
+  const { apiKey, model: modelOverride, baseURL } = readUnifiedEnv(
+    sourceEnv,
+    'openclaude',
+  );
+  const model = modelOverride || DEFAULT_OPENCLAUDE_MODEL;
   const cliPath = require.resolve('@gitlawb/openclaude/dist/cli.mjs');
 
-  // openclaude CLI (a claude-code fork) reads these specific env vars at
-  // runtime — translate the unified inputs to its native names.
+  // openclaude CLI (a claude-code fork) supports OpenAI-compatible backends
+  // via CLAUDE_CODE_USE_OPENAI. Translate the unified inputs to OPENAI_*.
+  const env: Record<string, string> = {
+    CLAUDE_CODE_USE_OPENAI: '1',
+    OPENAI_API_KEY: apiKey,
+    OPENAI_MODEL: model,
+  };
+  if (baseURL) env.OPENAI_BASE_URL = baseURL;
+
+  // Explicitly clear conflicting backend flags so a stale CLAUDE_CODE_USE_GEMINI
+  // (or similar) inherited from process.env can't override our OpenAI mode.
+  for (const flag of [
+    'CLAUDE_CODE_USE_GEMINI',
+    'CLAUDE_CODE_USE_MISTRAL',
+    'CLAUDE_CODE_USE_BEDROCK',
+    'CLAUDE_CODE_USE_VERTEX',
+    'CLAUDE_CODE_USE_FOUNDRY',
+    'CLAUDE_CODE_USE_GITHUB',
+    'GEMINI_API_KEY',
+    'GEMINI_MODEL',
+    'GEMINI_BASE_URL',
+  ]) {
+    env[flag] = '';
+  }
+
+  try {
+    const debugLine = `[${new Date().toISOString()}] openclaude → CLAUDE_CODE_USE_OPENAI=1 OPENAI_MODEL=${model} OPENAI_BASE_URL=${baseURL ?? '<default>'} apiKey.len=${apiKey.length} provider_env_keys=${Object.keys(env).sort().join(',')} processEnv_USE_GEMINI=${sourceEnv.CLAUDE_CODE_USE_GEMINI ?? '<unset>'} processEnv_OPENAI_BASE=${sourceEnv.OPENAI_BASE_URL ?? '<unset>'}\n`;
+    require('node:fs').appendFileSync('/workspace/group/.providers-debug.log', debugLine);
+  } catch {
+    /* best-effort debug */
+  }
+
   return {
     pathToClaudeCodeExecutable: cliPath,
     executable: 'node',
-    env: {
-      CLAUDE_CODE_USE_GEMINI: '1',
-      GEMINI_API_KEY: apiKey,
-      GEMINI_MODEL: model,
-    },
+    env,
     meta: { provider: 'openclaude', model },
   };
 }
