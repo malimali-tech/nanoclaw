@@ -10,20 +10,24 @@ const cfg: PathMapConfig = {
 
 describe('mapHostPath', () => {
   it('maps repo root', () => {
-    expect(mapHostPath('/abs/nanoclaw/src/index.ts', cfg))
-      .toBe('/workspace/project/src/index.ts');
+    expect(mapHostPath('/abs/nanoclaw/src/index.ts', cfg)).toBe(
+      '/workspace/project/src/index.ts',
+    );
   });
   it('maps store', () => {
-    expect(mapHostPath('/abs/nanoclaw/store/messages.db', cfg))
-      .toBe('/workspace/store/messages.db');
+    expect(mapHostPath('/abs/nanoclaw/store/messages.db', cfg)).toBe(
+      '/workspace/store/messages.db',
+    );
   });
   it('maps groups', () => {
-    expect(mapHostPath('/abs/nanoclaw/groups/main/notes.md', cfg))
-      .toBe('/workspace/groups/main/notes.md');
+    expect(mapHostPath('/abs/nanoclaw/groups/main/notes.md', cfg)).toBe(
+      '/workspace/groups/main/notes.md',
+    );
   });
   it('maps global', () => {
-    expect(mapHostPath('/abs/nanoclaw/groups/global/x.md', cfg))
-      .toBe('/workspace/global/x.md');
+    expect(mapHostPath('/abs/nanoclaw/groups/global/x.md', cfg)).toBe(
+      '/workspace/global/x.md',
+    );
   });
   it('throws on path outside roots', () => {
     expect(() => mapHostPath('/etc/passwd', cfg)).toThrow(/outside/);
