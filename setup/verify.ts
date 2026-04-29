@@ -12,7 +12,7 @@ import path from 'path';
 import Database from 'better-sqlite3';
 
 import { STORE_DIR } from '../src/config.js';
-import { readEnvFile } from '../src/env.js';
+import { PI_PROVIDER_ENV_RE, readEnvFile } from '../src/env.js';
 import { logger } from '../src/logger.js';
 import {
   getPlatform,
@@ -82,14 +82,20 @@ export async function run(_args: string[]): Promise<void> {
   }
   logger.info({ service }, 'Service status');
 
-  // 2. Check credentials
+  // 2. Check credentials — accept any pi-coding-agent provider env var or ~/.pi/agent/auth.json.
   let credentials = 'missing';
   const envFile = path.join(projectRoot, '.env');
   if (fs.existsSync(envFile)) {
     const envContent = fs.readFileSync(envFile, 'utf-8');
-    if (/^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=/m.test(envContent)) {
+    if (PI_PROVIDER_ENV_RE.test(envContent)) {
       credentials = 'configured';
     }
+  }
+  if (
+    credentials === 'missing' &&
+    fs.existsSync(path.join(homeDir, '.pi', 'agent', 'auth.json'))
+  ) {
+    credentials = 'configured';
   }
 
   // 3. Check channel auth — Feishu / Lark is the only built-in channel.

@@ -94,26 +94,41 @@ Run `npx tsx setup/index.ts --step timezone` and parse the status block.
 
 ## 4. Credentials
 
-NanoClaw runs the coding agent in-process via `@mariozechner/pi-coding-agent`, with bash commands sandboxed by `sandbox-exec` (macOS) or `bubblewrap` (Linux). Credentials live in `.env` at the project root.
+NanoClaw runs the coding agent in-process via `@mariozechner/pi-coding-agent`, with bash commands sandboxed by `sandbox-exec` (macOS) or `bubblewrap` (Linux). Pi-coding-agent supports many providers — configure whichever one you have via env vars in `.env`, or run `pi auth login` to populate `~/.pi/agent/auth.json`.
 
-AskUserQuestion: Do you want to use your **Claude subscription** (Pro/Max) or an **Anthropic API key**?
+AskUserQuestion: Which provider do you want to use?
 
-1. **Claude subscription (Pro/Max)** — description: "Uses your existing Claude Pro or Max subscription. Run `claude setup-token` in another terminal to get your token."
-2. **Anthropic API key** — description: "Pay-per-use API key from console.anthropic.com."
+1. **Anthropic (Claude)** — description: "API key from console.anthropic.com (`ANTHROPIC_API_KEY`) or OAuth token (`ANTHROPIC_OAUTH_TOKEN`)."
+2. **OpenAI** — description: "API key from platform.openai.com (`OPENAI_API_KEY`)."
+3. **Google (Gemini)** — description: "API key from aistudio.google.com (`GEMINI_API_KEY`)."
+4. **Other** — description: "DeepSeek, Groq, xAI, Mistral, Cerebras, AWS Bedrock, Azure OpenAI, or `pi auth login` for `~/.pi/agent/auth.json`."
 
-For subscription: tell the user to run `claude setup-token` in another terminal. Stop and wait for the user to confirm they have completed this step successfully before proceeding.
-
-Once confirmed, add the token to `.env`:
-```bash
-echo 'CLAUDE_CODE_OAUTH_TOKEN=<their-token>' >> .env
-```
-
-For API key: add to `.env`:
+Add the chosen credential to `.env`. Examples:
 ```bash
 echo 'ANTHROPIC_API_KEY=<their-key>' >> .env
+echo 'OPENAI_API_KEY=<their-key>' >> .env
+echo 'GEMINI_API_KEY=<their-key>' >> .env
+echo 'DEEPSEEK_API_KEY=<their-key>' >> .env
 ```
 
+For users who prefer pi-mono's own auth file: tell them to run `pi auth login` in another terminal and confirm `~/.pi/agent/auth.json` exists. No `.env` entry is required in that case.
+
 Verify the agent loads credentials: `npm run dev` should start without authentication errors.
+
+## 4a. Optional: Docker tool sandbox
+
+NanoClaw can forward all agent tools (`bash`, `read`, `write`, `edit`, `grep`, `find`, `ls`) into a long-running Docker container instead of using `sandbox-exec` / `bubblewrap`. This is opt-in — skip if the user does not want Docker.
+
+AskUserQuestion: "Do you want to enable the Docker tool sandbox? (Stronger isolation, requires Docker installed.)"
+
+If yes:
+
+1. Verify Docker is installed and running: `docker info`. If not, instruct the user to install Docker Desktop (macOS) or `docker.io` (Linux) and start the daemon, then re-run this step.
+2. Create the container: `./scripts/sandbox.sh create`. Verify with `./scripts/sandbox.sh status`.
+3. Edit `config/sandbox.default.json` and set `"runtime": "docker"` (or set the same field in a per-group `groups/<group>/.pi/sandbox.json` to scope it).
+4. Restart nanoclaw after step 7 so the new runtime takes effect.
+
+If no: leave `runtime` at its default (`sandbox-runtime`) and continue.
 
 ## 5. Set Up Channels
 
@@ -177,7 +192,7 @@ Run `npx tsx setup/index.ts --step verify` and parse the status block.
 **If STATUS=failed, fix each:**
 - SERVICE=stopped → `npm run build`, then restart: `launchctl kickstart -k gui/$(id -u)/com.nanoclaw` (macOS) or `systemctl --user restart nanoclaw` (Linux) or `bash start-nanoclaw.sh` (WSL nohup)
 - SERVICE=not_found → re-run step 7
-- CREDENTIALS=missing → re-run step 4 (check `.env` for `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`)
+- CREDENTIALS=missing → re-run step 4 (verify `.env` has a supported provider env var, or `~/.pi/agent/auth.json` exists)
 - CHANNEL_AUTH shows `not_found` for any channel → re-invoke that channel's skill (e.g. `/add-telegram`)
 - REGISTERED_GROUPS=0 → re-invoke the channel skills from step 5
 - MOUNT_ALLOWLIST=missing → `npx tsx setup/index.ts --step mounts -- --empty`
@@ -186,7 +201,7 @@ Tell user to test: send a message in their registered chat. Show: `tail -f logs/
 
 ## Troubleshooting
 
-**Service not starting:** Check `logs/nanoclaw.error.log`. Common: wrong Node path (re-run step 7), missing credentials (check `.env` for `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`), missing channel credentials (re-invoke channel skill).
+**Service not starting:** Check `logs/nanoclaw.error.log`. Common: wrong Node path (re-run step 7), missing credentials (`.env` needs a pi-coding-agent provider env var, or `~/.pi/agent/auth.json` must exist), missing channel credentials (re-invoke channel skill).
 
 **Agent fails to start:** Check `logs/nanoclaw.log` for pi-coding-agent errors. Verify credentials in `.env` and that `sandbox-exec` (macOS) / `bwrap` (Linux) is available on PATH.
 

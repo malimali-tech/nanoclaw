@@ -79,22 +79,24 @@ This is the **main channel**, which has elevated privileges.
 
 ## Authentication
 
-Anthropic credentials must be either an API key from console.anthropic.com (`ANTHROPIC_API_KEY`) or a long-lived OAuth token from `claude setup-token` (`CLAUDE_CODE_OAUTH_TOKEN`). Short-lived tokens from the system keychain or `~/.claude/.credentials.json` expire within hours and can cause recurring container 401s. The `/setup` skill walks through this. The native credential proxy manages credentials (including Anthropic auth) via `.env` — see `src/credential-proxy.ts`.
+The in-process coding agent (`@mariozechner/pi-coding-agent`) reads provider credentials from environment variables forwarded from `.env`, or from `~/.pi/agent/auth.json` populated by `pi auth login`. Supported provider env vars include `ANTHROPIC_API_KEY` / `ANTHROPIC_OAUTH_TOKEN`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `GROQ_API_KEY`, `XAI_API_KEY`, `MISTRAL_API_KEY`, `CEREBRAS_API_KEY`, `AZURE_OPENAI_API_KEY`, `GOOGLE_CLOUD_API_KEY`, `AWS_BEARER_TOKEN_BEDROCK`, `PI_OAUTH`. The `/setup` skill walks through this.
 
-## Container Mounts
+## Sandbox Layout
 
-Main has read-only access to the project, read-write access to the store (SQLite DB), and read-write access to its group folder:
+The paths your tools see depend on the `runtime` field in `config/sandbox.default.json` (with optional per-group override at `groups/<group>/.pi/sandbox.json`).
 
-| Container Path | Host Path | Access |
-|----------------|-----------|--------|
-| `/workspace/project` | Project root | read-only |
-| `/workspace/project/store` | `store/` | read-write |
-| `/workspace/group` | `groups/main/` | read-write |
+**`runtime: 'sandbox-runtime'` (default) or `runtime: 'off'`** — there are no bind mounts. The agent runs in-process with pi-coding-agent's tools touching host paths directly. Under `sandbox-runtime`, bash commands are confined by `sandbox-exec` (macOS) or `bubblewrap` (Linux); under `off`, there is no sandbox at all (dev only). File paths you read or write are real host paths — e.g. the project root, `store/messages.db`, and `groups/main/`.
 
-Key paths inside the container:
-- `/workspace/project/store/messages.db` - SQLite database (read-write)
-- `/workspace/project/store/messages.db` (registered_groups table) - Group config
-- `/workspace/project/groups/` - All group folders
+**`runtime: 'docker'`** — all 7 tools forward to the long-running `nanoclaw-sandbox` container, which sees the host through these bind mounts:
+
+| Container path | Host path | Mode |
+|----------------|-----------|------|
+| `/workspace/project` | repo root | read-only |
+| `/workspace/project/.env` | empty file | read-only (shadow — hides host LLM keys) |
+| `/workspace/store` | repo `store/` | read-write |
+| `/workspace/groups` | repo `groups/` | read-write |
+
+Per-group `containerConfig.additionalMounts` is currently a v1.1 stretch: the schema exists but is not yet wired into `scripts/sandbox.sh`, so additional mounts described below for other groups will not actually appear inside the container until that lands.
 
 ---
 

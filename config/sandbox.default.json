@@ -1,5 +1,10 @@
 {
   "enabled": true,
+  "runtime": "sandbox-runtime",
+  "docker": {
+    "containerName": "nanoclaw-sandbox",
+    "image": "debian:12-slim"
+  },
   "network": {
     "allowedDomains": [
       "registry.npmjs.org",

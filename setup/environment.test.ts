@@ -3,6 +3,8 @@ import fs from 'fs';
 
 import Database from 'better-sqlite3';
 
+import { PI_PROVIDER_ENV_RE } from '../src/env.js';
+
 /**
  * Tests for the environment check step.
  *
@@ -76,23 +78,27 @@ describe('credentials detection', () => {
   it('detects ANTHROPIC_API_KEY in env content', () => {
     const content =
       'SOME_KEY=value\nANTHROPIC_API_KEY=sk-ant-test123\nOTHER=foo';
-    const hasCredentials =
-      /^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=/m.test(content);
-    expect(hasCredentials).toBe(true);
+    expect(PI_PROVIDER_ENV_RE.test(content)).toBe(true);
   });
 
-  it('detects CLAUDE_CODE_OAUTH_TOKEN in env content', () => {
-    const content = 'CLAUDE_CODE_OAUTH_TOKEN=token123';
-    const hasCredentials =
-      /^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=/m.test(content);
-    expect(hasCredentials).toBe(true);
+  it('detects ANTHROPIC_OAUTH_TOKEN in env content', () => {
+    const content = 'ANTHROPIC_OAUTH_TOKEN=token123';
+    expect(PI_PROVIDER_ENV_RE.test(content)).toBe(true);
+  });
+
+  it('detects DEEPSEEK_API_KEY in env content', () => {
+    const content = 'DEEPSEEK_API_KEY=sk-deepseek-test';
+    expect(PI_PROVIDER_ENV_RE.test(content)).toBe(true);
+  });
+
+  it('detects GEMINI_API_KEY in env content', () => {
+    const content = 'GEMINI_API_KEY=AIza-test';
+    expect(PI_PROVIDER_ENV_RE.test(content)).toBe(true);
   });
 
   it('returns false when no credentials', () => {
     const content = 'ASSISTANT_NAME="Andy"\nOTHER=foo';
-    const hasCredentials =
-      /^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=/m.test(content);
-    expect(hasCredentials).toBe(false);
+    expect(PI_PROVIDER_ENV_RE.test(content)).toBe(false);
   });
 });
 
