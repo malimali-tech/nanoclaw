@@ -1,19 +1,34 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { loadSandboxConfig } from './sandbox-config.js';
 
+const tmpDirs: string[] = [];
+
+function mkTmp(): string {
+  const p = fs.mkdtempSync(path.join(os.tmpdir(), 'sbcfg-'));
+  tmpDirs.push(p);
+  return p;
+}
+
+afterEach(() => {
+  while (tmpDirs.length > 0) {
+    const p = tmpDirs.pop()!;
+    fs.rmSync(p, { recursive: true, force: true });
+  }
+});
+
 describe('loadSandboxConfig', () => {
   it('returns built-in default when no project override exists', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sbcfg-'));
+    const tmp = mkTmp();
     const cfg = loadSandboxConfig(tmp);
     expect(cfg.enabled).toBe(true);
     expect(cfg.network?.allowedDomains).toContain('registry.npmjs.org');
   });
 
   it('deep-merges project override over defaults', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sbcfg-'));
+    const tmp = mkTmp();
     fs.mkdirSync(path.join(tmp, '.pi'), { recursive: true });
     fs.writeFileSync(
       path.join(tmp, '.pi', 'sandbox.json'),
@@ -29,7 +44,7 @@ describe('loadSandboxConfig', () => {
   });
 
   it('disables when project sets enabled=false', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sbcfg-'));
+    const tmp = mkTmp();
     fs.mkdirSync(path.join(tmp, '.pi'), { recursive: true });
     fs.writeFileSync(
       path.join(tmp, '.pi', 'sandbox.json'),
