@@ -2,6 +2,8 @@
   <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
 </p>
 
+> ⚠️ **本翻译自 pi-mono 迁移（2026-04）起已过时。当前架构使用进程内 pi-coding-agent，并通过 `sandbox-exec` / `bubblewrap` 进行沙箱隔离，不再使用容器。请参考 [README.md](README.md) 获取最新架构。**
+
 <p align="center">
   NanoClaw —— 您的专属 Claude 助手，在容器中安全运行。它轻巧易懂，并能根据您的个人需求灵活定制。
 </p>

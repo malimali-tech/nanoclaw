@@ -88,7 +88,6 @@ done
 
 ```bash
 npm run build
-./container/build.sh
 ```
 
 Build must be clean before proceeding.
@@ -169,10 +168,10 @@ Look for:
 
 ### Agent says "Ollama is not installed"
 
-The agent is trying to run `ollama` CLI inside the container instead of using the MCP tools. This means:
-1. The MCP server wasn't registered — check `container/agent-runner/src/index.ts` has the `ollama` entry in `mcpServers`
+The agent is trying to run the `ollama` CLI directly instead of using the MCP tools. This means:
+1. The MCP server wasn't registered — verify the `ollama` entry in `mcpServers` under `src/agent/`
 2. The per-group source wasn't updated — re-copy files (see Phase 2)
-3. The container wasn't rebuilt — run `./container/build.sh`
+3. The host wasn't rebuilt — run `npm run build` and restart the service
 
 ### "Failed to connect to Ollama"
 

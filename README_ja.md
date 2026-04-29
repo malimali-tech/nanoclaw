@@ -2,6 +2,8 @@
   <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
 </p>
 
+> ⚠️ **This translation is out of date as of the pi-mono migration (2026-04). The current architecture uses an in-process pi-coding-agent with `sandbox-exec` / `bubblewrap` instead of containers. See [README.md](README.md) for the current architecture.**
+
 <p align="center">
   エージェントを専用コンテナで安全に実行するAIアシスタント。軽量で、理解しやすく、あなたのニーズに完全にカスタマイズできるように設計されています。
 </p>

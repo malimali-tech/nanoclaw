@@ -90,6 +90,7 @@ function setupLaunchd(
     <key>ProgramArguments</key>
     <array>
         <string>${nodePath}</string>
+        <string>--env-file-if-exists=${projectRoot}/.env</string>
         <string>${projectRoot}/dist/index.js</string>
     </array>
     <key>WorkingDirectory</key>

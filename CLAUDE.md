@@ -4,7 +4,7 @@ Personal Claude assistant. See [README.md](README.md) for philosophy and setup. 
 
 ## Quick Context
 
-Single Node.js process with skill-based channel system. Channels (WhatsApp, Telegram, Slack, Discord, Gmail) are skills that self-register at startup. Messages route to Claude Agent SDK running in containers (Linux VMs). Each group has isolated filesystem and memory.
+Single Node.js process with a skill-based channel system. Feishu / Lark is currently the only built-in channel; it self-registers at startup via `src/channels/feishu.ts`. Messages route to `@mariozechner/pi-coding-agent` running in-process on the host. Each group has its own working directory and per-group session state. Bash commands from the agent run inside `sandbox-exec` (macOS) or `bubblewrap` (Linux); see `config/sandbox.default.json` for the default network/filesystem rules.
 
 ## Key Files
 
@@ -12,24 +12,29 @@ Single Node.js process with skill-based channel system. Channels (WhatsApp, Tele
 |------|---------|
 | `src/index.ts` | Orchestrator: state, message loop, agent invocation |
 | `src/channels/registry.ts` | Channel registry (self-registration at startup) |
-| `src/ipc.ts` | IPC watcher and task processing |
 | `src/router.ts` | Message formatting and outbound routing |
 | `src/config.ts` | Trigger pattern, paths, intervals |
-| `src/container-runner.ts` | Spawns agent containers with mounts |
 | `src/task-scheduler.ts` | Runs scheduled tasks |
 | `src/db.ts` | SQLite operations |
+| `src/agent/run.ts` | In-process pi-coding-agent runtime entry point |
+| `src/agent/extension.ts` | NanoClaw IPC tools as a pi extension |
+| `src/agent/session-pool.ts` | Per-group AgentSession pool with idle TTL |
+| `src/agent/sandbox-config.ts` | Sandbox config loader (default + per-group override) |
+| `src/agent/types.ts` | Extension ctx and port interfaces |
 | `groups/{name}/CLAUDE.md` | Per-group memory (isolated) |
-| `container/skills/` | Skills loaded inside agent containers (browser, status, formatting) |
+| `config/sandbox.default.json` | Default sandbox profile (network + filesystem rules) |
 
-## Secrets / Credentials / Proxy (OneCLI)
+## LLM Provider
 
-API keys, secret keys, OAuth tokens, and auth credentials are managed by the OneCLI gateway — which handles secret injection into containers at request time, so no keys or tokens are ever passed to containers directly. Run `onecli --help`.
+NanoClaw runs `@mariozechner/pi-coding-agent` in-process. Configure your provider via environment variables (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`) or `~/.pi/agent/auth.json`. See [pi-mono docs](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) for the full provider list and authentication options.
+
+Bash commands run inside an OS-level sandbox (`sandbox-exec` on macOS, `bubblewrap` on Linux) configured by `config/sandbox.default.json` and per-group overrides at `groups/<group>/.pi/sandbox.json`.
 
 ## Skills
 
 Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full taxonomy and guidelines.
 
-- **Feature skills** — merge a `skill/*` branch to add capabilities (e.g. `/add-telegram`, `/add-slack`)
+- **Feature skills** — merge a `skill/*` branch to add capabilities (e.g. `/add-feishu`)
 - **Utility skills** — ship code files alongside SKILL.md (e.g. `/claw`)
 - **Operational skills** — instruction-only workflows, always on `main` (e.g. `/setup`, `/debug`)
 - **Container skills** — loaded inside agent containers at runtime (`container/skills/`)
@@ -40,7 +45,6 @@ Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) f
 | `/customize` | Adding channels, integrations, changing behavior |
 | `/debug` | Container issues, logs, troubleshooting |
 | `/update-nanoclaw` | Bring upstream NanoClaw updates into a customized install |
-| `/init-onecli` | Install OneCLI Agent Vault and migrate `.env` credentials to it |
 | `/qodo-pr-resolver` | Fetch and fix Qodo PR review issues interactively or in batch |
 | `/get-qodo-rules` | Load org- and repo-level coding rules from Qodo before code tasks |
 
@@ -55,8 +59,9 @@ Run commands directly—don't tell the user to run them.
 ```bash
 npm run dev          # Run with hot reload
 npm run build        # Compile TypeScript
-./container/build.sh # Rebuild agent container
 ```
+
+The agent now runs in the main process — there is no container build step. Bash commands from the agent are sandboxed via `sandbox-exec` (macOS) or `bubblewrap` (Linux); see `config/sandbox.default.json`.
 
 Service management:
 ```bash
@@ -71,10 +76,3 @@ systemctl --user stop nanoclaw
 systemctl --user restart nanoclaw
 ```
 
-## Troubleshooting
-
-**WhatsApp not connecting after upgrade:** WhatsApp is now a separate skill, not bundled in core. Run `/add-whatsapp` (or `npx tsx scripts/apply-skill.ts .claude/skills/add-whatsapp && npm run build`) to install it. Existing auth credentials and groups are preserved.
-
-## Container Build Cache
-
-The container buildkit caches the build context aggressively. `--no-cache` alone does NOT invalidate COPY steps — the builder's volume retains stale files. To force a truly clean rebuild, prune the builder then re-run `./container/build.sh`.

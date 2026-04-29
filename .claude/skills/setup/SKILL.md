@@ -9,7 +9,7 @@ Run setup steps automatically. Only pause when user action is required (channel 
 
 **Principle:** When something is broken or missing, fix it. Don't tell the user to go fix it themselves unless it genuinely requires their manual action (e.g. authenticating a channel, pasting a secret token). If a dependency is missing, install it. If a service won't start, diagnose and repair. Ask the user for permission when needed, then do the work.
 
-**UX Note:** Use `AskUserQuestion` for multiple-choice questions only (e.g. "Docker or Apple Container?", "which channels?"). Do NOT use it when free-text input is needed (e.g. phone numbers, tokens, paths) — just ask the question in plain text and wait for the user's reply.
+**UX Note:** Use `AskUserQuestion` for multiple-choice questions only (e.g. "which channels?"). Do NOT use it when free-text input is needed (e.g. phone numbers, tokens, paths) — just ask the question in plain text and wait for the user's reply.
 
 ## 0. Git & Fork Setup
 
@@ -68,7 +68,6 @@ Run `npx tsx setup/index.ts --step environment` and parse the status block.
 
 - If HAS_AUTH=true → WhatsApp is already configured, note for step 5
 - If HAS_REGISTERED_GROUPS=true → note existing config, offer to skip or reconfigure
-- Record APPLE_CONTAINER and DOCKER values for step 3
 
 ### OpenClaw Migration Detection
 
@@ -93,132 +92,9 @@ Run `npx tsx setup/index.ts --step timezone` and parse the status block.
 - If NEEDS_USER_INPUT=true → The system timezone could not be autodetected (e.g. POSIX-style TZ like `IST-2`). AskUserQuestion: "What is your timezone?" with common options (America/New_York, Europe/London, Asia/Jerusalem, Asia/Tokyo) and an "Other" escape. Then re-run: `npx tsx setup/index.ts --step timezone -- --tz <their-answer>`.
 - If STATUS=success → Timezone is configured. Note RESOLVED_TZ for reference.
 
-## 3. Container Runtime
+## 4. Credentials
 
-### 3a. Choose runtime
-
-Check the preflight results for `APPLE_CONTAINER` and `DOCKER`, and the PLATFORM from step 1.
-
-- PLATFORM=linux → Docker (only option)
-- PLATFORM=macos + APPLE_CONTAINER=installed → AskUserQuestion with two options:
-  1. **Docker (recommended)** — description: "Cross-platform, better credential management, well-tested."
-  2. **Apple Container (experimental)** — description: "Native macOS runtime. Requires advanced setup."
-  If Apple Container, run `/convert-to-apple-container` now, then skip to 3c.
-- PLATFORM=macos + APPLE_CONTAINER=not_found → Docker
-
-### 3a-docker. Install Docker
-
-- DOCKER=running → continue to 4b
-- DOCKER=installed_not_running → start Docker: `open -a Docker` (macOS) or `sudo systemctl start docker` (Linux). Wait 15s, re-check with `docker info`.
-- DOCKER=not_found → Use `AskUserQuestion: Docker is required for running agents. Would you like me to install it?` If confirmed:
-  - macOS: install via `brew install --cask docker`, then `open -a Docker` and wait for it to start. If brew not available, direct to Docker Desktop download at https://docker.com/products/docker-desktop
-  - Linux: install with `curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER`. Note: user may need to log out/in for group membership.
-
-### 3b. Apple Container conversion gate (if needed)
-
-**If the chosen runtime is Apple Container**, you MUST check whether the source code has already been converted from Docker to Apple Container. Do NOT skip this step. Run:
-
-```bash
-grep -q "CONTAINER_RUNTIME_BIN = 'container'" src/container-runtime.ts && echo "ALREADY_CONVERTED" || echo "NEEDS_CONVERSION"
-```
-
-**If NEEDS_CONVERSION**, the source code still uses Docker as the runtime. You MUST run the `/convert-to-apple-container` skill NOW, before proceeding to the build step.
-
-**If ALREADY_CONVERTED**, the code already uses Apple Container. Continue to 3c.
-
-**If the chosen runtime is Docker**, no conversion is needed. Continue to 3c.
-
-### 3c. Build and test
-
-Run `npx tsx setup/index.ts --step container -- --runtime <chosen>` and parse the status block.
-
-**If BUILD_OK=false:** Read `logs/setup.log` tail for the build error.
-- Cache issue (stale layers): `docker builder prune -f` (Docker) or `container builder stop && container builder rm && container builder start` (Apple Container). Retry.
-- Dockerfile syntax or missing files: diagnose from the log and fix, then retry.
-
-**If TEST_OK=false but BUILD_OK=true:** The image built but won't run. Check logs — common cause is runtime not fully started. Wait a moment and retry the test.
-
-## 4. Credential System
-
-The credential system depends on the container runtime chosen in step 3.
-
-### 4a. Docker → OneCLI
-
-Install OneCLI and its CLI tool:
-
-```bash
-curl -fsSL onecli.sh/install | sh
-curl -fsSL onecli.sh/cli/install | sh
-```
-
-Verify both installed: `onecli version`. If the command is not found, the CLI was likely installed to `~/.local/bin/`. Add it to PATH for the current session and persist it:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-# Persist for future sessions (append to shell profile if not already present)
-grep -q '.local/bin' ~/.bashrc 2>/dev/null || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-grep -q '.local/bin' ~/.zshrc 2>/dev/null || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-```
-
-Then re-verify with `onecli version`.
-
-Point the CLI at the local OneCLI instance, the ONECLI_URL was output from the install script above:
-```bash
-onecli config set api-host ${ONECLI_URL}
-```
-
-Ensure `.env` has the OneCLI URL (create the file if it doesn't exist):
-```bash
-grep -q 'ONECLI_URL' .env 2>/dev/null || echo 'ONECLI_URL=${ONECLI_URL}' >> .env
-```
-
-Check if a secret already exists:
-```bash
-onecli secrets list
-```
-
-If an Anthropic secret is listed, confirm with user: keep or reconfigure? If keeping, skip to step 5.
-
-AskUserQuestion: Do you want to use your **Claude subscription** (Pro/Max) or an **Anthropic API key**?
-
-1. **Claude subscription (Pro/Max)** — description: "Uses your existing Claude Pro or Max subscription. You'll run `claude setup-token` in another terminal to get your token."
-2. **Anthropic API key** — description: "Pay-per-use API key from console.anthropic.com."
-
-#### Subscription path
-
-Tell the user:
-
-> Run `claude setup-token` in another terminal. It will output a token — copy it but don't paste it here.
-
-Then stop and wait for the user to confirm they have the token. Do NOT proceed until they respond.
-
-Once they confirm, they register it with OneCLI. AskUserQuestion with two options:
-
-1. **Dashboard** — description: "Best if you have a browser on this machine. Open ${ONECLI_URL} and add the secret in the UI. Use type 'anthropic' and paste your token as the value."
-2. **CLI** — description: "Best for remote/headless servers. Run: `onecli secrets create --name Anthropic --type anthropic --value YOUR_TOKEN --host-pattern api.anthropic.com`"
-
-#### API key path
-
-Tell the user to get an API key from https://console.anthropic.com/settings/keys if they don't have one.
-
-Then AskUserQuestion with two options:
-
-1. **Dashboard** — description: "Best if you have a browser on this machine. Open ${ONECLI_URL} and add the secret in the UI."
-2. **CLI** — description: "Best for remote/headless servers. Run: `onecli secrets create --name Anthropic --type anthropic --value YOUR_KEY --host-pattern api.anthropic.com`"
-
-#### After either path
-
-Ask them to let you know when done.
-
-**If the user's response happens to contain a token or key** (starts with `sk-ant-`): handle it gracefully — run the `onecli secrets create` command with that value on their behalf.
-
-**After user confirms:** verify with `onecli secrets list` that an Anthropic secret exists. If not, ask again.
-
-### 4b. Apple Container → Native Credential Proxy
-
-Apple Container is not compatible with OneCLI. The credential proxy code is already included in the apple-container branch — do NOT invoke `/use-native-credential-proxy` (it would conflict with already-applied code).
-
-Instead, just configure the credentials in `.env`:
+NanoClaw runs the coding agent in-process via `@mariozechner/pi-coding-agent`, with bash commands sandboxed by `sandbox-exec` (macOS) or `bubblewrap` (Linux). Credentials live in `.env` at the project root.
 
 AskUserQuestion: Do you want to use your **Claude subscription** (Pro/Max) or an **Anthropic API key**?
 
@@ -237,7 +113,7 @@ For API key: add to `.env`:
 echo 'ANTHROPIC_API_KEY=<their-key>' >> .env
 ```
 
-Verify the proxy starts: `npm run dev` should show "Credential proxy listening" in the logs.
+Verify the agent loads credentials: `npm run dev` should start without authentication errors.
 
 ## 5. Set Up Channels
 
@@ -288,20 +164,6 @@ Run `npx tsx setup/index.ts --step service` and parse the status block.
 
 **If FALLBACK=wsl_no_systemd:** WSL without systemd detected. Tell user they can either enable systemd in WSL (`echo -e "[boot]\nsystemd=true" | sudo tee /etc/wsl.conf` then restart WSL) or use the generated `start-nanoclaw.sh` wrapper.
 
-**If DOCKER_GROUP_STALE=true:** The user was added to the docker group after their session started — the systemd service can't reach the Docker socket. Ask user to run these two commands:
-
-1. Immediate fix: `sudo setfacl -m u:$(whoami):rw /var/run/docker.sock`
-2. Persistent fix (re-applies after every Docker restart):
-```bash
-sudo mkdir -p /etc/systemd/system/docker.service.d
-sudo tee /etc/systemd/system/docker.service.d/socket-acl.conf << 'EOF'
-[Service]
-ExecStartPost=/usr/bin/setfacl -m u:USERNAME:rw /var/run/docker.sock
-EOF
-sudo systemctl daemon-reload
-```
-Replace `USERNAME` with the actual username (from `whoami`). Run the two `sudo` commands separately — the `tee` heredoc first, then `daemon-reload`. After user confirms setfacl ran, re-run the service step.
-
 **If SERVICE_LOADED=false:**
 - Read `logs/setup.log` for the error.
 - macOS: check `launchctl list | grep nanoclaw`. If PID=`-` and status non-zero, read `logs/nanoclaw.error.log`.
@@ -315,7 +177,7 @@ Run `npx tsx setup/index.ts --step verify` and parse the status block.
 **If STATUS=failed, fix each:**
 - SERVICE=stopped → `npm run build`, then restart: `launchctl kickstart -k gui/$(id -u)/com.nanoclaw` (macOS) or `systemctl --user restart nanoclaw` (Linux) or `bash start-nanoclaw.sh` (WSL nohup)
 - SERVICE=not_found → re-run step 7
-- CREDENTIALS=missing → re-run step 4 (Docker: check `onecli secrets list`; Apple Container: check `.env` for credentials)
+- CREDENTIALS=missing → re-run step 4 (check `.env` for `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`)
 - CHANNEL_AUTH shows `not_found` for any channel → re-invoke that channel's skill (e.g. `/add-telegram`)
 - REGISTERED_GROUPS=0 → re-invoke the channel skills from step 5
 - MOUNT_ALLOWLIST=missing → `npx tsx setup/index.ts --step mounts -- --empty`
@@ -324,9 +186,9 @@ Tell user to test: send a message in their registered chat. Show: `tail -f logs/
 
 ## Troubleshooting
 
-**Service not starting:** Check `logs/nanoclaw.error.log`. Common: wrong Node path (re-run step 7), credential system not running (Docker: check `curl ${ONECLI_URL}/api/health`; Apple Container: check `.env` credentials), missing channel credentials (re-invoke channel skill).
+**Service not starting:** Check `logs/nanoclaw.error.log`. Common: wrong Node path (re-run step 7), missing credentials (check `.env` for `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`), missing channel credentials (re-invoke channel skill).
 
-**Container agent fails ("Claude Code process exited with code 1"):** Ensure the container runtime is running — `open -a Docker` (macOS Docker), `container system start` (Apple Container), or `sudo systemctl start docker` (Linux). Check container logs in `groups/main/logs/container-*.log`.
+**Agent fails to start:** Check `logs/nanoclaw.log` for pi-coding-agent errors. Verify credentials in `.env` and that `sandbox-exec` (macOS) / `bwrap` (Linux) is available on PATH.
 
 **No response to messages:** Check trigger pattern. Main channel doesn't need prefix. Check DB: `npx tsx setup/index.ts --step verify`. Check `logs/nanoclaw.log`.
 

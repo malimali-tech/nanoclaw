@@ -1,11 +1,59 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Mock pi-coding-agent so runTask doesn't try to spin up a real LLM session
+// when the scheduler loop fires a due task during tests.
+vi.mock('@mariozechner/pi-coding-agent', () => {
+  class FakeSession {
+    subscribe(_cb: (event: unknown) => void): () => void {
+      return () => {};
+    }
+    async prompt(_text: string): Promise<void> {
+      return;
+    }
+    dispose(): void {
+      return;
+    }
+  }
+  return {
+    AuthStorage: { create: () => ({}) },
+    ModelRegistry: { create: (_a: unknown) => ({}) },
+    SessionManager: {
+      continueRecent: (_cwd: string) => ({}),
+      inMemory: () => ({}),
+    },
+    DefaultResourceLoader: class {
+      constructor(_args: unknown) {}
+      async reload(): Promise<void> {
+        return;
+      }
+    },
+    getAgentDir: () => '/tmp/agent-dir',
+    createAgentSession: async () => ({ session: new FakeSession() }),
+  };
+});
+
 import { _initTestDatabase, createTask, getTaskById } from './db.js';
 import {
   _resetSchedulerLoopForTests,
   computeNextRun,
+  makeTaskSchedulerPort,
   startSchedulerLoop,
+  type SchedulerDependencies,
 } from './task-scheduler.js';
+
+const noopPorts: SchedulerDependencies['ports'] = {
+  router: { send: async () => {} },
+  taskScheduler: {
+    schedule: () => ({ taskId: 'x' }),
+    list: () => [],
+    pause: () => {},
+    resume: () => {},
+    cancel: () => {},
+    update: () => {},
+  },
+  groupRegistry: { register: () => {} },
+  channels: [],
+};
 
 describe('task scheduler', () => {
   beforeEach(() => {
@@ -32,21 +80,14 @@ describe('task scheduler', () => {
       created_at: '2026-02-22T00:00:00.000Z',
     });
 
-    const enqueueTask = vi.fn(
-      (_groupJid: string, _taskId: string, fn: () => Promise<void>) => {
-        void fn();
-      },
-    );
-
     startSchedulerLoop({
       registeredGroups: () => ({}),
-      getSessions: () => ({}),
-      queue: { enqueueTask } as any,
-      onProcess: () => {},
-      sendMessage: async () => {},
+      ports: noopPorts,
     });
 
+    // Let the scheduler loop tick and any microtasks resolve.
     await vi.advanceTimersByTimeAsync(10);
+    await vi.runOnlyPendingTimersAsync();
 
     const task = getTaskById('task-invalid-folder');
     expect(task?.status).toBe('paused');
@@ -125,5 +166,104 @@ describe('task scheduler', () => {
     const offset =
       (new Date(nextRun!).getTime() - new Date(scheduledTime).getTime()) % ms;
     expect(offset).toBe(0);
+  });
+});
+
+describe('makeTaskSchedulerPort', () => {
+  beforeEach(() => {
+    _initTestDatabase();
+  });
+
+  it('schedule creates a task with computed next_run and active status', () => {
+    const port = makeTaskSchedulerPort();
+    const before = Date.now();
+    const { taskId } = port.schedule({
+      prompt: 'do thing',
+      scheduleType: 'interval',
+      scheduleValue: '60000',
+      contextMode: 'isolated',
+      targetJid: 'g@g.us',
+      createdBy: 'mygroup',
+    });
+
+    const t = getTaskById(taskId);
+    expect(t).toBeDefined();
+    expect(t!.status).toBe('active');
+    expect(t!.group_folder).toBe('mygroup');
+    expect(t!.chat_jid).toBe('g@g.us');
+    expect(t!.prompt).toBe('do thing');
+    const next = new Date(t!.next_run!).getTime();
+    expect(next).toBeGreaterThanOrEqual(before + 60000 - 50);
+  });
+
+  it('list filters by group folder for non-main scopes', () => {
+    const port = makeTaskSchedulerPort();
+    port.schedule({
+      prompt: 'a',
+      scheduleType: 'interval',
+      scheduleValue: '60000',
+      contextMode: 'isolated',
+      targetJid: 'g1@g.us',
+      createdBy: 'group-a',
+    });
+    port.schedule({
+      prompt: 'b',
+      scheduleType: 'interval',
+      scheduleValue: '60000',
+      contextMode: 'isolated',
+      targetJid: 'g2@g.us',
+      createdBy: 'group-b',
+    });
+
+    const allFromMain = port.list({ groupFolder: 'group-a', isMain: true });
+    const ownOnly = port.list({ groupFolder: 'group-a', isMain: false });
+    expect(allFromMain).toHaveLength(2);
+    expect(ownOnly).toHaveLength(1);
+    expect(ownOnly[0].groupFolder).toBe('group-a');
+  });
+
+  it('pause / resume / cancel flow', () => {
+    const port = makeTaskSchedulerPort();
+    const { taskId } = port.schedule({
+      prompt: 'p',
+      scheduleType: 'interval',
+      scheduleValue: '60000',
+      contextMode: 'isolated',
+      targetJid: 'g@g.us',
+      createdBy: 'g',
+    });
+    const scope = { groupFolder: 'g', isMain: false };
+
+    port.pause(taskId, scope);
+    expect(getTaskById(taskId)?.status).toBe('paused');
+
+    port.resume(taskId, scope);
+    expect(getTaskById(taskId)?.status).toBe('active');
+
+    port.cancel(taskId, scope);
+    expect(getTaskById(taskId)).toBeUndefined();
+  });
+
+  it('update recomputes next_run when schedule_value changes', () => {
+    const port = makeTaskSchedulerPort();
+    const { taskId } = port.schedule({
+      prompt: 'p',
+      scheduleType: 'interval',
+      scheduleValue: '60000',
+      contextMode: 'isolated',
+      targetJid: 'g@g.us',
+      createdBy: 'g',
+    });
+    const oldNext = new Date(getTaskById(taskId)!.next_run!).getTime();
+
+    port.update({
+      taskId,
+      scope: { groupFolder: 'g', isMain: false },
+      scheduleValue: '600000', // 10x larger
+    });
+
+    const newNext = new Date(getTaskById(taskId)!.next_run!).getTime();
+    expect(newNext).toBeGreaterThan(oldNext);
+    expect(getTaskById(taskId)!.schedule_value).toBe('600000');
   });
 });

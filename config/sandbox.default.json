@@ -1,0 +1,26 @@
+{
+  "enabled": true,
+  "network": {
+    "allowedDomains": [
+      "registry.npmjs.org",
+      "registry.yarnpkg.com",
+      "*.npmjs.org",
+      "pypi.org",
+      "*.pypi.org",
+      "github.com",
+      "*.github.com",
+      "api.github.com",
+      "raw.githubusercontent.com",
+      "api.anthropic.com",
+      "api.openai.com",
+      "api.deepseek.com",
+      "generativelanguage.googleapis.com"
+    ],
+    "deniedDomains": []
+  },
+  "filesystem": {
+    "denyRead": ["~/.ssh", "~/.aws", "~/.gnupg", "~/.config/gh"],
+    "allowWrite": [".", "/tmp"],
+    "denyWrite": [".env", ".env.*", "*.pem", "*.key", "*.p12"]
+  }
+}
