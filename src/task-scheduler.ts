@@ -1,24 +1,38 @@
-import { ChildProcess } from 'child_process';
 import { CronExpressionParser } from 'cron-parser';
 import fs from 'fs';
+import path from 'path';
 
-import { ASSISTANT_NAME, SCHEDULER_POLL_INTERVAL, TIMEZONE } from './config.js';
 import {
-  ContainerOutput,
-  runContainerAgent,
-  writeTasksSnapshot,
-} from './container-runner.js';
+  AuthStorage,
+  DefaultResourceLoader,
+  ModelRegistry,
+  SessionManager,
+  createAgentSession,
+  getAgentDir,
+} from '@mariozechner/pi-coding-agent';
+
+import { GROUPS_DIR, SCHEDULER_POLL_INTERVAL, TIMEZONE } from './config.js';
 import {
+  createTask,
+  deleteTask,
   getAllTasks,
   getDueTasks,
   getTaskById,
+  getTasksForGroup,
   logTaskRun,
   updateTask,
   updateTaskAfterRun,
 } from './db.js';
-import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { logger } from './logger.js';
+import { nanoclawExtension } from './agent/extension.js';
+import type {
+  ExtensionCtx,
+  ScheduleTaskRequest,
+  ScheduledTaskSummary,
+  TaskSchedulerPort,
+  UpdateTaskRequest,
+} from './agent/types.js';
 import { RegisteredGroup, ScheduledTask } from './types.js';
 
 /**
@@ -62,17 +76,47 @@ export function computeNextRun(task: ScheduledTask): string | null {
   return null;
 }
 
+/**
+ * Compute the very first run time for a brand-new task. Unlike
+ * computeNextRun this does not need a prior `next_run` to anchor to.
+ */
+function computeFirstRun(
+  type: 'cron' | 'interval' | 'once',
+  value: string,
+): string {
+  if (type === 'cron') {
+    const itr = CronExpressionParser.parse(value, { tz: TIMEZONE });
+    const iso = itr.next().toISOString();
+    if (!iso) throw new Error(`Cannot compute next run for cron: ${value}`);
+    return iso;
+  }
+  if (type === 'interval') {
+    const ms = parseInt(value, 10);
+    return new Date(Date.now() + ms).toISOString();
+  }
+  // once: value is local-time without TZ suffix; new Date() treats as local
+  return new Date(value).toISOString();
+}
+
+function toSummary(t: ScheduledTask): ScheduledTaskSummary {
+  return {
+    id: t.id,
+    prompt: t.prompt,
+    scheduleType: t.schedule_type,
+    scheduleValue: t.schedule_value,
+    status: t.status,
+    nextRun: t.next_run ?? undefined,
+    groupFolder: t.group_folder,
+  };
+}
+
 export interface SchedulerDependencies {
   registeredGroups: () => Record<string, RegisteredGroup>;
-  getSessions: () => Record<string, string>;
-  queue: GroupQueue;
-  onProcess: (
-    groupJid: string,
-    proc: ChildProcess,
-    containerName: string,
-    groupFolder: string,
-  ) => void;
-  sendMessage: (jid: string, text: string) => Promise<void>;
+  /** Ports forwarded into the in-process pi agent for scheduled task runs. */
+  ports: Pick<
+    ExtensionCtx,
+    'router' | 'taskScheduler' | 'groupRegistry' | 'channels'
+  >;
 }
 
 async function runTask(
@@ -129,95 +173,95 @@ async function runTask(
     return;
   }
 
-  // Update tasks snapshot for container to read (filtered by group)
   const isMain = group.isMain === true;
-  const tasks = getAllTasks();
-  writeTasksSnapshot(
-    task.group_folder,
+
+  let result: string | null = null as string | null;
+  let error: string | null = null as string | null;
+  let session: Awaited<ReturnType<typeof createAgentSession>>['session'] | null =
+    null;
+  let buffer = '';
+  let sendChain: Promise<void> = Promise.resolve();
+
+  const ctx: ExtensionCtx = {
+    ...deps.ports,
+    groupFolder: task.group_folder,
+    chatJid: task.chat_jid,
     isMain,
-    tasks.map((t) => ({
-      id: t.id,
-      groupFolder: t.group_folder,
-      prompt: t.prompt,
-      script: t.script,
-      schedule_type: t.schedule_type,
-      schedule_value: t.schedule_value,
-      status: t.status,
-      next_run: t.next_run,
-    })),
-  );
+  };
 
-  let result: string | null = null;
-  let error: string | null = null;
-
-  // For group context mode, use the group's current session
-  const sessions = deps.getSessions();
-  const sessionId =
-    task.context_mode === 'group' ? sessions[task.group_folder] : undefined;
-
-  // After the task produces a result, close the container promptly.
-  // Tasks are single-turn — no need to wait IDLE_TIMEOUT (30 min) for the
-  // query loop to time out. A short delay handles any final MCP calls.
-  const TASK_CLOSE_DELAY_MS = 10000;
-  let closeTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const scheduleClose = () => {
-    if (closeTimer) return; // already scheduled
-    closeTimer = setTimeout(() => {
-      logger.debug({ taskId: task.id }, 'Closing task container after result');
-      deps.queue.closeStdin(task.chat_jid);
-    }, TASK_CLOSE_DELAY_MS);
+  const flush = async () => {
+    const text = buffer.trim();
+    buffer = '';
+    if (!text) return;
+    try {
+      await deps.ports.router.send(task.chat_jid, text);
+      // Track the last non-empty output as the task's result.
+      result = text;
+    } catch (err) {
+      logger.error(
+        { taskId: task.id, err },
+        'router.send failed during scheduled task',
+      );
+    }
   };
 
   try {
-    const output = await runContainerAgent(
-      group,
-      {
-        prompt: task.prompt,
-        sessionId,
-        groupFolder: task.group_folder,
-        chatJid: task.chat_jid,
-        isMain,
-        isScheduledTask: true,
-        assistantName: ASSISTANT_NAME,
-        script: task.script || undefined,
-      },
-      (proc, containerName) =>
-        deps.onProcess(task.chat_jid, proc, containerName, task.group_folder),
-      async (streamedOutput: ContainerOutput) => {
-        if (streamedOutput.result) {
-          result = streamedOutput.result;
-          // Forward result to user (sendMessage handles formatting)
-          await deps.sendMessage(task.chat_jid, streamedOutput.result);
-          scheduleClose();
-        }
-        if (streamedOutput.status === 'success') {
-          deps.queue.notifyIdle(task.chat_jid);
-          scheduleClose(); // Close promptly even when result is null (e.g. IPC-only tasks)
-        }
-        if (streamedOutput.status === 'error') {
-          error = streamedOutput.error || 'Unknown error';
-        }
-      },
-    );
+    const cwd = path.join(GROUPS_DIR, task.group_folder);
+    const authStorage = AuthStorage.create();
+    const modelRegistry = ModelRegistry.create(authStorage);
+    const loader = new DefaultResourceLoader({
+      cwd,
+      agentDir: getAgentDir(),
+      extensionFactories: [nanoclawExtension(ctx)],
+    });
+    await loader.reload();
 
-    if (closeTimer) clearTimeout(closeTimer);
+    const created = await createAgentSession({
+      cwd,
+      sessionManager:
+        task.context_mode === 'group'
+          ? SessionManager.continueRecent(cwd)
+          : SessionManager.inMemory(),
+      resourceLoader: loader,
+      authStorage,
+      modelRegistry,
+    });
+    session = created.session;
 
-    if (output.status === 'error') {
-      error = output.error || 'Unknown error';
-    } else if (output.result) {
-      // Result was already forwarded to the user via the streaming callback above
-      result = output.result;
-    }
+    session.subscribe((event) => {
+      if (
+        event.type === 'message_update' &&
+        event.assistantMessageEvent.type === 'text_delta'
+      ) {
+        buffer += event.assistantMessageEvent.delta;
+      } else if (event.type === 'turn_end' || event.type === 'agent_end') {
+        sendChain = sendChain.then(() => flush());
+      }
+    });
+
+    await session.prompt(task.prompt);
+    // Drain any pending flushes triggered by stream events.
+    await sendChain;
+    await flush();
 
     logger.info(
       { taskId: task.id, durationMs: Date.now() - startTime },
       'Task completed',
     );
   } catch (err) {
-    if (closeTimer) clearTimeout(closeTimer);
     error = err instanceof Error ? err.message : String(err);
     logger.error({ taskId: task.id, error }, 'Task failed');
+  } finally {
+    if (session) {
+      try {
+        session.dispose();
+      } catch (err) {
+        logger.warn(
+          { taskId: task.id, err },
+          'Failed to dispose session for scheduled task',
+        );
+      }
+    }
   }
 
   const durationMs = Date.now() - startTime;
@@ -264,9 +308,12 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
           continue;
         }
 
-        deps.queue.enqueueTask(currentTask.chat_jid, currentTask.id, () =>
-          runTask(currentTask, deps),
-        );
+        runTask(currentTask, deps).catch((err) => {
+          logger.error(
+            { taskId: currentTask.id, err },
+            'Task execution failed',
+          );
+        });
       }
     } catch (err) {
       logger.error({ err }, 'Error in scheduler loop');
@@ -281,4 +328,60 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
 /** @internal - for tests only. */
 export function _resetSchedulerLoopForTests(): void {
   schedulerRunning = false;
+}
+
+/**
+ * Build a TaskSchedulerPort backed by the host SQLite database.
+ * The pi extension calls into this from inside the agent container.
+ */
+export function makeTaskSchedulerPort(): TaskSchedulerPort {
+  return {
+    schedule: (req: ScheduleTaskRequest) => {
+      const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const nextRun = computeFirstRun(req.scheduleType, req.scheduleValue);
+      createTask({
+        id: taskId,
+        group_folder: req.createdBy,
+        chat_jid: req.targetJid,
+        prompt: req.prompt,
+        script: req.script,
+        schedule_type: req.scheduleType,
+        schedule_value: req.scheduleValue,
+        context_mode: req.contextMode,
+        next_run: nextRun,
+        status: 'active',
+        created_at: new Date().toISOString(),
+      });
+      return { taskId };
+    },
+    list: ({ groupFolder, isMain }) => {
+      const all = isMain ? getAllTasks() : getTasksForGroup(groupFolder);
+      return all.map(toSummary);
+    },
+    pause: (taskId, _scope) => updateTask(taskId, { status: 'paused' }),
+    resume: (taskId, _scope) => {
+      const t = getTaskById(taskId);
+      if (!t) return;
+      // Recompute next_run on resume so we don't immediately fire a stale task.
+      const nextRun = computeFirstRun(t.schedule_type, t.schedule_value);
+      updateTask(taskId, { status: 'active', next_run: nextRun });
+    },
+    cancel: (taskId, _scope) => deleteTask(taskId),
+    update: (req: UpdateTaskRequest) => {
+      const partial: Parameters<typeof updateTask>[1] = {};
+      if (req.prompt !== undefined) partial.prompt = req.prompt;
+      if (req.script !== undefined) partial.script = req.script;
+      if (req.scheduleType !== undefined) partial.schedule_type = req.scheduleType;
+      if (req.scheduleValue !== undefined) {
+        partial.schedule_value = req.scheduleValue;
+        // Recompute next_run since the schedule changed.
+        const t = getTaskById(req.taskId);
+        if (t) {
+          const type = req.scheduleType ?? t.schedule_type;
+          partial.next_run = computeFirstRun(type, req.scheduleValue);
+        }
+      }
+      updateTask(req.taskId, partial);
+    },
+  };
 }

@@ -672,20 +672,33 @@ async function main(): Promise<void> {
   }
 
   // Start subsystems (independently of connection handler)
+  // TODO(task-9): wire real ports (router/taskScheduler/groupRegistry/channels).
+  // This stub exists only so the worktree compiles between Task 8 and Task 9 —
+  // the scheduler will not run user prompts correctly until Task 9 lands.
   startSchedulerLoop({
     registeredGroups: () => registeredGroups,
-    getSessions: () => sessions,
-    queue,
-    onProcess: (groupJid, proc, containerName, groupFolder) =>
-      queue.registerProcess(groupJid, proc, containerName, groupFolder),
-    sendMessage: async (jid, rawText) => {
-      const channel = findChannel(channels, jid);
-      if (!channel) {
-        logger.warn({ jid }, 'No channel owns JID, cannot send message');
-        return;
-      }
-      const text = formatOutbound(rawText);
-      if (text) await channel.sendMessage(jid, text);
+    ports: {
+      router: {
+        send: async (jid, rawText) => {
+          const channel = findChannel(channels, jid);
+          if (!channel) {
+            logger.warn({ jid }, 'No channel owns JID, cannot send message');
+            return;
+          }
+          const text = formatOutbound(rawText);
+          if (text) await channel.sendMessage(jid, text);
+        },
+      },
+      taskScheduler: {
+        schedule: () => ({ taskId: '' }),
+        list: () => [],
+        pause: () => {},
+        resume: () => {},
+        cancel: () => {},
+        update: () => {},
+      },
+      groupRegistry: { register: () => {} },
+      channels,
     },
   });
   startIpcWatcher({
