@@ -59,7 +59,7 @@ claude
 
 Then run `/setup`. Claude Code handles everything: dependencies, authentication, sandbox configuration, and service setup.
 
-> **Note:** Commands prefixed with `/` (like `/setup`, `/add-whatsapp`) are [Claude Code skills](https://code.claude.com/docs/en/skills). Type them inside the `claude` CLI prompt, not in your regular terminal. If you don't have Claude Code installed, get it at [claude.com/product/claude-code](https://claude.com/product/claude-code).
+> **Note:** Commands prefixed with `/` (like `/setup`, `/add-feishu`) are [Claude Code skills](https://code.claude.com/docs/en/skills). Type them inside the `claude` CLI prompt, not in your regular terminal. If you don't have Claude Code installed, get it at [claude.com/product/claude-code](https://claude.com/product/claude-code).
 
 ## Philosophy
 
@@ -76,13 +76,13 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 - No monitoring dashboard; ask Claude what's happening.
 - No debugging tools; describe the problem and Claude fixes it.
 
-**Skills over features.** Instead of adding features (e.g. support for Telegram) to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) like `/add-telegram` that transform your fork. You end up with clean code that does exactly what you need.
+**Skills over features.** Instead of adding new channels or integrations to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) (e.g. a hypothetical `/add-slack`) that transform your fork. You end up with clean code that does exactly what you need.
 
 **Pi-coding-agent in-process.** NanoClaw embeds [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) directly — no subprocess, no container build. The provider is selected via standard environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …) or `~/.pi/agent/auth.json`.
 
 ## What It Supports
 
-- **Multi-channel messaging** - Talk to your assistant from WhatsApp, Telegram, Discord, Slack, or Gmail. Add channels with skills like `/add-whatsapp` or `/add-telegram`. Run one or many at the same time.
+- **Feishu / Lark messaging** - Talk to your assistant from Feishu (国内) or Lark (国际) groups via WebSocket long-connection — no public URL needed. Other channels can be added back later as skills.
 - **Isolated group context** - Each group has its own `CLAUDE.md` memory and working directory; bash commands are sandboxed with a per-group sandbox profile.
 - **Main channel** - Your private channel (self-chat) for admin control; every group is completely isolated
 - **Scheduled tasks** - Recurring jobs that run the agent and can message you back
@@ -90,7 +90,6 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 - **OS-level sandbox** - Bash commands run via `sandbox-exec` (macOS) or `bubblewrap` (Linux); rules live in `config/sandbox.default.json` with per-group overrides at `groups/<group>/.pi/sandbox.json`
 - **Multi-provider** - Pi-coding-agent supports Anthropic, OpenAI, Gemini, and more — configure via env vars or `~/.pi/agent/auth.json`
 - **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks
-- **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
 
 ## Usage
 
@@ -126,9 +125,9 @@ The codebase is small enough that Claude can safely modify it.
 
 **Don't add features. Add skills.**
 
-If you want to add Telegram support, don't create a PR that adds Telegram to the core codebase. Instead, fork NanoClaw, make the code changes on a branch, and open a PR. We'll create a `skill/telegram` branch from your PR that other users can merge into their fork.
+If you want to add a new channel (e.g. Slack), don't create a PR that adds it to the core codebase. Instead, fork NanoClaw, make the code changes on a branch, and open a PR. We'll create a `skill/<channel>` branch from your PR that other users can merge into their fork.
 
-Users then run `/add-telegram` on their fork and get clean code that does exactly what they need, not a bloated system trying to support every use case.
+Users then run `/add-<channel>` on their fork and get clean code that does exactly what they need, not a bloated system trying to support every use case.
 
 ### RFS (Request for Skills)
 

@@ -4,7 +4,7 @@ Personal Claude assistant. See [README.md](README.md) for philosophy and setup. 
 
 ## Quick Context
 
-Single Node.js process with skill-based channel system. Channels (WhatsApp, Telegram, Slack, Discord, Gmail) are skills that self-register at startup. Messages route to `@mariozechner/pi-coding-agent` running in-process on the host. Each group has its own working directory and per-group session state. Bash commands from the agent run inside `sandbox-exec` (macOS) or `bubblewrap` (Linux); see `config/sandbox.default.json` for the default network/filesystem rules.
+Single Node.js process with a skill-based channel system. Feishu / Lark is currently the only built-in channel; it self-registers at startup via `src/channels/feishu.ts`. Messages route to `@mariozechner/pi-coding-agent` running in-process on the host. Each group has its own working directory and per-group session state. Bash commands from the agent run inside `sandbox-exec` (macOS) or `bubblewrap` (Linux); see `config/sandbox.default.json` for the default network/filesystem rules.
 
 ## Key Files
 
@@ -34,7 +34,7 @@ Bash commands run inside an OS-level sandbox (`sandbox-exec` on macOS, `bubblewr
 
 Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full taxonomy and guidelines.
 
-- **Feature skills** — merge a `skill/*` branch to add capabilities (e.g. `/add-telegram`, `/add-slack`)
+- **Feature skills** — merge a `skill/*` branch to add capabilities (e.g. `/add-feishu`)
 - **Utility skills** — ship code files alongside SKILL.md (e.g. `/claw`)
 - **Operational skills** — instruction-only workflows, always on `main` (e.g. `/setup`, `/debug`)
 - **Container skills** — loaded inside agent containers at runtime (`container/skills/`)
@@ -76,6 +76,3 @@ systemctl --user stop nanoclaw
 systemctl --user restart nanoclaw
 ```
 
-## Troubleshooting
-
-**WhatsApp not connecting after upgrade:** WhatsApp is now a separate skill, not bundled in core. Run `/add-whatsapp` (or `npx tsx scripts/apply-skill.ts .claude/skills/add-whatsapp && npm run build`) to install it. Existing auth credentials and groups are preserved.

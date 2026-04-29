@@ -1,7 +1,9 @@
 /**
  * Step: register — Write channel registration config, create group folders.
  *
- * Accepts --channel to specify the messaging platform (whatsapp, telegram, slack, discord).
+ * Accepts --channel to specify the messaging platform. Feishu / Lark is the
+ * only built-in channel; the field is kept generic so future channel skills
+ * can reuse the same registration plumbing.
  * Uses parameterized SQL queries to prevent injection.
  */
 import fs from 'fs';
@@ -30,7 +32,7 @@ function parseArgs(args: string[]): RegisterArgs {
     name: '',
     trigger: '',
     folder: '',
-    channel: 'whatsapp', // backward-compat: pre-refactor installs omit --channel
+    channel: 'feishu',
     requiresTrigger: true,
     isMain: false,
     assistantName: 'Andy',
@@ -92,8 +94,8 @@ export async function run(args: string[]): Promise<void> {
 
   logger.info(parsed, 'Registering channel');
 
-  // Ensure data and store directories exist (store/ may not exist on
-  // fresh installs that skip WhatsApp auth, which normally creates it)
+  // Ensure data and store directories exist (Feishu installs do not seed
+  // store/, so create it explicitly).
   fs.mkdirSync(path.join(projectRoot, 'data'), { recursive: true });
   fs.mkdirSync(STORE_DIR, { recursive: true });
 
