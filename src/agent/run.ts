@@ -15,6 +15,7 @@ import { logger } from '../logger.js';
 import { SessionPool, type DisposableSession } from './session-pool.js';
 import { loadSandboxConfig } from './sandbox-config.js';
 import { nanoclawExtension } from './extension.js';
+import { resolveModel } from './model.js';
 import type { ExtensionCtx } from './types.js';
 
 const IDLE_MS_RAW = parseInt(process.env.NANOCLAW_AGENT_IDLE_TTL_MS ?? '', 10);
@@ -77,12 +78,15 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
   });
   await loader.reload();
 
+  const model = resolveModel(modelRegistry);
+  if (model) log(`using model: ${model.provider}/${model.id}`);
   const { session } = await createAgentSession({
     cwd: groupCwd,
     sessionManager: SessionManager.continueRecent(groupCwd),
     resourceLoader: loader,
     authStorage,
     modelRegistry,
+    model,
   });
 
   const pooled: PooledSession = {

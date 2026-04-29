@@ -26,6 +26,7 @@ import {
 import { resolveGroupFolderPath } from './group-folder.js';
 import { logger } from './logger.js';
 import { nanoclawExtension } from './agent/extension.js';
+import { resolveModel } from './agent/model.js';
 import type {
   ExtensionCtx,
   ScheduleTaskRequest,
@@ -216,6 +217,7 @@ async function runTask(
     });
     await loader.reload();
 
+    const model = resolveModel(modelRegistry);
     const created = await createAgentSession({
       cwd,
       sessionManager:
@@ -225,6 +227,7 @@ async function runTask(
       resourceLoader: loader,
       authStorage,
       modelRegistry,
+      model,
     });
     session = created.session;
 
