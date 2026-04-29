@@ -185,6 +185,12 @@ The earlier simplify pass identified `containerConfig` / `AdditionalMount` / `Mo
 | Agent calls hostile network endpoint | **NOT defended in v1** (Mom default). Future: egress allowlist. |
 | Container escape (kernel exploit) | Out of scope; stock Docker hardening only |
 
+## Implementation notes (Phase 3 outcomes)
+
+- **Image dependency**: `find.glob` uses `bash` with `shopt -s globstar nullglob dotglob`. `debian:12-slim` ships bash; if the image is swapped in `runtime.docker.image`, ensure bash is present.
+- **Binary write trailing-NUL edge case**: `write` and `edit` pass content via env var + `printf '%s'`. This is byte-faithful for text but does NOT preserve a literal trailing NUL byte. Agent must use `bash` directly for binary writes that require NUL preservation.
+- **Image MIME detection deferred**: `read.detectImageMimeType` is not implemented; the read tool treats all files as non-image. Add later if image preview becomes a requirement.
+
 ## Tradeoffs explicitly accepted
 
 - **No per-group container** — group-to-group isolation is weak (a non-`main` group's bash can read other groups' files via `/workspace/groups/<other>`). Same trust domain (single user); strong isolation = future variant.
