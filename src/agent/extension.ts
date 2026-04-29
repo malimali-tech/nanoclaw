@@ -127,13 +127,13 @@ export function nanoclawExtension(ctx: ExtensionCtx) {
           description: `${op.replace('_task', '')} a scheduled task.`,
           parameters: Type.Object({ task_id: Type.String() }),
           execute: async (_id, p) => {
-            const fn =
+            const method =
               op === 'pause_task'
-                ? ctx.taskScheduler.pause
+                ? 'pause'
                 : op === 'resume_task'
-                  ? ctx.taskScheduler.resume
-                  : ctx.taskScheduler.cancel;
-            fn(p.task_id, {
+                  ? 'resume'
+                  : 'cancel';
+            ctx.taskScheduler[method](p.task_id, {
               groupFolder: ctx.groupFolder,
               isMain: ctx.isMain,
             });

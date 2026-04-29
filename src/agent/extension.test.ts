@@ -107,4 +107,33 @@ describe('nanoclawExtension', () => {
       requiresTrigger: false,
     });
   });
+
+  it('pause_task / cancel_task each invoke only the matching scheduler method', async () => {
+    const ctx = makeCtx();
+    const { pi, tools } = makePi();
+    nanoclawExtension(ctx)(pi);
+    const pause = tools.find((t) => t.name === 'pause_task')!;
+    const cancel = tools.find((t) => t.name === 'cancel_task')!;
+    await pause.execute('id', { task_id: 't1' });
+    expect(ctx.taskScheduler.pause).toHaveBeenCalledWith('t1', { groupFolder: 'wa_test', isMain: false });
+    expect(ctx.taskScheduler.resume).not.toHaveBeenCalled();
+    expect(ctx.taskScheduler.cancel).not.toHaveBeenCalled();
+    await cancel.execute('id', { task_id: 't1' });
+    expect(ctx.taskScheduler.cancel).toHaveBeenCalledWith('t1', { groupFolder: 'wa_test', isMain: false });
+    expect(ctx.taskScheduler.resume).not.toHaveBeenCalled();
+  });
+
+  it('schedule_task rejects "once" with timezone suffix and does not call scheduler', async () => {
+    const ctx = makeCtx();
+    const { pi, tools } = makePi();
+    nanoclawExtension(ctx)(pi);
+    const sched = tools.find((t) => t.name === 'schedule_task')!;
+    const res = await sched.execute('id', {
+      prompt: 'x',
+      schedule_type: 'once',
+      schedule_value: '2026-04-29T10:00:00Z',
+    });
+    expect(JSON.stringify(res)).toMatch(/timezone/i);
+    expect(ctx.taskScheduler.schedule).not.toHaveBeenCalled();
+  });
 });
