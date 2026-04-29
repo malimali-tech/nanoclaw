@@ -1,21 +1,36 @@
 // src/agent/run.ts
 import path from 'path';
+import { spawn } from 'node:child_process';
 import {
   AuthStorage,
   DefaultResourceLoader,
   ModelRegistry,
   SessionManager,
   createAgentSession,
+  createBashToolDefinition,
+  createReadToolDefinition,
+  createEditToolDefinition,
+  createWriteToolDefinition,
+  createGrepToolDefinition,
+  createFindToolDefinition,
+  createLsToolDefinition,
   getAgentDir,
   type AgentSession,
+  type ToolDefinition,
 } from '@mariozechner/pi-coding-agent';
 import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
 import { GROUPS_DIR } from '../config.js';
 import { logger } from '../logger.js';
 import { SessionPool, type DisposableSession } from './session-pool.js';
-import { loadSandboxConfig } from './sandbox-config.js';
+import { loadSandboxConfig, type SandboxConfig } from './sandbox-config.js';
 import { nanoclawExtension } from './extension.js';
 import { resolveModel } from './model.js';
+import { checkContainerHealth, type ExecFn } from './container-health.js';
+import {
+  createDockerOperations,
+  type DockerOperationsBundle,
+} from './docker-operations.js';
+import type { PathMapConfig } from './path-map.js';
 import type { ExtensionCtx } from './types.js';
 
 const IDLE_MS_RAW = parseInt(process.env.NANOCLAW_AGENT_IDLE_TTL_MS ?? '', 10);
@@ -34,24 +49,98 @@ type SharedPorts = Pick<
   'router' | 'taskScheduler' | 'groupRegistry' | 'channels'
 >;
 
+type CustomToolsBuilder = (groupCwd: string) => ToolDefinition[] | undefined;
+
+const nullCustomToolsBuilder: CustomToolsBuilder = () => undefined;
+
+/** Wrap `child_process.spawn` to satisfy the {@link ExecFn} contract used by container-health. */
+const spawnExec: ExecFn = (argv) =>
+  new Promise((resolve, reject) => {
+    const [cmd, ...rest] = argv;
+    if (!cmd) {
+      reject(new Error('exec: empty argv'));
+      return;
+    }
+    const child = spawn(cmd, rest, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    child.stdout?.on('data', (b: Buffer) => {
+      stdout += b.toString('utf8');
+    });
+    child.stderr?.on('data', () => {
+      /* swallow; container-health only cares about stdout + exit code */
+    });
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ stdout, code: code ?? -1 }));
+  });
+
 let sandboxReady = false;
+let customToolsBuilder: CustomToolsBuilder = nullCustomToolsBuilder;
+
 async function ensureSandbox(groupCwd: string): Promise<void> {
   if (sandboxReady) return;
-  const cfg = loadSandboxConfig(groupCwd);
-  if (cfg.enabled === false) {
+  const cfg: SandboxConfig = loadSandboxConfig(groupCwd);
+  const runtime = cfg.runtime ?? 'sandbox-runtime';
+
+  if (cfg.enabled === false || runtime === 'off') {
     log('sandbox disabled by config');
+    customToolsBuilder = nullCustomToolsBuilder;
     sandboxReady = true;
     return;
   }
+
+  if (runtime === 'docker') {
+    const containerName = cfg.docker?.containerName ?? 'nanoclaw-sandbox';
+    const health = await checkContainerHealth(containerName, spawnExec);
+    if (health.status === 'missing') {
+      throw new Error(
+        `Docker sandbox container '${containerName}' not found. Run: ./scripts/sandbox.sh create`,
+      );
+    }
+    if (health.status === 'stopped') {
+      throw new Error(
+        `Docker sandbox container '${containerName}' exists but is stopped. Run: ./scripts/sandbox.sh start`,
+      );
+    }
+
+    const repoRoot = process.cwd();
+    const paths: PathMapConfig = {
+      repoRoot,
+      groupsDir: GROUPS_DIR,
+      storeDir: path.join(repoRoot, 'store'),
+      globalDir: path.join(GROUPS_DIR, 'global'),
+    };
+    const dockerOps: DockerOperationsBundle = createDockerOperations({
+      container: containerName,
+      paths,
+    });
+
+    customToolsBuilder = (cwd) =>
+      [
+        createBashToolDefinition(cwd, { operations: dockerOps.bash }),
+        createReadToolDefinition(cwd, { operations: dockerOps.read }),
+        createEditToolDefinition(cwd, { operations: dockerOps.edit }),
+        createWriteToolDefinition(cwd, { operations: dockerOps.write }),
+        createGrepToolDefinition(cwd, { operations: dockerOps.grep }),
+        createFindToolDefinition(cwd, { operations: dockerOps.find }),
+        createLsToolDefinition(cwd, { operations: dockerOps.ls }),
+      ] as ToolDefinition[];
+    log(`docker sandbox ready (container=${containerName})`);
+    sandboxReady = true;
+    return;
+  }
+
+  // runtime === 'sandbox-runtime' (default)
   if (process.platform !== 'darwin' && process.platform !== 'linux') {
     log(
       `sandbox unsupported on ${process.platform}; bash will run unsandboxed`,
     );
+    customToolsBuilder = nullCustomToolsBuilder;
     sandboxReady = true;
     return;
   }
   await SandboxManager.initialize(cfg);
   log('sandbox initialized');
+  customToolsBuilder = nullCustomToolsBuilder;
   sandboxReady = true;
 }
 
@@ -83,6 +172,7 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
 
   const model = resolveModel(modelRegistry);
   if (model) log(`using model: ${model.provider}/${model.id}`);
+  const customTools = customToolsBuilder(groupCwd);
   const { session } = await createAgentSession({
     cwd: groupCwd,
     sessionManager: SessionManager.continueRecent(groupCwd),
@@ -90,6 +180,7 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
     authStorage,
     modelRegistry,
     model,
+    ...(customTools ? { noTools: 'builtin' as const, customTools } : {}),
   });
 
   const pooled: PooledSession = {
@@ -165,4 +256,5 @@ export async function shutdownAgent(): Promise<void> {
   if (pool) await pool.disposeAll();
   pool = null;
   sandboxReady = false;
+  customToolsBuilder = nullCustomToolsBuilder;
 }
