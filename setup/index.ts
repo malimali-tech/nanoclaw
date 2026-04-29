@@ -11,7 +11,6 @@ const STEPS: Record<
 > = {
   timezone: () => import('./timezone.js'),
   environment: () => import('./environment.js'),
-  container: () => import('./container.js'),
   register: () => import('./register.js'),
   mounts: () => import('./mounts.js'),
   service: () => import('./service.js'),
