@@ -5,6 +5,10 @@ import type { SandboxRuntimeConfig } from '@anthropic-ai/sandbox-runtime';
 
 export interface SandboxConfig extends SandboxRuntimeConfig {
   enabled?: boolean;
+  /** Which sandbox backend to use. Defaults to `sandbox-runtime` (current behavior). */
+  runtime?: 'docker' | 'sandbox-runtime' | 'off';
+  /** Settings for `runtime: docker`. Ignored otherwise. */
+  docker?: { containerName?: string; image?: string };
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -38,6 +42,8 @@ function mergeSandboxConfig(
 ): SandboxConfig {
   const out: SandboxConfig = { ...a };
   if (b.enabled !== undefined) out.enabled = b.enabled;
+  if (b.runtime !== undefined) out.runtime = b.runtime;
+  if (b.docker) out.docker = { ...a.docker, ...b.docker };
   if (b.network) out.network = { ...a.network, ...b.network };
   if (b.filesystem) out.filesystem = { ...a.filesystem, ...b.filesystem };
   return out;
