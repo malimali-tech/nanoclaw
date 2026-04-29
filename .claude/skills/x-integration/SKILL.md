@@ -43,11 +43,7 @@ Before using this skill, ensure:
 npx dotenv -e .env -- npx tsx .claude/skills/x-integration/scripts/setup.ts
 # Verify: data/x-auth.json should exist after successful login
 
-# 2. Rebuild container to include skill
-./container/build.sh
-# Verify: Output shows "COPY .claude/skills/x-integration/agent.ts"
-
-# 3. Rebuild host and restart service
+# 2. Rebuild host and restart service
 npm run build
 launchctl kickstart -k gui/$(id -u)/com.nanoclaw  # macOS
 # Linux: systemctl --user restart nanoclaw
@@ -196,40 +192,7 @@ Add to the end of tools array (before the closing `]`):
 
 ---
 
-**3. Build script: `container/build.sh`**
-
-Change build context from `container/` to project root (required to access `.claude/skills/`):
-```bash
-# Find:
-docker build -t "${IMAGE_NAME}:${TAG}" .
-
-# Replace with:
-cd "$SCRIPT_DIR/.."
-docker build -t "${IMAGE_NAME}:${TAG}" -f container/Dockerfile .
-```
-
----
-
-**4. Dockerfile: `container/Dockerfile`**
-
-First, update the build context paths (required to access `.claude/skills/` from project root):
-```dockerfile
-# Find:
-COPY agent-runner/package*.json ./
-...
-COPY agent-runner/ ./
-
-# Replace with:
-COPY container/agent-runner/package*.json ./
-...
-COPY container/agent-runner/ ./
-```
-
-Then add COPY line after `COPY container/agent-runner/ ./` and before `RUN npm run build`:
-```dockerfile
-# Copy skill MCP tools
-COPY .claude/skills/x-integration/agent.ts ./src/skills/x-integration/
-```
+**Note:** This skill was originally written for the previous container-based architecture. NanoClaw now runs the agent in-process via `@mariozechner/pi-coding-agent`, so the agent.ts MCP tools are imported directly from the host code (no Dockerfile edits or container build script needed). Wire `createXTools` into the agent's `mcpServers` configuration in `src/agent/` and rebuild the host with `npm run build`.
 
 ## Setup
 
@@ -257,15 +220,10 @@ This opens Chrome for manual X login. Session saved to `data/x-browser-profile/`
 cat data/x-auth.json  # Should show {"authenticated": true, ...}
 ```
 
-### 3. Rebuild Container
+### 3. Rebuild Host
 
 ```bash
-./container/build.sh
-```
-
-**Verify success:**
-```bash
-./container/build.sh 2>&1 | grep -i "agent.ts"  # Should show COPY line
+npm run build
 ```
 
 ### 4. Restart Service
@@ -397,17 +355,9 @@ If X updates their UI, selectors in scripts may break. Current selectors:
 | Modal dialog | `[role="dialog"][aria-modal="true"]` |
 | Modal submit | `[data-testid="tweetButton"]` |
 
-### Container Build Issues
+### MCP Tool Loading Issues
 
-If MCP tools not found in container:
-
-```bash
-# Verify build copies skill
-./container/build.sh 2>&1 | grep -i skill
-
-# Check container has the file
-docker run nanoclaw-agent ls -la /app/src/skills/
-```
+If MCP tools are not loaded by the in-process agent, verify that `createXTools` is wired into the `mcpServers` config in `src/agent/`, that `npm run build` has been run, and that the service was restarted.
 
 ## Security
 

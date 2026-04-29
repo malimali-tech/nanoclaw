@@ -43,12 +43,6 @@ npm test
 npm run build
 ```
 
-### Rebuild container
-
-```bash
-./container/build.sh
-```
-
 ### Restart service
 
 ```bash
@@ -66,7 +60,7 @@ launchctl kickstart -k gui/$(id -u)/com.nanoclaw  # macOS
    - The agent acknowledges compaction (e.g., "Conversation compacted.")
    - The session continues — send a follow-up message and verify the agent responds coherently
    - A conversation archive is written to `groups/{folder}/conversations/` (by the PreCompact hook)
-   - Container logs show `Compact boundary observed` (confirms SDK actually compacted)
+   - App logs (`logs/nanoclaw.log`) show `Compact boundary observed` (confirms the agent actually compacted)
    - If `compact_boundary` was NOT observed, the response says "compact_boundary was not observed"
 4. From a **non-main group** as a non-admin user, send: `@<assistant> /compact`
 5. Verify:
@@ -106,7 +100,6 @@ cd /tmp/nanoclaw-test
 claude  # then run /add-compact
 npm run build
 npm test
-./container/build.sh
 # Manual: send /compact from main group, verify compaction + continuation
 # Manual: send @<assistant> /compact from non-main as non-admin, verify denial
 # Manual: send @<assistant> /compact from non-main as admin, verify allowed

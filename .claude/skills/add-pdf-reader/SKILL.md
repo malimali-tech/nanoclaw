@@ -53,12 +53,6 @@ npm run build
 npx vitest run src/channels/whatsapp.test.ts
 ```
 
-### Rebuild container
-
-```bash
-./container/build.sh
-```
-
 ### Restart service
 
 ```bash
@@ -93,7 +87,7 @@ Look for:
 
 ### Agent says pdf-reader command not found
 
-Container needs rebuilding. Run `./container/build.sh` and restart the service.
+Verify `pdftotext` is installed on the host (`brew install poppler` on macOS, `apt-get install poppler-utils` on Linux), then rebuild and restart: `npm run build` and restart the service.
 
 ### PDF text extraction is empty
 

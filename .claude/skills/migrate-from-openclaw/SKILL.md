@@ -64,7 +64,7 @@ Then explain the key architectural differences. Don't dump a table — paraphras
 - **Container isolation:** NanoClaw runs each agent in an isolated Linux container (Docker or Apple Container). OpenClaw runs everything in one process. This means stronger isolation but also means each group is its own sandbox.
 - **Group-based memory:** In OpenClaw, all groups under one agent share the same SOUL.md, MEMORY.md, and IDENTITY.md. In NanoClaw, each group has its own filesystem and CLAUDE.md. Shared state goes in `groups/global/CLAUDE.md` (mounted read-only into all non-main containers).
 - **Channel skills:** In OpenClaw, channels are configured in `openclaw.json`. In NanoClaw, channels are installed as code via skills (`/add-telegram`, `/add-whatsapp`, etc.) and configured through `.env` variables.
-- **Simpler config:** NanoClaw has no config file — behavior is in the code and `CLAUDE.md` files. Credentials live in `.env` or the OneCLI vault.
+- **Simpler config:** NanoClaw has no config file — behavior is in the code and `CLAUDE.md` files. Credentials live in `.env`.
 
 AskUserQuestion: "Ready to start migrating? I'll go through each area one at a time."
 1. **Yes, let's go** — proceed to Phase 1
@@ -279,13 +279,7 @@ If SKILL_COUNT > 0 in discovery, OpenClaw had custom skills. The SKILL.md format
 
 The discovery reports skill names and source locations. For each skill, read just the YAML front matter (name + description at the top of SKILL.md) and present a list to the user: skill name, description, source location. Let the user select which ones to bring over.
 
-For confirmed skills, copy the entire skill directory as-is:
-
-```bash
-cp -r <skill_source_dir> container/skills/<skill_name>
-```
-
-After all skills are copied, a container rebuild is needed — note this for post-migration: `./container/build.sh`.
+For confirmed skills, copy the entire skill directory as-is into the agent skills location used by pi-coding-agent (typically `~/.claude/skills/<skill_name>` or a project-level skills directory). Restart the service after copying so the agent picks them up.
 
 ### Config-registered plugins and skills
 
@@ -344,7 +338,7 @@ npx tsx ${CLAUDE_SKILL_DIR}/scripts/extract-channel-credentials.ts --state-dir <
 
 The script writes the credential directly to `.env` using the correct NanoClaw variable name (e.g. `TELEGRAM_BOT_TOKEN`). Check the status block for `WRITTEN_TO` and `WRITTEN_COUNT` to confirm.
 
-**Credential destination note:** Credentials are saved to `.env` for now. During `/setup`, the credential step will either keep them in `.env` (Apple Container) or migrate them to the OneCLI vault (Docker). The user doesn't need to worry about this now.
+**Credential destination note:** Credentials are saved to `.env`, which is loaded by the host process at startup.
 
 For Slack: there are two credentials (bot token + app token). The script handles both in one run — check `HAS_CREDENTIAL_2` and `NANOCLAW_ENV_VAR_2` in the status block.
 
@@ -374,16 +368,16 @@ Read relevant sections from `<STATE_DIR>/openclaw.json` directly with the Read t
 
 If MCP_SERVERS was non-empty in discovery, these can be ported. Claude Code supports MCP servers natively. Read the OpenClaw config's `mcp.servers` section to get each server's details (`command`, `args`, `env`, `url`).
 
-MCP servers in NanoClaw are registered in the agent-runner source code. Before editing, grep for `mcpServers` in `container/agent-runner/src/` to find the current location — it's expected to be in `index.ts` in the `query()` options, but may have moved. For each OpenClaw MCP server the user wants to bring over:
+MCP servers in NanoClaw are registered in the agent setup code. Before editing, grep for `mcpServers` under `src/agent/` to find the current location. For each OpenClaw MCP server the user wants to bring over:
 
 1. Read its config: command, args, env, url
-2. **stdio servers** (have `command`): Add an entry to the `mcpServers` object in `container/agent-runner/src/index.ts`. The command runs inside the container, so it needs to be available there (Node.js/npx-based servers work; custom binaries would need to be added to the Dockerfile).
-3. **HTTP/SSE servers** (have `url`): These work if the URL is accessible from inside the container. Add them the same way.
+2. **stdio servers** (have `command`): Add an entry to the `mcpServers` object. The command runs in the host process, so any required binaries must be on the host PATH.
+3. **HTTP/SSE servers** (have `url`): These work if the URL is reachable from the host. Add them the same way.
 4. **Environment variables**: Any `env` values that reference secrets should be added to `.env` and passed through via `process.env.*` in the mcpServers entry.
 
-After adding all MCP servers, a container rebuild is needed: `./container/build.sh`
+After adding MCP servers, restart the service so the agent picks them up.
 
-Show the user each server and ask which to bring over. For servers that need custom binaries not available in the container, note them for manual setup.
+Show the user each server and ask which to bring over.
 
 ### Webhooks and Endpoints
 
@@ -396,8 +390,8 @@ If the config has webhook sections (in `cron.webhook`, `cron.failureDestination`
 ### Other Config
 
 Scan the config for notable sections and briefly mention anything that doesn't carry over:
-- **Exec approvals / command allowlist:** NanoClaw uses container isolation instead — the agent runs with `--dangerously-skip-permissions` inside a sandboxed container
-- **Human delay:** Not applicable in NanoClaw's container model
+- **Exec approvals / command allowlist:** NanoClaw uses host-level OS sandboxing for bash commands (`sandbox-exec` on macOS, `bubblewrap` on Linux) instead of an application-level allowlist
+- **Human delay:** Not applicable in NanoClaw's execution model
 - **Compaction:** Handled by Claude Code SDK automatically
 - **TTS:** Not built into NanoClaw
 - **Model configuration:** NanoClaw uses whatever Anthropic model the credential provides access to
@@ -419,7 +413,7 @@ Print a comprehensive summary:
 - Personality → CLAUDE.md (core) + `soul.md` (extended), placed per Phase 1 decision (global or per-group)
 - User context → `user-context.md`
 - Memories → `memories.md` + daily memory files (copied to `daily-memories/` or consolidated)
-- OpenClaw skills → copied to `container/skills/`
+- OpenClaw skills → copied into the agent skills directory
 - Channel credentials → `.env` (list which channels)
 - Scheduled tasks → inserted into database or noted for post-setup
 - MCP servers → registered in agent-runner
@@ -427,7 +421,7 @@ Print a comprehensive summary:
 **Noted for later:**
 - Channel code installation (happens during `/setup`)
 - Task creation (if deferred due to no registered group yet)
-- Container rebuild needed (if skills or MCP servers were added): `./container/build.sh`
+- Service restart needed (if skills or MCP servers were added)
 
 **Not applicable:**
 - Unsupported channels (list them — groups registered for future)

@@ -102,7 +102,6 @@ Use the group's `folder` and `chat_jid` from the registered groups table. Cron e
 
 ```bash
 npm run build
-./container/build.sh
 launchctl kickstart -k gui/$(id -u)/com.nanoclaw  # macOS
 # Linux: systemctl --user restart nanoclaw
 ```

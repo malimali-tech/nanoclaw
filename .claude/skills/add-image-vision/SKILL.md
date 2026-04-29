@@ -61,19 +61,12 @@ All tests must pass and build must be clean before proceeding.
 
 ## Phase 3: Configure
 
-1. Rebuild the container (agent-runner changes need a rebuild):
+1. Rebuild the host:
    ```bash
-   ./container/build.sh
+   npm run build
    ```
 
-2. Sync agent-runner source to group caches:
-   ```bash
-   for dir in data/sessions/*/agent-runner-src/; do
-     cp container/agent-runner/src/*.ts "$dir"
-   done
-   ```
-
-3. Restart the service:
+2. Restart the service:
    ```bash
    launchctl kickstart -k gui/$(id -u)/com.nanoclaw
    ```
