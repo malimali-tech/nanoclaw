@@ -178,8 +178,9 @@ async function runTask(
 
   let result: string | null = null as string | null;
   let error: string | null = null as string | null;
-  let session: Awaited<ReturnType<typeof createAgentSession>>['session'] | null =
-    null;
+  let session:
+    | Awaited<ReturnType<typeof createAgentSession>>['session']
+    | null = null;
   let buffer = '';
   let sendChain: Promise<void> = Promise.resolve();
 
@@ -374,7 +375,8 @@ export function makeTaskSchedulerPort(): TaskSchedulerPort {
       const partial: Parameters<typeof updateTask>[1] = {};
       if (req.prompt !== undefined) partial.prompt = req.prompt;
       if (req.script !== undefined) partial.script = req.script;
-      if (req.scheduleType !== undefined) partial.schedule_type = req.scheduleType;
+      if (req.scheduleType !== undefined)
+        partial.schedule_type = req.scheduleType;
       if (req.scheduleValue !== undefined) {
         partial.schedule_value = req.scheduleValue;
         // Recompute next_run since the schedule changed.

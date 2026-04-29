@@ -8,7 +8,10 @@ export interface SandboxConfig extends SandboxRuntimeConfig {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_PATH = path.resolve(__dirname, '../../config/sandbox.default.json');
+const DEFAULT_PATH = path.resolve(
+  __dirname,
+  '../../config/sandbox.default.json',
+);
 
 if (!fs.existsSync(DEFAULT_PATH)) {
   throw new Error(
@@ -29,7 +32,10 @@ function readJsonOrEmpty(p: string): Partial<SandboxConfig> {
 // shallowly (one level). Leaf arrays like allowedDomains and denyWrite are
 // REPLACED by the override, not concatenated. To extend a default list, the
 // project config must include the defaults explicitly.
-function mergeSandboxConfig(a: SandboxConfig, b: Partial<SandboxConfig>): SandboxConfig {
+function mergeSandboxConfig(
+  a: SandboxConfig,
+  b: Partial<SandboxConfig>,
+): SandboxConfig {
   const out: SandboxConfig = { ...a };
   if (b.enabled !== undefined) out.enabled = b.enabled;
   if (b.network) out.network = { ...a.network, ...b.network };

@@ -1,6 +1,9 @@
 // src/agent/extension.ts
 import { Type } from 'typebox';
-import type { ExtensionAPI, AgentToolResult } from '@mariozechner/pi-coding-agent';
+import type {
+  ExtensionAPI,
+  AgentToolResult,
+} from '@mariozechner/pi-coding-agent';
 import { defineTool } from '@mariozechner/pi-coding-agent';
 import { CronExpressionParser } from 'cron-parser';
 import type { ExtensionCtx, ScheduleType } from './types.js';
@@ -29,7 +32,8 @@ function validateSchedule(type: ScheduleType, value: string): string | null {
     if (/[Zz]$/.test(value) || /[+-]\d{2}:\d{2}$/.test(value)) {
       return `Timestamp must be local time without timezone suffix.`;
     }
-    if (isNaN(new Date(value).getTime())) return `Invalid timestamp: "${value}"`;
+    if (isNaN(new Date(value).getTime()))
+      return `Invalid timestamp: "${value}"`;
   }
   return null;
 }

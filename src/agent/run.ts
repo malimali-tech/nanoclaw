@@ -19,7 +19,8 @@ import { resolveModel } from './model.js';
 import type { ExtensionCtx } from './types.js';
 
 const IDLE_MS_RAW = parseInt(process.env.NANOCLAW_AGENT_IDLE_TTL_MS ?? '', 10);
-const IDLE_MS = Number.isFinite(IDLE_MS_RAW) && IDLE_MS_RAW > 0 ? IDLE_MS_RAW : 600000;
+const IDLE_MS =
+  Number.isFinite(IDLE_MS_RAW) && IDLE_MS_RAW > 0 ? IDLE_MS_RAW : 600000;
 const log = (m: string) => logger.info(`[agent] ${m}`);
 
 interface PooledSession extends DisposableSession {
@@ -43,7 +44,9 @@ async function ensureSandbox(groupCwd: string): Promise<void> {
     return;
   }
   if (process.platform !== 'darwin' && process.platform !== 'linux') {
-    log(`sandbox unsupported on ${process.platform}; bash will run unsandboxed`);
+    log(
+      `sandbox unsupported on ${process.platform}; bash will run unsandboxed`,
+    );
     sandboxReady = true;
     return;
   }
@@ -121,7 +124,9 @@ async function flushBuffer(p: PooledSession, ctx: ExtensionCtx): Promise<void> {
   try {
     await ctx.router.send(ctx.chatJid, text);
   } catch (err) {
-    log(`router.send failed: ${err instanceof Error ? err.message : String(err)}`);
+    log(
+      `router.send failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -130,7 +135,11 @@ let pool: SessionPool<PooledSession> | null = null;
 export function configureAgent(ports: SharedPorts): void {
   pool = new SessionPool<PooledSession>({
     factory: async (key) => {
-      const [groupFolder, chatJid, isMain] = JSON.parse(key) as [string, string, boolean];
+      const [groupFolder, chatJid, isMain] = JSON.parse(key) as [
+        string,
+        string,
+        boolean,
+      ];
       const ctx = buildCtx({ groupFolder, chatJid, isMain, ports });
       return buildSession(ctx);
     },

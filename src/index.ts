@@ -41,21 +41,11 @@ import {
   loadSenderAllowlist,
   shouldDropMessage,
 } from './sender-allowlist.js';
-import {
-  makeTaskSchedulerPort,
-  startSchedulerLoop,
-} from './task-scheduler.js';
+import { makeTaskSchedulerPort, startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
-import {
-  configureAgent,
-  handleMessage,
-  shutdownAgent,
-} from './agent/run.js';
-import type {
-  GroupRegistryPort,
-  RouterPort,
-} from './agent/types.js';
+import { configureAgent, handleMessage, shutdownAgent } from './agent/run.js';
+import type { GroupRegistryPort, RouterPort } from './agent/types.js';
 
 // Re-export for backwards compatibility during refactor
 export { escapeXml, formatMessages } from './router.js';

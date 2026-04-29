@@ -115,11 +115,17 @@ describe('nanoclawExtension', () => {
     const pause = tools.find((t) => t.name === 'pause_task')!;
     const cancel = tools.find((t) => t.name === 'cancel_task')!;
     await pause.execute('id', { task_id: 't1' });
-    expect(ctx.taskScheduler.pause).toHaveBeenCalledWith('t1', { groupFolder: 'wa_test', isMain: false });
+    expect(ctx.taskScheduler.pause).toHaveBeenCalledWith('t1', {
+      groupFolder: 'wa_test',
+      isMain: false,
+    });
     expect(ctx.taskScheduler.resume).not.toHaveBeenCalled();
     expect(ctx.taskScheduler.cancel).not.toHaveBeenCalled();
     await cancel.execute('id', { task_id: 't1' });
-    expect(ctx.taskScheduler.cancel).toHaveBeenCalledWith('t1', { groupFolder: 'wa_test', isMain: false });
+    expect(ctx.taskScheduler.cancel).toHaveBeenCalledWith('t1', {
+      groupFolder: 'wa_test',
+      isMain: false,
+    });
     expect(ctx.taskScheduler.resume).not.toHaveBeenCalled();
   });
 
