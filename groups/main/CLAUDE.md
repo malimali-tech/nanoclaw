@@ -79,7 +79,7 @@ This is the **main channel**, which has elevated privileges.
 
 ## Authentication
 
-Anthropic credentials must be either an API key from console.anthropic.com (`ANTHROPIC_API_KEY`) or a long-lived OAuth token from `claude setup-token` (`CLAUDE_CODE_OAUTH_TOKEN`). Short-lived tokens from the system keychain or `~/.claude/.credentials.json` expire within hours and can cause recurring container 401s. The `/setup` skill walks through this. The native credential proxy manages credentials (including Anthropic auth) via `.env` — see `src/credential-proxy.ts`.
+The in-process coding agent (`@mariozechner/pi-coding-agent`) reads provider credentials from environment variables forwarded from `.env`, or from `~/.pi/agent/auth.json` populated by `pi auth login`. Supported provider env vars include `ANTHROPIC_API_KEY` / `ANTHROPIC_OAUTH_TOKEN`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `GROQ_API_KEY`, `XAI_API_KEY`, `MISTRAL_API_KEY`, `CEREBRAS_API_KEY`, `AZURE_OPENAI_API_KEY`, `GOOGLE_CLOUD_API_KEY`, `AWS_BEARER_TOKEN_BEDROCK`, `PI_OAUTH`. The `/setup` skill walks through this.
 
 ## Container Mounts
 

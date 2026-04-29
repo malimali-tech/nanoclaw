@@ -55,12 +55,18 @@ LOG_LEVEL=debug npm run dev
 Invalid API key · Please run /login
 ```
 
-**Fix:** Ensure `.env` has either an OAuth token or an API key:
+**Fix:** Ensure `.env` has a provider env var that pi-coding-agent recognises, or that `~/.pi/agent/auth.json` exists:
 ```bash
-cat .env  # Should show one of:
-# CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...  (subscription)
-# ANTHROPIC_API_KEY=sk-ant-api03-...        (pay-per-use)
+cat .env  # Should show one of e.g.:
+# ANTHROPIC_API_KEY=sk-ant-api03-...
+# ANTHROPIC_OAUTH_TOKEN=...
+# OPENAI_API_KEY=sk-...
+# GEMINI_API_KEY=AIza...
+# DEEPSEEK_API_KEY=sk-...
+# (or run `pi auth login` to populate ~/.pi/agent/auth.json)
 ```
+
+Other supported vars: `AZURE_OPENAI_API_KEY`, `GOOGLE_CLOUD_API_KEY`, `GROQ_API_KEY`, `XAI_API_KEY`, `MISTRAL_API_KEY`, `CEREBRAS_API_KEY`, `AWS_BEARER_TOKEN_BEDROCK`, `PI_OAUTH`.
 
 `.env` is loaded by Node's `--env-file-if-exists` flag in `npm start` / `npm run dev`, and forwarded into the in-process agent.
 
@@ -115,7 +121,7 @@ systemctl --user restart nanoclaw                   # Linux
 echo "=== Checking NanoClaw Setup ==="
 
 echo -e "\n1. Authentication configured?"
-[ -f .env ] && (grep -q "CLAUDE_CODE_OAUTH_TOKEN=sk-" .env || grep -q "ANTHROPIC_API_KEY=sk-" .env) && echo "OK" || echo "MISSING - add CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY to .env"
+if [ -f .env ] && grep -qE "^(ANTHROPIC_API_KEY|ANTHROPIC_OAUTH_TOKEN|OPENAI_API_KEY|AZURE_OPENAI_API_KEY|GEMINI_API_KEY|GOOGLE_CLOUD_API_KEY|DEEPSEEK_API_KEY|GROQ_API_KEY|XAI_API_KEY|MISTRAL_API_KEY|CEREBRAS_API_KEY|AWS_BEARER_TOKEN_BEDROCK|PI_OAUTH)=" .env; then echo "OK (.env)"; elif [ -f "$HOME/.pi/agent/auth.json" ]; then echo "OK (~/.pi/agent/auth.json)"; else echo "MISSING - add a pi-coding-agent provider key to .env, or run 'pi auth login'"; fi
 
 echo -e "\n2. Sandbox runtime available?"
 if [ "$(uname)" = "Darwin" ]; then

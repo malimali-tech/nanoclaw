@@ -2,6 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { logger } from './logger.js';
 
+// Provider env vars recognised by @mariozechner/pi-coding-agent.
+// Anchored at line start so prefix substrings won't false-match.
+export const PI_PROVIDER_ENV_RE =
+  /^(ANTHROPIC_API_KEY|ANTHROPIC_OAUTH_TOKEN|OPENAI_API_KEY|AZURE_OPENAI_API_KEY|GEMINI_API_KEY|GOOGLE_CLOUD_API_KEY|DEEPSEEK_API_KEY|GROQ_API_KEY|XAI_API_KEY|MISTRAL_API_KEY|CEREBRAS_API_KEY|AWS_BEARER_TOKEN_BEDROCK|PI_OAUTH)=/m;
+
 /**
  * Parse the .env file and return values for the requested keys.
  * Does NOT load anything into process.env — callers decide what to
