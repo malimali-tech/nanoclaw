@@ -3,7 +3,6 @@ import path from 'path';
 
 import {
   ASSISTANT_NAME,
-  CREDENTIAL_PROXY_PORT,
   DEFAULT_TRIGGER,
   getTriggerPattern,
   GROUPS_DIR,
@@ -11,17 +10,11 @@ import {
   POLL_INTERVAL,
   TIMEZONE,
 } from './config.js';
-import { startCredentialProxy } from './credential-proxy.js';
 import './channels/index.js';
 import {
   getChannelFactory,
   getRegisteredChannelNames,
 } from './channels/registry.js';
-import {
-  cleanupOrphans,
-  ensureContainerRuntimeRunning,
-  PROXY_BIND_HOST,
-} from './container-runtime.js';
 import {
   getAllChats,
   getAllRegisteredGroups,
@@ -48,7 +41,6 @@ import {
   loadSenderAllowlist,
   shouldDropMessage,
 } from './sender-allowlist.js';
-import { startSessionCleanup } from './session-cleanup.js';
 import {
   makeTaskSchedulerPort,
   startSchedulerLoop,
@@ -363,28 +355,15 @@ function recoverPendingMessages(): void {
   }
 }
 
-function ensureContainerSystemRunning(): void {
-  ensureContainerRuntimeRunning();
-  cleanupOrphans();
-}
-
 async function main(): Promise<void> {
-  ensureContainerSystemRunning();
   initDatabase();
   logger.info('Database initialized');
   loadState();
   restoreRemoteControl();
 
-  // Start credential proxy (containers route API calls through this)
-  const proxyServer = await startCredentialProxy(
-    CREDENTIAL_PROXY_PORT,
-    PROXY_BIND_HOST,
-  );
-
   // Graceful shutdown handlers
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutdown signal received');
-    proxyServer.close();
     await shutdownAgent();
     for (const ch of channels) await ch.disconnect();
     process.exit(0);
@@ -534,7 +513,6 @@ async function main(): Promise<void> {
       channels,
     },
   });
-  startSessionCleanup();
   recoverPendingMessages();
   startMessageLoop().catch((err) => {
     logger.fatal({ err }, 'Message loop crashed unexpectedly');
