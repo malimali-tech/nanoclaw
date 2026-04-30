@@ -293,7 +293,7 @@ describe('FeishuChannel', () => {
   });
 
   describe('mention handling', () => {
-    it('strips the bot @mention from text', async () => {
+    it('substitutes the bot @mention with the assistant name (preserves trigger)', async () => {
       const { deps, handlers } = makeDeps();
       const ch = new FeishuChannel(opts, { appId: 'a', appSecret: 's', deps });
       await ch.connect();
@@ -305,7 +305,8 @@ describe('FeishuChannel', () => {
           ],
         }),
       );
-      expect(opts.messages[0].msg.content).toBe('please help');
+      // ASSISTANT_NAME defaults to 'Andy' when env is unset.
+      expect(opts.messages[0].msg.content).toBe('@Andy please help');
     });
 
     it('replaces non-bot mentions with @name', async () => {

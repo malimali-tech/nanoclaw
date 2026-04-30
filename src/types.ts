@@ -49,12 +49,28 @@ export interface NewMessage {
   sender_name: string;
   content: string;
   timestamp: string;
+  /** 'p2p' for direct chats with the bot, 'group' for multi-party group chats. */
+  chat_type?: 'p2p' | 'group';
   is_from_me?: boolean;
   is_bot_message?: boolean;
   thread_id?: string;
   reply_to_message_id?: string;
   reply_to_message_content?: string;
   reply_to_sender_name?: string;
+}
+
+/**
+ * Hint emitted by a channel when it sees a chat it can talk in. The host
+ * decides whether to auto-register; channels just report. Fired both on
+ * "bot added to chat" platform events and as a fallback from the first
+ * inbound message of an unknown chat (so p2p chats — which have no
+ * "bot added" event — also get picked up).
+ */
+export interface ChatDiscovery {
+  jid: string;
+  /** Human-readable chat name if the platform provides one. */
+  name?: string;
+  chatType: 'p2p' | 'group';
 }
 
 export interface ScheduledTask {

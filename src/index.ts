@@ -20,7 +20,10 @@ import {
   initDatabase,
   setRegisteredGroup,
 } from './db.js';
-import { resolveGroupFolderPath } from './group-folder.js';
+import {
+  isValidGroupFolder,
+  resolveGroupFolderPath,
+} from './group-folder.js';
 import {
   appendMessage,
   flushWrites,
@@ -42,7 +45,12 @@ import {
   shouldDropMessage,
 } from './sender-allowlist.js';
 import { makeTaskSchedulerPort, startSchedulerLoop } from './task-scheduler.js';
-import { Channel, NewMessage, RegisteredGroup } from './types.js';
+import {
+  ChatDiscovery,
+  Channel,
+  NewMessage,
+  RegisteredGroup,
+} from './types.js';
 import { logger } from './logger.js';
 import {
   configureAgent,
@@ -144,6 +152,22 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
 
 function botMessageId(): string {
   return `bot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Derive a stable, filesystem-safe group folder name from a chat JID.
+ * Examples:
+ *   feishu:oc_3e6b3a40...  →  oc_3e6b3a40...
+ *   feishu:p2p_xxx         →  p2p_xxx
+ *
+ * The chat-id portion of a Feishu JID already satisfies
+ * isValidGroupFolder's regex (`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`), so we
+ * use it as-is. Sanitize defensively for any character a future channel
+ * might emit; reject "global" (reserved) at validation time upstream.
+ */
+function deriveFolderFromJid(jid: string): string {
+  const tail = jid.includes(':') ? jid.slice(jid.indexOf(':') + 1) : jid;
+  return tail.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64);
 }
 
 /**
@@ -371,6 +395,44 @@ async function main(): Promise<void> {
     }
   }
 
+  /**
+   * Idempotent auto-registration on chat discovery. Implements the "open
+   * provisioning" decision from the brainstorm (Q1=A + Q3=A): every chat the
+   * bot can see becomes a registered group on first sight, no human approval
+   * required. Sender allowlist still gates who is allowed to *trigger* the
+   * agent — registration just opens the channel for that gating to apply.
+   *
+   * Folder name is derived from the JID (e.g. `feishu:oc_xxx` → `oc_xxx`)
+   * so it's stable across NanoClaw restarts and matches what Docker mounts
+   * see (chat_id → /workspace/group).
+   */
+  const autoRegister = (discovery: ChatDiscovery): void => {
+    if (registeredGroups[discovery.jid]) return;
+    const folder = deriveFolderFromJid(discovery.jid);
+    if (!isValidGroupFolder(folder)) {
+      logger.warn(
+        { jid: discovery.jid, folder },
+        'auto-register: derived folder is invalid; skipping',
+      );
+      return;
+    }
+    const group: RegisteredGroup = {
+      name: discovery.name ?? `${discovery.chatType}:${discovery.jid}`,
+      folder,
+      trigger: DEFAULT_TRIGGER,
+      added_at: new Date().toISOString(),
+      // p2p chats: bot is the only counterparty, every message is for it.
+      // Group chats: keep the trigger so we don't reply to every line.
+      requiresTrigger: discovery.chatType === 'group',
+      isMain: false,
+    };
+    logger.info(
+      { jid: discovery.jid, folder, chatType: discovery.chatType, name: group.name },
+      'auto-registering chat (open provisioning)',
+    );
+    registerGroup(discovery.jid, group);
+  };
+
   // Channel callbacks (shared by all channels)
   const channelOpts = {
     onMessage: (chatJid: string, msg: NewMessage) => {
@@ -383,7 +445,17 @@ async function main(): Promise<void> {
         return;
       }
 
-      // Only registered groups have a log; everything else is dropped.
+      // Auto-register fallback: if the channel didn't fire onChatDiscovered
+      // for some reason (older channels, missed event), use the message
+      // itself as the discovery signal. The chat_type from the message tells
+      // us whether to treat it as p2p or group.
+      if (!registeredGroups[chatJid]) {
+        autoRegister({
+          jid: chatJid,
+          name: msg.sender_name || undefined,
+          chatType: msg.chat_type ?? 'group',
+        });
+      }
       const group = registeredGroups[chatJid];
       if (!group) return;
 
@@ -410,6 +482,7 @@ async function main(): Promise<void> {
       );
     },
     registeredGroups: () => registeredGroups,
+    onChatDiscovered: autoRegister,
   };
 
   // Create and connect all registered channels.

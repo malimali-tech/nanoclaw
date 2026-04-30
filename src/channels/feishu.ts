@@ -1,5 +1,6 @@
 import * as Lark from '@larksuiteoapi/node-sdk';
 
+import { ASSISTANT_NAME } from '../config.js';
 import { Channel, NewMessage } from '../types.js';
 import { ChannelOpts, registerChannel } from './registry.js';
 
@@ -29,6 +30,17 @@ interface FeishuMessageEvent {
 }
 
 type MaybeEventEnvelope = { event?: FeishuMessageEvent } | FeishuMessageEvent;
+
+/** Payload of `im.chat.member.bot.added_v1` — bot was added to a group. */
+interface FeishuBotAddedEvent {
+  chat_id?: string;
+  name?: string;
+  external?: boolean;
+  operator_id?: { open_id?: string; user_id?: string; union_id?: string };
+}
+type MaybeBotAddedEnvelope =
+  | { event?: FeishuBotAddedEvent }
+  | FeishuBotAddedEvent;
 
 export interface FeishuChannelDeps {
   client: Pick<Lark.Client, 'im' | 'request'>;
@@ -83,6 +95,9 @@ export class FeishuChannel implements Channel {
     this.deps.dispatcher.register({
       'im.message.receive_v1': async (data: unknown) => {
         this.handleInbound(data as MaybeEventEnvelope);
+      },
+      'im.chat.member.bot.added_v1': async (data: unknown) => {
+        this.handleBotAdded(data as MaybeBotAddedEnvelope);
       },
     });
   }
@@ -158,6 +173,8 @@ export class FeishuChannel implements Channel {
     const senderOpenId = event?.sender?.sender_id?.open_id ?? '';
     const rawText = this.extractText(msg);
     const content = this.stripBotMention(rawText, msg.mentions);
+    const chatType: 'p2p' | 'group' =
+      msg.chat_type === 'p2p' ? 'p2p' : 'group';
 
     const timestamp = this.parseTimestamp(msg.create_time);
     const normalized: NewMessage = {
@@ -167,16 +184,49 @@ export class FeishuChannel implements Channel {
       sender_name: '',
       content,
       timestamp,
+      chat_type: chatType,
     };
     if (msg.parent_id) normalized.reply_to_message_id = msg.parent_id;
     if (senderOpenId && this.botOpenId && senderOpenId === this.botOpenId) {
       normalized.is_from_me = true;
     }
 
+    // Fallback discovery: p2p chats have no "bot added" event (the chat
+    // springs into existence when someone first DMs the bot), and groups
+    // can also slip through if NanoClaw was offline when bot.added fired.
+    // Host's onChatDiscovered is idempotent — calling it on every inbound
+    // is fine and is the simplest way to never miss a chat.
+    this.channelOpts.onChatDiscovered?.({
+      jid,
+      chatType,
+      // No name available from a message event. Host will fall back to
+      // a sensible default (sender name for p2p, chat_id for group).
+    });
+
     console.log(
       `[feishu] inbound chat_id=${msg.chat_id} msg_id=${msg.message_id}`,
     );
     this.channelOpts.onMessage(jid, normalized);
+  }
+
+  /**
+   * `im.chat.member.bot.added_v1` — fires when the bot is added to a group
+   * chat. Gives us the chat name up front, which is otherwise not in the
+   * message event payload.
+   */
+  private handleBotAdded(data: MaybeBotAddedEnvelope): void {
+    const evt: FeishuBotAddedEvent | undefined =
+      (data as { event?: FeishuBotAddedEvent })?.event ??
+      (data as FeishuBotAddedEvent);
+    if (!evt?.chat_id) return;
+    console.log(
+      `[feishu] bot added to chat_id=${evt.chat_id} name=${evt.name ?? '?'} external=${evt.external ?? false}`,
+    );
+    this.channelOpts.onChatDiscovered?.({
+      jid: `feishu:${evt.chat_id}`,
+      name: evt.name,
+      chatType: 'group',
+    });
   }
 
   private parseTimestamp(createTime: string | undefined): string {
@@ -251,7 +301,11 @@ export class FeishuChannel implements Channel {
       const mentionOpenId = mention.id?.open_id;
       if (!mention.key || !mentionOpenId) continue;
       if (this.botOpenId && mentionOpenId === this.botOpenId) {
-        out = out.split(mention.key).join('').replace(/\s+/g, ' ').trim();
+        // Substitute the Feishu placeholder (e.g. "@_user_1") with the
+        // assistant's text-form name so the trigger regex (`^@<name>\b`)
+        // can match downstream. Don't strip — that would silently break
+        // every non-main group's trigger detection.
+        out = out.split(mention.key).join(`@${ASSISTANT_NAME}`);
       } else if (mention.name) {
         out = out.split(mention.key).join(`@${mention.name}`);
       }
