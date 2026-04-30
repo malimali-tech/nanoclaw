@@ -2,232 +2,202 @@
   <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
 </p>
 
-> ⚠️ **This translation is out of date as of the pi-mono migration (2026-04). The current architecture uses an in-process pi-coding-agent with `sandbox-exec` / `bubblewrap` instead of containers. See [README.md](README.md) for the current architecture.**
-
 <p align="center">
-  エージェントを専用コンテナで安全に実行するAIアシスタント。軽量で、理解しやすく、あなたのニーズに完全にカスタマイズできるように設計されています。
+  軽量なパーソナル AI アシスタント。pi-coding-agent はホストプロセス内で動作し、bash コマンドは <code>sandbox-exec</code> / <code>bubblewrap</code> でサンドボックス化されます。理解しやすく、あなたのニーズに合わせて完全にカスタマイズできます。
 </p>
 
 <p align="center">
   <a href="https://nanoclaw.dev">nanoclaw.dev</a>&nbsp; • &nbsp;
+  <a href="https://docs.nanoclaw.dev">docs</a>&nbsp; • &nbsp;
   <a href="README.md">English</a>&nbsp; • &nbsp;
   <a href="README_zh.md">中文</a>&nbsp; • &nbsp;
-  <a href="https://discord.gg/VDdww8qS42"><img src="https://img.shields.io/discord/1470188214710046894?label=Discord&logo=discord&v=2" alt="Discord" valign="middle"></a>&nbsp; • &nbsp;
-  <a href="repo-tokens"><img src="repo-tokens/badge.svg" alt="34.9k tokens, 17% of context window" valign="middle"></a>
+  <a href="https://discord.gg/VDdww8qS42"><img src="https://img.shields.io/discord/1470188214710046894?label=Discord&logo=discord&v=2" alt="Discord" valign="middle"></a>
 </p>
 
----
-
-<h2 align="center">🐳 Dockerサンドボックスで動作</h2>
-<p align="center">各エージェントはマイクロVM内の独立したコンテナで実行されます。<br>ハイパーバイザーレベルの分離。ミリ秒で起動。複雑なセットアップ不要。</p>
-
-**macOS (Apple Silicon)**
-```bash
-curl -fsSL https://nanoclaw.dev/install-docker-sandboxes.sh | bash
-```
-
-**Windows (WSL)**
-```bash
-curl -fsSL https://nanoclaw.dev/install-docker-sandboxes-windows.sh | bash
-```
-
-> 現在、macOS（Apple Silicon）とWindows（x86）に対応しています。Linux対応は近日公開予定。
-
-<p align="center"><a href="https://nanoclaw.dev/blog/nanoclaw-docker-sandboxes">発表記事を読む →</a>&nbsp; · &nbsp;<a href="docs/docker-sandboxes.md">手動セットアップガイド →</a></p>
+> **このフォークについて：** このフォークは Feishu / Lark チャネルのみを内蔵しています。アップストリーム NanoClaw のマルチチャネルスキル（add-whatsapp / add-telegram / add-slack / add-discord）はここでは利用できず、対応するランタイムコードとセットアップ手順も削除されています。
 
 ---
 
-## NanoClawを作った理由
+## なぜ NanoClaw を作ったのか
 
-[OpenClaw](https://github.com/openclaw/openclaw)は素晴らしいプロジェクトですが、理解しきれない複雑なソフトウェアに自分の生活へのフルアクセスを与えたまま安心して眠れるとは思えませんでした。OpenClawは約50万行のコード、53の設定ファイル、70以上の依存関係を持っています。セキュリティはアプリケーションレベル（許可リスト、ペアリングコード）であり、真のOS レベルの分離ではありません。すべてが共有メモリを持つ1つのNodeプロセスで動作します。
+[OpenClaw](https://github.com/openclaw/openclaw) は素晴らしいプロジェクトですが、よく理解できないソフトウェアに自分の生活への完全なアクセス権を与えるのは安心できませんでした。OpenClaw は約 50 万行のコード、53 個の設定ファイル、70 以上の依存関係を持ちます。セキュリティはアプリケーションレベル（許可リスト、ペアリングコード）で、真の OS レベル分離ではありません。すべてが共有メモリの単一 Node プロセスで動作します。
 
-NanoClawは同じコア機能を提供しますが、理解できる規模のコードベースで実現しています：1つのプロセスと少数のファイル。Claudeエージェントは単なるパーミッションチェックの背後ではなく、ファイルシステム分離された独自のLinuxコンテナで実行されます。
+NanoClaw は同じコア機能を、理解できるサイズのコードベースで提供します：1 プロセス、ほんの数ファイル。Coding agent は [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) を介してプロセス内で動作し、bash コマンドは `sandbox-exec`（macOS）または `bubblewrap`（Linux）を使用して OS レベルで分離されます — 単なる権限チェックではありません。
 
 ## クイックスタート
 
 ```bash
-gh repo fork qwibitai/nanoclaw --clone
+gh repo fork malimali-tech/nanoclaw --clone
 cd nanoclaw
 claude
 ```
 
 <details>
-<summary>GitHub CLIなしの場合</summary>
+<summary>GitHub CLI なしの場合</summary>
 
-1. GitHub上で[qwibitai/nanoclaw](https://github.com/qwibitai/nanoclaw)をフォーク（Forkボタンをクリック）
-2. `git clone https://github.com/<あなたのユーザー名>/nanoclaw.git`
+1. GitHub で [malimali-tech/nanoclaw](https://github.com/malimali-tech/nanoclaw) を Fork
+2. `git clone https://github.com/<your-username>/nanoclaw.git`
 3. `cd nanoclaw`
 4. `claude`
 
 </details>
 
-その後、`/setup`を実行します。Claude Codeがすべてを処理します：依存関係、認証、コンテナセットアップ、サービス設定。
+そして `/setup` を実行。Claude Code がすべてを処理します：依存関係、認証、サンドボックス設定、サービス起動。
 
-> **注意:** `/`で始まるコマンド（`/setup`、`/add-whatsapp`など）は[Claude Codeスキル](https://code.claude.com/docs/en/skills)です。通常のターミナルではなく、`claude` CLIプロンプト内で入力してください。Claude Codeをインストールしていない場合は、[claude.com/product/claude-code](https://claude.com/product/claude-code)から入手してください。
+> **注意：** `/`で始まるコマンド（`/setup`、`/add-feishu`など）は [Claude Code スキル](https://code.claude.com/docs/en/skills)です。通常のターミナルではなく、`claude` CLI プロンプト内で入力してください。Claude Code をインストールしていない場合は、[claude.com/product/claude-code](https://claude.com/product/claude-code)から入手してください。
 
-## 設計思想
+## 設計哲学
 
-**理解できる規模。** 1つのプロセス、少数のソースファイル、マイクロサービスなし。NanoClawのコードベース全体を理解したい場合は、Claude Codeに説明を求めるだけです。
+**理解できるサイズ。** 1 プロセス、数個のソースファイル、マイクロサービスなし。NanoClaw のコードベース全体を理解したい？Claude Code に解説してもらってください。
 
-**分離によるセキュリティ。** エージェントはLinuxコンテナ（macOSではApple Container、またはDocker）で実行され、明示的にマウントされたものだけが見えます。コマンドはホストではなくコンテナ内で実行されるため、Bashアクセスは安全です。
+**分離によるセキュリティ。** エージェントの bash コマンドは OS レベルのサンドボックス内で動作します — macOS では `sandbox-exec`、Linux では `bubblewrap` — `config/sandbox.default.json` で設定され、グループごとに上書き可能です。ファイルシステムとネットワークアクセスは権限チェックではなくポリシーで制限されます。
 
-**個人ユーザー向け。** NanoClawはモノリシックなフレームワークではなく、各ユーザーのニーズに正確にフィットするソフトウェアです。肥大化するのではなく、オーダーメイドになるよう設計されています。自分のフォークを作成し、Claude Codeにニーズに合わせて変更させます。
+**個人ユーザーのために。** NanoClaw はモノリシックなフレームワークではなく、各ユーザーのニーズに正確に合うソフトウェアです。Fork して Claude Code に好みに合わせて改変してもらいます。
 
-**カスタマイズ＝コード変更。** 設定ファイルの肥大化なし。動作を変えたい？コードを変更するだけ。コードベースは変更しても安全な規模です。
+**カスタマイズ = コード変更。** 設定の氾濫なし。動作を変えたい？コードを変更します。コードベースは小さいので安全です。
 
-**AIネイティブ。**
-- インストールウィザードなし — Claude Codeがセットアップを案内。
-- モニタリングダッシュボードなし — Claudeに状況を聞くだけ。
-- デバッグツールなし — 問題を説明すればClaudeが修正。
+**AI ネイティブ。**
+- インストールウィザードなし。Claude Code がセットアップを案内。
+- 監視ダッシュボードなし。Claude に何が起きているか聞く。
+- デバッグツールなし。問題を説明すれば Claude が直す。
 
-**機能追加ではなくスキル。** コードベースに機能（例：Telegram対応）を追加する代わりに、コントリビューターは`/add-telegram`のような[Claude Codeスキル](https://code.claude.com/docs/en/skills)を提出し、あなたのフォークを変換します。あなたが必要なものだけを正確に実行するクリーンなコードが手に入ります。
+**機能追加ではなくスキル。** コードベースに新しい統合を追加する代わりに、コントリビューターは [Claude Code スキル](https://code.claude.com/docs/en/skills)（例：`/add-feishu`、`/add-karpathy-llm-wiki`）を提出してフォークを変換します。あなたが必要なものだけを正確に実行するクリーンなコードが手に入ります。
 
-**最高のハーネス、最高のモデル。** NanoClawはClaude Agent SDK上で動作します。つまり、Claude Codeを直接実行しているということです。Claude Codeは高い能力を持ち、そのコーディングと問題解決能力によってNanoClawを変更・拡張し、各ユーザーに合わせてカスタマイズできます。
+**Pi-coding-agent をプロセス内で実行。** NanoClaw は [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) を直接埋め込みます — サブプロセスもコンテナビルドもありません。Provider は標準の環境変数（`ANTHROPIC_API_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、…）または `~/.pi/agent/auth.json` で選択します。
 
 ## サポート機能
 
-- **マルチチャネルメッセージング** - WhatsApp、Telegram、Discord、Slack、Gmailからアシスタントと会話。`/add-whatsapp`や`/add-telegram`などのスキルでチャネルを追加。1つでも複数でも同時に実行可能。
-- **グループごとの分離コンテキスト** - 各グループは独自の`CLAUDE.md`メモリ、分離されたファイルシステムを持ち、そのファイルシステムのみがマウントされた専用コンテナサンドボックスで実行。
-- **メインチャネル** - 管理制御用のプライベートチャネル（セルフチャット）。各グループは完全に分離。
-- **スケジュールタスク** - Claudeを実行し、メッセージを返せる定期ジョブ。
-- **Webアクセス** - Webからのコンテンツ検索・取得。
-- **コンテナ分離** - エージェントは[Dockerサンドボックス](https://nanoclaw.dev/blog/nanoclaw-docker-sandboxes)（マイクロVM分離）、Apple Container（macOS）、またはDocker（macOS/Linux）でサンドボックス化。
-- **エージェントスウォーム** - 複雑なタスクで協力する専門エージェントチームを起動。
-- **オプション連携** - Gmail（`/add-gmail`）などをスキルで追加。
+- **Feishu / Lark メッセージング** - 公開 URL なしの WebSocket 長時間接続で、Feishu（中国国内）または Lark（国際）グループからアシスタントと会話。このフォークは Feishu チャネルのみを提供しています。他のチャネルはアップストリームのスキルでここでは適用されません。
+- **隔離されたグループコンテキスト** - 各グループには独自の `CLAUDE.md` メモリと作業ディレクトリがあります。bash コマンドはグループごとのサンドボックスプロファイルで保護されます。
+- **メインチャンネル** - 管理用のプライベートチャネル（self-chat）。他のすべてのグループは完全に隔離。
+- **スケジュールされたタスク** - エージェントを実行し、メッセージを返信できる定期ジョブ。
+- **Web アクセス** - 検索とコンテンツ取得。
+- **OS レベルのサンドボックス** - bash コマンドは `sandbox-exec`（macOS）または `bubblewrap`（Linux）経由で実行。ルールは `config/sandbox.default.json` にあり、`groups/<group>/.pi/sandbox.json` でグループごとに上書き可能。
+- **マルチプロバイダー** - Pi-coding-agent は Anthropic、OpenAI、Gemini、DeepSeek などをサポート。env vars または `~/.pi/agent/auth.json` で設定。
 
 ## 使い方
 
-トリガーワード（デフォルト：`@Andy`）でアシスタントに話しかけます：
+トリガーワード（デフォルト：`@Andy`）でアシスタントと話します：
 
 ```
-@Andy 毎朝9時に営業パイプラインの概要を送って（Obsidian vaultフォルダにアクセス可能）
-@Andy 毎週金曜に過去1週間のgit履歴をレビューして、差異があればREADMEを更新して
-@Andy 毎週月曜の朝8時に、Hacker NewsとTechCrunchからAI関連のニュースをまとめてブリーフィングを送って
+@Andy 平日午前 9 時に営業パイプラインの概要を送信（Obsidian vault フォルダにアクセス可能）
+@Andy 毎週金曜日に過去 1 週間の git 履歴をレビューし、ずれがあれば README を更新
+@Andy 毎週月曜日午前 8 時に Hacker News と TechCrunch から AI 開発のニュースをまとめてブリーフィング
 ```
 
-メインチャネル（セルフチャット）から、グループやタスクを管理できます：
+メインチャンネル（self-chat）からグループとタスクを管理できます：
 ```
-@Andy 全グループのスケジュールタスクを一覧表示して
-@Andy 月曜のブリーフィングタスクを一時停止して
-@Andy Family Chatグループに参加して
+@Andy すべてのグループのスケジュールされたタスクを一覧表示
+@Andy 月曜日のブリーフィングタスクを一時停止
+@Andy 「家族チャット」グループに参加
 ```
 
 ## カスタマイズ
 
-NanoClawは設定ファイルを使いません。変更するには、Claude Codeに伝えるだけです：
+NanoClaw は設定ファイルを使いません。変更したい場合は Claude Code に伝えるだけです：
 
-- 「トリガーワードを@Bobに変更して」
-- 「今後はレスポンスをもっと短く直接的にして」
-- 「おはようと言ったらカスタム挨拶を追加して」
-- 「会話の要約を毎週保存して」
+- 「トリガーワードを @Bob に変更」
+- 「これからは応答を短く直接的に」
+- 「おはようと言ったらカスタム挨拶を追加」
+- 「会話の要約を毎週保存」
 
-または`/customize`を実行してガイド付きの変更を行えます。
+または `/customize` でガイド付き変更。
 
-コードベースは十分に小さいため、Claudeが安全に変更できます。
+コードベースは小さいので Claude が安全に変更できます。
 
 ## コントリビューション
 
-**機能を追加するのではなく、スキルを追加してください。**
+**機能を追加せず、スキルを追加してください。**
 
-Telegram対応を追加したい場合、コアコードベースにTelegramを追加するPRを作成しないでください。代わりに、NanoClawをフォークし、ブランチでコード変更を行い、PRを開いてください。あなたのPRから`skill/telegram`ブランチを作成し、他のユーザーが自分のフォークにマージできるようにします。
+新しい機能（別のチャネル、MCP 統合、ワークフローなど）を追加したい場合、コアコードベースに追加する PR を作成しないでください。代わりに、NanoClaw を Fork し、ブランチでコード変更を行い、PR を開いてください。あなたのブランチを、他のユーザーが必要に応じて自分のフォークにマージできるスキルに変換します。
 
-ユーザーは自分のフォークで`/add-telegram`を実行するだけで、あらゆるユースケースに対応しようとする肥大化したシステムではなく、必要なものだけを正確に実行するクリーンなコードが手に入ります。
+ユーザーは自分のフォークで `/add-<your-skill>` を実行するだけで、必要なものだけを正確に実行するクリーンなコードを手に入れます。
 
-### RFS（スキル募集）
+## 動作要件
 
-私たちが求めているスキル：
-
-**コミュニケーションチャネル**
-- `/add-signal` - Signalをチャネルとして追加
-
-**セッション管理**
-- `/clear` - 会話をコンパクト化する`/clear`コマンドの追加（同一セッション内で重要な情報を保持しながらコンテキストを要約）。Claude Agent SDKを通じてプログラム的にコンパクト化をトリガーする方法の解明が必要。
-
-## 必要条件
-
-- macOSまたはLinux
-- Node.js 20以上
+- macOS、Linux、または Windows（WSL2 経由）
+- Node.js 20+
 - [Claude Code](https://claude.ai/download)
-- [Apple Container](https://github.com/apple/container)（macOS）または[Docker](https://docker.com/products/docker-desktop)（macOS/Linux）
+- macOS：`sandbox-exec`（標準搭載）。Linux：`bubblewrap`（`apt install bubblewrap` / `dnf install bubblewrap`）。
 
 ## アーキテクチャ
 
 ```
-チャネル --> SQLite --> ポーリングループ --> コンテナ（Claude Agent SDK） --> レスポンス
+Channels --> SQLite (メタデータ) + log.jsonl (メッセージ) --> ポーリングループ --> pi-coding-agent (プロセス内 + サンドボックス化された bash) --> 応答
 ```
 
-単一のNode.jsプロセス。チャネルはスキルで追加され、起動時に自己登録します — オーケストレーターは認証情報が存在するチャネルを接続します。エージェントはファイルシステム分離された独立したLinuxコンテナで実行されます。マウントされたディレクトリのみアクセス可能。グループごとのメッセージキューと同時実行制御。ファイルシステム経由のIPC。
+単一の Node.js プロセス。Channel はスキル経由で追加され、起動時に自己登録します — オーケストレーターは認証情報が揃っているチャネルに接続します。エージェントは `@mariozechner/pi-coding-agent` を介してプロセス内で動作。bash コマンドは `sandbox-exec`（macOS）または `bubblewrap`（Linux）でラップされ、ルールは `config/sandbox.default.json` から（グループごとの上書き可能）。グループごとのメッセージキューと並行制御。
 
-詳細なアーキテクチャについては、[docs/SPEC.md](docs/SPEC.md)を参照してください。
+完全な移行設計は [docs/plans/2026-04-29-pi-mono-host-agent-design.md](docs/plans/2026-04-29-pi-mono-host-agent-design.md) を参照。
 
 主要ファイル：
 - `src/index.ts` - オーケストレーター：状態、メッセージループ、エージェント呼び出し
-- `src/channels/registry.ts` - チャネルレジストリ（起動時の自己登録）
-- `src/ipc.ts` - IPCウォッチャーとタスク処理
+- `src/channels/registry.ts` - Channel レジストリ（起動時の自己登録）
+- `src/channels/feishu.ts` - Feishu / Lark channel 実装
 - `src/router.ts` - メッセージフォーマットとアウトバウンドルーティング
-- `src/group-queue.ts` - グローバル同時実行制限付きのグループごとのキュー
-- `src/container-runner.ts` - ストリーミングエージェントコンテナの起動
-- `src/task-scheduler.ts` - スケジュールタスクの実行
-- `src/db.ts` - SQLite操作（メッセージ、グループ、セッション、状態）
+- `src/group-log.ts` - グループごとの `log.jsonl` 追加 / テール / カーソル
+- `src/agent/run.ts` - プロセス内 pi-coding-agent ランタイムエントリ
+- `src/agent/extension.ts` - NanoClaw IPC ツール（pi extension として）
+- `src/agent/session-pool.ts` - グループごとの AgentSession プール（idle TTL あり）
+- `src/agent/sandbox-config.ts` - サンドボックス設定ローダー
+- `src/task-scheduler.ts` - スケジュールされたタスク
+- `src/db.ts` - SQLite（scheduled_tasks / sessions / registered_groups / router_state）
 - `groups/*/CLAUDE.md` - グループごとのメモリ
+- `config/sandbox.default.json` - デフォルトサンドボックスプロファイル
 
 ## FAQ
 
-**なぜDockerなのか？**
+**なぜコンテナを使わなくなったのか？**
 
-Dockerはクロスプラットフォーム対応（macOS、Linux、さらにWSL2経由のWindows）と成熟したエコシステムを提供します。macOSでは、`/convert-to-apple-container`でオプションとしてApple Containerに切り替え、より軽量なネイティブランタイムを使用できます。
+NanoClaw は以前、エージェント呼び出しごとに Linux コンテナを起動していました。pi-mono 移行により、ホスト側実行 + bash の OS レベルサンドボックス化（macOS の `sandbox-exec`、Linux の `bubblewrap`）に切り替えました。高速で、メッセージごとのコールドスタートがなく、ファイルシステムとネットワーク分離は依然としてカーネルレベルです。
 
-**Linuxで実行できますか？**
+**Linux または Windows で動作しますか？**
 
-はい。DockerがデフォルトのランタイムでmacOSとLinuxの両方で動作します。`/setup`を実行するだけです。
+はい。macOS は組み込みの `sandbox-exec` を使用。Linux は `bubblewrap` が必要（`apt install bubblewrap` / `dnf install bubblewrap`）。Windows は WSL2 経由（Linux パス）。`/setup` を実行するだけ。
 
-**セキュリティは大丈夫ですか？**
+**安全ですか？**
 
-エージェントはアプリケーションレベルのパーミッションチェックの背後ではなく、コンテナで実行されます。明示的にマウントされたディレクトリのみアクセスできます。実行するものをレビューすべきですが、コードベースは十分に小さいため実際にレビュー可能です。完全なセキュリティモデルについては[docs/SECURITY.md](docs/SECURITY.md)を参照してください。
+エージェントの bash コマンドは制限されたファイルシステムとネットワークアクセスを持つ OS レベルのサンドボックスで実行されます — `config/sandbox.default.json` で宣言的に定義され、グループごとに上書き可能。ルールを監査して厳しくできます。コードベースは小さく、サンドボックスがどう呼び出されるかを含む全攻撃面をレビューできます。
 
-**なぜ設定ファイルがないのか？**
+**設定ファイルがないのはなぜ？**
 
-設定の肥大化を避けたいからです。すべてのユーザーがNanoClawをカスタマイズし、汎用的なシステムを設定するのではなく、コードが必要なことを正確に実行するようにすべきです。設定ファイルが欲しい場合は、Claudeに追加するよう伝えることができます。
+設定の氾濫を望まないからです。各ユーザーは汎用システムを設定するのではなく、コードが正確に望むことをするように NanoClaw をカスタマイズすべきです。設定ファイルが好きなら Claude に追加してもらえます。
 
-**サードパーティやオープンソースモデルを使えますか？**
+**サードパーティ製またはオープンソースモデルを使えますか？**
 
-はい。NanoClawはClaude API互換のモデルエンドポイントに対応しています。`.env`ファイルで以下の環境変数を設定してください：
+はい。NanoClaw は provider 選択を `@mariozechner/pi-coding-agent` に委譲します。使いたいプロバイダーの標準環境変数を設定：
 
 ```bash
-ANTHROPIC_BASE_URL=https://your-api-endpoint.com
-ANTHROPIC_AUTH_TOKEN=your-token-here
+ANTHROPIC_API_KEY=...     # Anthropic
+OPENAI_API_KEY=...        # OpenAI / OpenAI 互換（DeepSeek、Qwen など）
+GEMINI_API_KEY=...        # Google Gemini
 ```
 
-以下が使用可能です：
-- [Ollama](https://ollama.ai)とAPIプロキシ経由のローカルモデル
-- [Together AI](https://together.ai)、[Fireworks](https://fireworks.ai)等でホストされたオープンソースモデル
-- Anthropic互換APIのカスタムモデルデプロイメント
+認証情報を `~/.pi/agent/auth.json` に保存することもできます。OpenAI 互換のローカルまたはセルフホストエンドポイントの場合、対応する pi-mono 環境変数（例：`OPENAI_BASE_URL`）でベース URL を上書きします。完全なプロバイダーリストは [pi-coding-agent docs](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) を参照。
 
-注意：最高の互換性のため、モデルはAnthropic APIフォーマットに対応している必要があります。
+**問題のデバッグはどうすればいいですか？**
 
-**問題のデバッグ方法は？**
+Claude Code に聞いてください。「スケジューラーが動いていないのはなぜ？」「最近のログには何がある？」「このメッセージに応答がなかったのはなぜ？」これが NanoClaw の根底にある AI ネイティブアプローチです。
 
-Claude Codeに聞いてください。「スケジューラーが動いていないのはなぜ？」「最近のログには何がある？」「このメッセージに返信がなかったのはなぜ？」これがNanoClawの基盤となるAIネイティブなアプローチです。
+**セットアップが動かないのはなぜ？**
 
-**セットアップがうまくいかない場合は？**
-
-問題がある場合、セットアップ中にClaudeが動的に修正を試みます。それでもうまくいかない場合は、`claude`を実行してから`/debug`を実行してください。Claudeが他のユーザーにも影響する可能性のある問題を見つけた場合は、セットアップのSKILL.mdを修正するPRを開いてください。
+問題がある場合、セットアップ中に Claude が動的に修正しようとします。それでもうまくいかない場合は、`claude` を実行してから `/debug` を実行してください。Claude が他のユーザーに影響する可能性のある問題を見つけた場合、setup SKILL.md を変更する PR を開いてください。
 
 **どのような変更がコードベースに受け入れられますか？**
 
-セキュリティ修正、バグ修正、明確な改善のみが基本設定に受け入れられます。それだけです。
+セキュリティ修正、バグ修正、ベース設定への明確な改善のみ。それだけです。
 
-それ以外のすべて（新機能、OS互換性、ハードウェアサポート、機能拡張）はスキルとしてコントリビューションすべきです。
+その他すべて（新機能、OS 互換性、ハードウェアサポート、拡張）はスキルとして提供すべきです。
 
-これにより、基本システムを最小限に保ち、すべてのユーザーが不要な機能を継承することなく、自分のインストールをカスタマイズできます。
+これによりベースシステムを最小限に保ち、各ユーザーが望まない機能を継承せずに自分のインストールをカスタマイズできます。
 
 ## コミュニティ
 
-質問やアイデアは？[Discordに参加](https://discord.gg/VDdww8qS42)してください。
+質問やアイデアは？[Discord に参加](https://discord.gg/VDdww8qS42)してください。
 
 ## 変更履歴
 
-破壊的変更と移行ノートについては[CHANGELOG.md](CHANGELOG.md)を参照してください。
+破壊的変更と移行手順は [CHANGELOG.md](CHANGELOG.md) を参照。完全なリリース履歴は [ドキュメントサイト](https://docs.nanoclaw.dev/changelog) を参照。
 
 ## ライセンス
 

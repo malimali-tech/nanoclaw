@@ -40,7 +40,7 @@ The codebase assumes you have an AI collaborator. It doesn't need to be excessiv
 
 ### Skills Over Features
 
-When people contribute, they shouldn't add "Telegram support alongside WhatsApp." They should contribute a skill like `/add-telegram` that transforms the codebase. Users fork the repo, run skills to customize, and end up with clean code that does exactly what they need - not a bloated system trying to support everyone's use case simultaneously.
+When people contribute, they shouldn't add a new channel or integration directly to the core. They should contribute a skill (e.g. the upstream `/add-feishu` / `/add-karpathy-llm-wiki` model) that transforms the codebase. Users fork the repo, run skills to customize, and end up with clean code that does exactly what they need — not a bloated system trying to support everyone's use case simultaneously.
 
 ---
 
@@ -129,28 +129,22 @@ A personal Claude assistant accessible via messaging, with minimal custom code.
 ## Integration Points
 
 ### Channels
-- WhatsApp (baileys), Telegram (grammy), Discord (discord.js), Slack (@slack/bolt), Gmail (googleapis)
-- Each channel lives in a separate fork repo and is added via skills (e.g., `/add-whatsapp`, `/add-telegram`)
-- Messages stored in SQLite, polled by router
-- Channels self-register at startup — unconfigured channels are skipped with a warning
+- The original upstream design listed five candidate channels (WhatsApp via baileys, Telegram via grammy, Discord via discord.js, Slack via @slack/bolt, Gmail via googleapis), each shipped as a separate skill (`/add-whatsapp` / `/add-telegram` / …) merged via a `skill/<name>` branch.
+- **This fork ships only Feishu / Lark** (`src/channels/feishu.ts`, via `@larksuiteoapi/node-sdk`). The other channel skills are not installed and are not part of this fork's contract.
+- Messages are stored as per-group `groups/<folder>/.nanoclaw/log.jsonl` (the SQLite `messages`/`chats` tables were removed in 2026-04). Channels self-register at startup; unconfigured channels are skipped with a warning.
 
 ### Scheduler
-- Built-in scheduler runs on the host, spawns containers for task execution
-- Custom `nanoclaw` MCP server (inside container) provides scheduling tools
-- Tools: `schedule_task`, `list_tasks`, `pause_task`, `resume_task`, `cancel_task`, `send_message`
-- Tasks stored in SQLite with run history
+- Built-in scheduler runs in the host process (no per-task containers)
+- Tools (registered as a pi-coding-agent extension in `src/agent/extension.ts`): `schedule_task`, `list_tasks`, `pause_task`, `resume_task`, `cancel_task`, `update_task`, `send_message`, `register_group`
+- Tasks stored in SQLite (`scheduled_tasks` + `task_run_logs`) with run history
 - Scheduler loop checks for due tasks every minute
-- Tasks execute Claude Agent SDK in containerized group context
+- Tasks run as in-process pi-coding-agent sessions in the group's working directory
 
 ### Web Access
-- Built-in WebSearch and WebFetch tools
-- Standard Claude Agent SDK capabilities
+- Whatever the running pi-coding-agent provides (configured via the standard pi extension mechanism). No bundled WebSearch/WebFetch in the host process.
 
 ### Browser Automation
-- agent-browser CLI with Chromium in container
-- Snapshot-based interaction with element references (@e1, @e2, etc.)
-- Screenshots, PDFs, video recording
-- Authentication state persistence
+- Not bundled. If needed, install via a pi extension or have the agent invoke a CLI (e.g. Playwright) inside the bash sandbox.
 
 ---
 

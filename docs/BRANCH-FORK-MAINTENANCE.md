@@ -1,6 +1,8 @@
 # Branch & Fork Maintenance Guidelines
 
-## Structure
+> **Note for this fork (`malimali-tech/nanoclaw`):** This guide describes upstream's branch/fork model, in which channel implementations live in separate "channel forks" (`nanoclaw-whatsapp`, `nanoclaw-telegram`, …) merged into a clean upstream main. This fork instead **bakes Feishu directly into `main`** — there is no `nanoclaw-feishu`-style separate channel fork to merge here. The forward-merge procedures below remain useful when pulling upstream changes through `upstream/main` into this fork's `main`.
+
+## Structure (upstream model)
 
 **`qwibitai/nanoclaw`** (upstream) — core engine with skill definitions (`.claude/skills/`). No channel code on `main`.
 
@@ -8,7 +10,7 @@
 
 **`skill/*` and `feat/*` branches on upstream** — add features unrelated to channels (e.g. `skill/compact`, `skill/apple-container`). Users merge these into their clone to add capabilities. Channel-specific skill branches that duplicate the forks (e.g. `skill/whatsapp`, `skill/telegram`) are legacy.
 
-## How users add capabilities
+## How users add capabilities (upstream model)
 
 ```
 user clones upstream main

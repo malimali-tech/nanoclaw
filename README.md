@@ -76,13 +76,13 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 - No monitoring dashboard; ask Claude what's happening.
 - No debugging tools; describe the problem and Claude fixes it.
 
-**Skills over features.** Instead of adding new channels or integrations to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) (e.g. a hypothetical `/add-slack`) that transform your fork. You end up with clean code that does exactly what you need.
+**Skills over features.** Instead of adding new integrations to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) (e.g. `/add-feishu`, `/add-karpathy-llm-wiki`) that transform your fork. You end up with clean code that does exactly what you need.
 
 **Pi-coding-agent in-process.** NanoClaw embeds [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) directly — no subprocess, no container build. The provider is selected via standard environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …) or `~/.pi/agent/auth.json`.
 
 ## What It Supports
 
-- **Feishu / Lark messaging** - Talk to your assistant from Feishu (国内) or Lark (国际) groups via WebSocket long-connection — no public URL needed. Other channels can be added back later as skills.
+- **Feishu / Lark messaging** - Talk to your assistant from Feishu (国内) or Lark (国际) groups via WebSocket long-connection — no public URL needed. This fork ships only the Feishu channel; other channels are upstream skills that don't apply here.
 - **Isolated group context** - Each group has its own `CLAUDE.md` memory and working directory; bash commands are sandboxed with a per-group sandbox profile.
 - **Main channel** - Your private channel (self-chat) for admin control; every group is completely isolated
 - **Scheduled tasks** - Recurring jobs that run the agent and can message you back
@@ -125,16 +125,9 @@ The codebase is small enough that Claude can safely modify it.
 
 **Don't add features. Add skills.**
 
-If you want to add a new channel (e.g. Slack), don't create a PR that adds it to the core codebase. Instead, fork NanoClaw, make the code changes on a branch, and open a PR. We'll create a `skill/<channel>` branch from your PR that other users can merge into their fork.
+If you want to add a new capability (a different channel, an MCP integration, a workflow), don't create a PR that adds it to the core codebase. Instead, fork NanoClaw, make the code changes on a branch, and open a PR. We'll turn your branch into a skill that other users can merge into their fork on demand.
 
-Users then run `/add-<channel>` on their fork and get clean code that does exactly what they need, not a bloated system trying to support every use case.
-
-### RFS (Request for Skills)
-
-Skills we'd like to see:
-
-**Communication Channels**
-- `/add-signal` - Add Signal as a channel
+Users then run `/add-<your-skill>` on their fork and get clean code that does exactly what they need, not a bloated system trying to support every use case.
 
 ## Requirements
 

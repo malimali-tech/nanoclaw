@@ -1,10 +1,12 @@
 # Skills as Branches
 
+> **Note for this fork:** This document explains the upstream NanoClaw "skill = branch" mechanism in general terms. Channel skills (`skill/discord`, `skill/telegram`, `skill/slack`, `skill/whatsapp`) and their dependents (telegram-swarm, voice-transcription, image-vision, pdf-reader) are **upstream-only** — this fork ships only Feishu / Lark and does not consume those branches. The branch-merge mechanism still applies to non-channel skills (e.g. `add-feishu`, `add-karpathy-llm-wiki`, `add-parallel`, `add-ollama-tool`, `add-macos-statusbar`).
+
 ## Overview
 
 This document covers **feature skills** — skills that add capabilities via git branch merges. This is the most complex skill type and the primary way NanoClaw is extended.
 
-NanoClaw has four types of skills overall. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full taxonomy:
+NanoClaw has three types of skills overall (this fork removed the legacy "Container skill" type along with the per-message container architecture). See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full taxonomy:
 
 | Type | Location | How it works |
 |------|----------|-------------|

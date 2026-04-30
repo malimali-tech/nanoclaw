@@ -35,20 +35,20 @@ Add capabilities to NanoClaw by merging a git branch. The SKILL.md contains setu
 
 **Location:** `.claude/skills/` on `main` (instructions only), code on `skill/*` branch
 
-**Examples:** `/add-telegram`, `/add-slack`, `/add-discord`, `/add-gmail`
+**Examples:** `/add-feishu`, `/add-karpathy-llm-wiki`, `/add-parallel`, `/add-ollama-tool`, `/add-macos-statusbar`
 
 **How they work:**
-1. User runs `/add-telegram`
-2. Claude follows the SKILL.md: fetches and merges the `skill/telegram` branch
-3. Claude walks through interactive setup (env vars, bot creation, etc.)
+1. User runs `/add-feishu`
+2. Claude follows the SKILL.md: fetches and merges the `skill/feishu` branch
+3. Claude walks through interactive setup (env vars, app creation on the platform, etc.)
 
 **Contributing a feature skill:**
-1. Fork `qwibitai/nanoclaw` and branch from `main`
+1. Fork the repo and branch from `main`
 2. Make the code changes (new files, modified source, updated `package.json`, etc.)
 3. Add a SKILL.md in `.claude/skills/<name>/` with setup instructions — step 1 should be merging the branch
 4. Open a PR. We'll create the `skill/<name>` branch from your work
 
-See `/add-telegram` for a good example. See [docs/skills-as-branches.md](docs/skills-as-branches.md) for the full system design.
+See `/add-feishu` for a working example. See [docs/skills-as-branches.md](docs/skills-as-branches.md) for the full system design.
 
 #### 2. Utility skills (with code files)
 

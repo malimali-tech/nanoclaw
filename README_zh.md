@@ -2,202 +2,202 @@
   <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
 </p>
 
-> ⚠️ **本翻译自 pi-mono 迁移（2026-04）起已过时。当前架构使用进程内 pi-coding-agent，并通过 `sandbox-exec` / `bubblewrap` 进行沙箱隔离，不再使用容器。请参考 [README.md](README.md) 获取最新架构。**
-
 <p align="center">
-  NanoClaw —— 您的专属 Claude 助手，在容器中安全运行。它轻巧易懂，并能根据您的个人需求灵活定制。
+  一个轻量级的个人 AI 助手。pi-coding-agent 在主进程内运行，bash 命令通过 <code>sandbox-exec</code> / <code>bubblewrap</code> 沙箱化。代码量小到可以完全读懂，可以按你的需求随意改造。
 </p>
 
 <p align="center">
   <a href="https://nanoclaw.dev">nanoclaw.dev</a>&nbsp; • &nbsp;
+  <a href="https://docs.nanoclaw.dev">docs</a>&nbsp; • &nbsp;
   <a href="README.md">English</a>&nbsp; • &nbsp;
   <a href="README_ja.md">日本語</a>&nbsp; • &nbsp;
-  <a href="https://discord.gg/VDdww8qS42"><img src="https://img.shields.io/discord/1470188214710046894?label=Discord&logo=discord&v=2" alt="Discord" valign="middle"></a>&nbsp; • &nbsp;
-  <a href="repo-tokens"><img src="repo-tokens/badge.svg" alt="34.9k tokens, 17% of context window" valign="middle"></a>
+  <a href="https://discord.gg/VDdww8qS42"><img src="https://img.shields.io/discord/1470188214710046894?label=Discord&logo=discord&v=2" alt="Discord" valign="middle"></a>
 </p>
-通过 Claude Code，NanoClaw 可以动态重写自身代码，根据您的需求定制功能。
 
-**新功能：** 首个支持 [Agent Swarms（智能体集群）](https://code.claude.com/docs/en/agent-teams) 的 AI 助手。可轻松组建智能体团队，在您的聊天中高效协作。
+> **关于本 fork：** 这个 fork 只内置飞书 / Lark 一个 channel。上游 nanoclaw 的多 channel 技能（add-whatsapp / add-telegram / add-slack / add-discord）这里都没有，相应的运行时代码与设置流程也已移除。
 
-## 我为什么创建这个项目
+---
 
-[OpenClaw](https://github.com/openclaw/openclaw) 是一个令人印象深刻的项目，但我无法安心使用一个我不了解却能访问我个人隐私的软件。OpenClaw 有近 50 万行代码、53 个配置文件和 70+ 个依赖项。其安全性是应用级别的（通过白名单、配对码实现），而非操作系统级别的隔离。所有东西都在一个共享内存的 Node 进程中运行。
+## 为什么有这个项目
 
-NanoClaw 用一个您能快速理解的代码库，为您提供了同样的核心功能。只有一个进程，少数几个文件。智能体（Agent）运行在具有文件系统隔离的真实 Linux 容器中，而不是依赖于权限检查。
+[OpenClaw](https://github.com/openclaw/openclaw) 是个令人印象深刻的项目，但把一个近 50 万行代码、53 个配置文件、70+ 依赖、安全靠应用层白名单 + 配对码、所有东西跑在一个共享内存 Node 进程里的软件接入我的生活——我睡不着。
+
+NanoClaw 提供同样的核心功能，但代码库小到可以完全读懂：一个进程，几个源文件。Coding agent 通过 [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) 在主进程内运行，bash 命令在 OS 层用 `sandbox-exec`（macOS）或 `bubblewrap`（Linux）做内核级沙箱——不是仅仅通过权限检查。
 
 ## 快速开始
 
 ```bash
-git clone https://github.com/qwibitai/nanoclaw.git
+gh repo fork malimali-tech/nanoclaw --clone
 cd nanoclaw
 claude
 ```
 
-然后运行 `/setup`。Claude Code 会处理一切：依赖安装、身份验证、容器设置、服务配置。
+<details>
+<summary>不用 GitHub CLI</summary>
 
-> **注意：** 以 `/` 开头的命令（如 `/setup`、`/add-whatsapp`）是 [Claude Code 技能](https://code.claude.com/docs/en/skills)。请在 `claude` CLI 提示符中输入，而非在普通终端中。
+1. 在 GitHub 上 Fork [malimali-tech/nanoclaw](https://github.com/malimali-tech/nanoclaw)
+2. `git clone https://github.com/<your-username>/nanoclaw.git`
+3. `cd nanoclaw`
+4. `claude`
+
+</details>
+
+然后运行 `/setup`。Claude Code 会处理一切：依赖安装、凭据配置、沙箱设置、服务启动。
+
+> **注意：** 以 `/` 开头的命令（`/setup`、`/add-feishu` 等）是 [Claude Code 技能](https://code.claude.com/docs/en/skills)。请在 `claude` CLI 提示符里输入，不是普通 shell。还没装 Claude Code 可在 [claude.com/product/claude-code](https://claude.com/product/claude-code) 获取。
 
 ## 设计哲学
 
-**小巧易懂：** 单一进程，少量源文件。无微服务、无消息队列、无复杂抽象层。让 Claude Code 引导您轻松上手。
+**小到能读懂。** 一个进程，几个源文件，没有微服务。想搞清楚整个 NanoClaw 是怎么运转的？让 Claude Code 带你过一遍代码就行。
 
-**通过隔离保障安全:** 智能体运行在 Linux 容器（在 macOS 上是 Apple Container，或 Docker）中。它们只能看到被明确挂载的内容。即便通过 Bash 访问也十分安全，因为所有命令都在容器内执行，不会直接操作您的宿主机。
+**通过隔离保障安全。** Agent 跑出来的 bash 命令在 OS 级沙箱里运行——macOS 的 `sandbox-exec`、Linux 的 `bubblewrap`——配置由 `config/sandbox.default.json` 决定，每个群组还能在 `groups/<group>/.pi/sandbox.json` 做独立 override。文件系统和网络访问由策略控制，不是只靠权限检查。
 
-**为单一用户打造:** 这不是一个框架，是一个完全符合您个人需求的、可工作的软件。您可以 Fork 本项目，然后让 Claude Code 根据您的精确需求进行修改和适配。
+**为单一用户打造。** NanoClaw 不是一个大而全的框架，而是恰好符合你需求的一份代码。Fork 一份，让 Claude Code 按你的偏好改造它。
 
-**定制即代码修改:** 没有繁杂的配置文件。想要不同的行为？直接修改代码。代码库足够小，这样做是安全的。
+**定制即代码改动。** 没有配置爆炸。想要不同的行为？改代码。代码足够小，改起来安全。
 
-**AI 原生:** 无安装向导（由 Claude Code 指导安装）。无需监控仪表盘，直接询问 Claude 即可了解系统状况。无调试工具（描述问题，Claude 会修复它）。
+**AI 原生。**
+- 没有安装向导，由 Claude Code 引导。
+- 没有监控面板，问 Claude 当前在跑什么。
+- 没有调试工具，描述问题让 Claude 修。
 
-**技能（Skills）优于功能（Features）:** 贡献者不应该向代码库添加新功能（例如支持 Telegram）。相反，他们应该贡献像 `/add-telegram` 这样的 [Claude Code 技能](https://code.claude.com/docs/en/skills)，这些技能可以改造您的 fork。最终，您得到的是只做您需要事情的整洁代码。
+**技能优于功能。** 与其往代码库里加新集成，不如以 [Claude Code 技能](https://code.claude.com/docs/en/skills) 形式贡献（例如 `/add-feishu`、`/add-karpathy-llm-wiki`）来改造你的 fork。结果是一份只做你需要的事的整洁代码。
 
-**最好的工具套件，最好的模型:** 本项目运行在 Claude Agent SDK 之上，这意味着您直接运行的就是 Claude Code。Claude Code 高度强大，其编码和问题解决能力使其能够修改和扩展 NanoClaw，为每个用户量身定制。
+**Pi-coding-agent 进程内运行。** NanoClaw 直接嵌入 [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent)——没有子进程、没有容器构建。Provider 通过标准环境变量选择（`ANTHROPIC_API_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`DEEPSEEK_API_KEY`…）或 `~/.pi/agent/auth.json`。
 
-## 功能支持
+## 支持的能力
 
-- **多渠道消息** - 通过 WhatsApp、Telegram、Discord、Slack 或 Gmail 与您的助手对话。使用 `/add-whatsapp` 或 `/add-telegram` 等技能添加渠道，可同时运行一个或多个。
-- **隔离的群组上下文** - 每个群组都拥有独立的 `CLAUDE.md` 记忆和隔离的文件系统。它们在各自的容器沙箱中运行，且仅挂载所需的文件系统。
-- **主频道** - 您的私有频道（self-chat），用于管理控制；其他所有群组都完全隔离
-- **计划任务** - 运行 Claude 的周期性作业，并可以给您回发消息
-- **网络访问** - 搜索和抓取网页内容
-- **容器隔离** - 智能体在 Apple Container (macOS) 或 Docker (macOS/Linux) 的沙箱中运行
-- **智能体集群（Agent Swarms）** - 启动多个专业智能体团队，协作完成复杂任务（首个支持此功能的个人 AI 助手）
-- **可选集成** - 通过技能添加 Gmail (`/add-gmail`) 等更多功能
+- **飞书 / Lark 消息** — 通过 WebSocket 长连接和飞书（国内）或 Lark（国际）群对话，无需公网 URL。本 fork 仅内置飞书 channel；上游其他 channel 在这里不可用。
+- **群组隔离的上下文** — 每个群组都有独立的 `CLAUDE.md` 记忆和工作目录；bash 命令受群组级沙箱配置约束。
+- **主频道（main）** — 你的私有频道（self-chat），用于管理控制；其他群组完全隔离。
+- **计划任务** — 周期性运行 agent，并能给你回发消息。
+- **网络访问** — 在沙箱允许的域名范围内搜索和抓取网页。
+- **OS 级沙箱** — bash 命令通过 `sandbox-exec`（macOS）或 `bubblewrap`（Linux）执行；规则在 `config/sandbox.default.json`，每群可在 `groups/<group>/.pi/sandbox.json` 覆盖。
+- **多 Provider** — pi-coding-agent 支持 Anthropic、OpenAI、Gemini、DeepSeek 等，通过 .env 或 `~/.pi/agent/auth.json` 配置。
 
 ## 使用方法
 
-使用触发词（默认为 `@Andy`）与您的助手对话：
+用触发词（默认 `@Andy`）跟助手对话：
 
 ```
-@Andy 每周一到周五早上9点，给我发一份销售渠道的概览（需要访问我的 Obsidian vault 文件夹）
-@Andy 每周五回顾过去一周的 git 历史，如果与 README 有出入，就更新它
-@Andy 每周一早上8点，从 Hacker News 和 TechCrunch 收集关于 AI 发展的资讯，然后发给我一份简报
+@Andy 每个工作日早 9 点给我一份销售流水概览（可以读我的 Obsidian vault）
+@Andy 每周五回顾一下过去一周的 git 历史，发现和 README 不一致就更新 README
+@Andy 每周一早 8 点，从 Hacker News 和 TechCrunch 收集 AI 进展，给我一份简报
 ```
 
-在主频道（您的self-chat）中，可以管理群组和任务：
+在主频道（self-chat）可以管理群组和任务：
 ```
 @Andy 列出所有群组的计划任务
-@Andy 暂停周一简报任务
-@Andy 加入"家庭聊天"群组
+@Andy 暂停"周一简报"任务
+@Andy 加入"家庭群"
 ```
 
 ## 定制
 
-没有需要学习的配置文件。直接告诉 Claude Code 您想要什么：
+NanoClaw 没有配置文件，要改什么直接告诉 Claude Code：
 
 - "把触发词改成 @Bob"
-- "记住以后回答要更简短直接"
-- "当我说早上好的时候，加一个自定义的问候"
-- "每周存储一次对话摘要"
+- "以后回答都简短直接一点"
+- "我说早上好的时候加个自定义问候"
+- "每周存一份对话总结"
 
-或者运行 `/customize` 进行引导式修改。
+或者运行 `/customize` 走引导式流程。
 
-代码库足够小，Claude 可以安全地修改它。
+代码足够小，让 Claude 改不会失控。
 
 ## 贡献
 
-**不要添加功能，而是添加技能。**
+**别加功能，加技能。**
 
-如果您想添加 Telegram 支持，不要创建一个 PR 同时添加 Telegram 和 WhatsApp。而是贡献一个技能文件 (`.claude/skills/add-telegram/SKILL.md`)，教 Claude Code 如何改造一个 NanoClaw 安装以使用 Telegram。
+想加新能力（比如另一个 channel、一个 MCP 集成、一个工作流）？不要直接往主仓库里加，而是 Fork → 在分支上写代码 → 开 PR。我们会把它做成一个其他用户可按需 merge 的技能。
 
-然后用户在自己的 fork 上运行 `/add-telegram`，就能得到只做他们需要事情的整洁代码，而不是一个试图支持所有用例的臃肿系统。
-
-### RFS (技能征集)
-
-我们希望看到的技能：
-
-**通信渠道**
-- `/add-signal` - 添加 Signal 作为渠道
-
-**会话管理**
-- `/clear` - 添加一个 `/clear` 命令，用于压缩会话（在同一会话中总结上下文，同时保留关键信息）。这需要研究如何通过 Claude Agent SDK 以编程方式触发压缩。
+用户只要在自己的 fork 上运行 `/add-<your-skill>`，就能拿到一份只做他们需要的事的整洁代码，而不是一个试图支持所有用例的臃肿系统。
 
 ## 系统要求
 
-- macOS 或 Linux
+- macOS、Linux、或 Windows（通过 WSL2）
 - Node.js 20+
 - [Claude Code](https://claude.ai/download)
-- [Apple Container](https://github.com/apple/container) (macOS) 或 [Docker](https://docker.com/products/docker-desktop) (macOS/Linux)
+- macOS：`sandbox-exec`（系统自带）。Linux：`bubblewrap`（`apt install bubblewrap` / `dnf install bubblewrap`）。
 
 ## 架构
 
 ```
-渠道 --> SQLite --> 轮询循环 --> 容器 (Claude Agent SDK) --> 响应
+Channels --> SQLite (元数据) + log.jsonl (消息) --> 轮询循环 --> pi-coding-agent (进程内 + sandbox 化 bash) --> 回复
 ```
 
-单一 Node.js 进程。渠道通过技能添加，启动时自注册 — 编排器连接具有凭据的渠道。智能体在具有文件系统隔离的 Linux 容器中执行。每个群组的消息队列带有并发控制。通过文件系统进行 IPC。
+单 Node.js 进程。Channel 通过技能添加并在启动时自注册——orchestrator 连接所有凭据齐全的 channel。Agent 在主进程内通过 `@mariozechner/pi-coding-agent` 运行；bash 命令包裹在 `sandbox-exec`（macOS）/ `bubblewrap`（Linux）里，规则来自 `config/sandbox.default.json`（可被群级覆盖）。每个群组有独立的消息队列和会话池。
 
-完整架构详情请见 [docs/SPEC.md](docs/SPEC.md)。
+完整迁移设计参见 [docs/plans/2026-04-29-pi-mono-host-agent-design.md](docs/plans/2026-04-29-pi-mono-host-agent-design.md)。
 
 关键文件：
-- `src/index.ts` - 编排器：状态管理、消息循环、智能体调用
-- `src/channels/registry.ts` - 渠道注册表（启动时自注册）
-- `src/ipc.ts` - IPC 监听与任务处理
-- `src/router.ts` - 消息格式化与出站路由
-- `src/group-queue.ts` - 带全局并发限制的群组队列
-- `src/container-runner.ts` - 生成流式智能体容器
-- `src/task-scheduler.ts` - 运行计划任务
-- `src/db.ts` - SQLite 操作（消息、群组、会话、状态）
-- `groups/*/CLAUDE.md` - 各群组的记忆
+- `src/index.ts` — orchestrator：状态、消息循环、agent 调用
+- `src/channels/registry.ts` — channel 自注册表
+- `src/channels/feishu.ts` — 飞书 / Lark channel 实现
+- `src/router.ts` — 消息格式化与出站路由
+- `src/group-log.ts` — 每群的 `log.jsonl` 追加 / 尾读 / cursor
+- `src/agent/run.ts` — 进程内 pi-coding-agent 运行入口
+- `src/agent/extension.ts` — NanoClaw 的 IPC 工具（pi extension）
+- `src/agent/session-pool.ts` — 每群一个 AgentSession，带 idle TTL
+- `src/agent/sandbox-config.ts` — sandbox 配置加载（默认 + 每群覆盖）
+- `src/task-scheduler.ts` — 计划任务调度器
+- `src/db.ts` — SQLite（scheduled_tasks / sessions / registered_groups / router_state）
+- `groups/*/CLAUDE.md` — 每群的记忆
+- `config/sandbox.default.json` — 默认沙箱 profile（网络 / 文件系统规则）
 
 ## FAQ
 
-**为什么是 Docker？**
+**为什么不用容器了？**
 
-Docker 提供跨平台支持（macOS 和 Linux）和成熟的生态系统。在 macOS 上，您可以选择通过运行 `/convert-to-apple-container` 切换到 Apple Container，以获得更轻量级的原生运行时体验。
+NanoClaw 早期为每条消息启一个 Linux 容器跑 agent。pi-mono 迁移之后改成进程内执行 + bash OS 级沙箱（macOS 的 `sandbox-exec`、Linux 的 `bubblewrap`）：更快，不再有每条消息的冷启动，文件系统和网络隔离仍然在内核层。
 
-**我可以在 Linux 上运行吗？**
+**Linux / Windows 上能跑吗？**
 
-可以。Docker 是默认的容器运行时，在 macOS 和 Linux 上都可以使用。只需运行 `/setup`。
+可以。macOS 用系统自带的 `sandbox-exec`。Linux 需要装 `bubblewrap`（`apt install bubblewrap` / `dnf install bubblewrap`）。Windows 通过 WSL2（走 Linux 路径）。`/setup` 一把搞定。
 
-**这个项目安全吗？**
+**安全吗？**
 
-智能体在容器中运行，而不是在应用级别的权限检查之后。它们只能访问被明确挂载的目录。您仍然应该审查您运行的代码，但这个代码库小到您真的可以做到。完整的安全模型请见 [docs/SECURITY.md](docs/SECURITY.md)。
+Agent 的 bash 命令在 OS 级沙箱里运行，文件系统和网络访问受限——规则声明在 `config/sandbox.default.json`，可以按需收紧。代码库小，整个攻击面、包括沙箱怎么调用，都能完整 review。
 
 **为什么没有配置文件？**
 
-我们不希望配置泛滥。每个用户都应该定制它，让代码完全符合他们的需求，而不是去配置一个通用的系统。如果您喜欢用配置文件，告诉 Claude 让它加上。
+不想要配置爆炸。每个用户都应该把代码改成正好符合自己需求，而不是去配一个通用系统。如果你偏好配置文件，让 Claude 给你加。
 
-**我可以使用第三方或开源模型吗？**
+**能用第三方或本地模型吗？**
 
-可以。NanoClaw 支持任何 API 兼容的模型端点。在 `.env` 文件中设置以下环境变量：
+能。NanoClaw 把 provider 选择委托给 `@mariozechner/pi-coding-agent`。在 .env 里设你想用的环境变量：
 
 ```bash
-ANTHROPIC_BASE_URL=https://your-api-endpoint.com
-ANTHROPIC_AUTH_TOKEN=your-token-here
+ANTHROPIC_API_KEY=...     # Anthropic
+OPENAI_API_KEY=...        # OpenAI / OpenAI-兼容（DeepSeek、Qwen 等）
+GEMINI_API_KEY=...        # Google Gemini
+DEEPSEEK_API_KEY=...      # DeepSeek
 ```
 
-这使您能够使用：
-- 通过 [Ollama](https://ollama.ai) 配合 API 代理运行的本地模型
-- 托管在 [Together AI](https://together.ai)、[Fireworks](https://fireworks.ai) 等平台上的开源模型
-- 兼容 Anthropic API 格式的自定义模型部署
+也可以用 `~/.pi/agent/auth.json` 存凭据。OpenAI 兼容的本地或自托管端点用对应的 base URL 环境变量（如 `OPENAI_BASE_URL`）。完整 provider 列表见 [pi-coding-agent 文档](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent)。
 
-注意：为获得最佳兼容性，模型需支持 Anthropic API 格式。
+**怎么调试？**
 
-**我该如何调试问题？**
+问 Claude Code。"调度器为什么没跑？""最近的日志里有什么？""这条消息为什么没回复？" 这就是 NanoClaw 的 AI 原生方式。
 
-问 Claude Code。"为什么计划任务没有运行？" "最近的日志里有什么？" "为什么这条消息没有得到回应？" 这就是 AI 原生的方法。
+**装不上怎么办？**
 
-**为什么我的安装不成功？**
+设置过程中 Claude 会动态修复问题。如果还是不行，运行 `claude` 然后 `/debug`。如果 Claude 发现了一个可能影响其他人的问题，欢迎开 PR 改 setup SKILL.md。
 
-如果遇到问题，安装过程中 Claude 会尝试动态修复。如果问题仍然存在，运行 `claude`，然后运行 `/debug`。如果 Claude 发现一个可能影响其他用户的问题，请开一个 PR 来修改 setup SKILL.md。
+**什么样的代码改动会被合并？**
 
-**什么样的代码更改会被接受？**
+仅安全修复、bug 修复、和对基础配置的清晰改进。其他东西（新能力、OS 兼容性、硬件支持、增强）都应该作为技能贡献。
 
-安全修复、bug 修复，以及对基础配置的明确改进。仅此而已。
-
-其他一切（新功能、操作系统兼容性、硬件支持、增强功能）都应该作为技能来贡献。
-
-这使得基础系统保持最小化，并让每个用户可以定制他们的安装，而无需继承他们不想要的功能。
+这样基础系统保持最小，每个用户可以按自己的需要定制，不必背着自己用不到的功能。
 
 ## 社区
 
-有任何疑问或建议？欢迎[加入 Discord 社区](https://discord.gg/VDdww8qS42)与我们交流。
+有疑问或想法？[加入 Discord](https://discord.gg/VDdww8qS42)。
 
 ## 更新日志
 
-破坏性变更和迁移说明请见 [CHANGELOG.md](CHANGELOG.md)。
+破坏性变更和迁移说明见 [CHANGELOG.md](CHANGELOG.md)，完整发布历史见 [文档站 changelog](https://docs.nanoclaw.dev/changelog)。
 
-## 许可证
+## 许可
 
 MIT
