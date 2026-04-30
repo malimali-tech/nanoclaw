@@ -16,19 +16,19 @@ import {
   getRegisteredChannelNames,
 } from './channels/registry.js';
 import {
-  getAllChats,
   getAllRegisteredGroups,
-  getLastBotMessageTimestamp,
-  getMessagesSince,
-  getNewMessages,
-  getRouterState,
   initDatabase,
   setRegisteredGroup,
-  setRouterState,
-  storeChatMetadata,
-  storeMessage,
 } from './db.js';
 import { resolveGroupFolderPath } from './group-folder.js';
+import {
+  appendMessage,
+  flushWrites,
+  getLastBotTimestamp,
+  readCursor,
+  readMessagesSince,
+  writeCursor,
+} from './group-log.js';
 import { findChannel, formatMessages, routeOutbound } from './router.js';
 import {
   restoreRemoteControl,
@@ -50,31 +50,19 @@ import type { GroupRegistryPort, RouterPort } from './agent/types.js';
 // Re-export for backwards compatibility during refactor
 export { escapeXml, formatMessages } from './router.js';
 
-/** Lightweight summary of an available chat group, used by callers/tests. */
-export interface AvailableGroup {
-  jid: string;
-  name: string;
-  lastActivity: string;
-  isRegistered: boolean;
-}
-
-let lastTimestamp = '';
 let registeredGroups: Record<string, RegisteredGroup> = {};
-let lastAgentTimestamp: Record<string, string> = {};
+/** Per-group processing cursor (last message timestamp handed to the agent). */
+const cursors: Record<string, string> = {};
 let messageLoopRunning = false;
 
 const channels: Channel[] = [];
 
 function loadState(): void {
-  lastTimestamp = getRouterState('last_timestamp') || '';
-  const agentTs = getRouterState('last_agent_timestamp');
-  try {
-    lastAgentTimestamp = agentTs ? JSON.parse(agentTs) : {};
-  } catch {
-    logger.warn('Corrupted last_agent_timestamp in DB, resetting');
-    lastAgentTimestamp = {};
-  }
   registeredGroups = getAllRegisteredGroups();
+  for (const [jid, group] of Object.entries(registeredGroups)) {
+    const fromDisk = readCursor(group.folder);
+    if (fromDisk) cursors[jid] = fromDisk;
+  }
   logger.info(
     { groupCount: Object.keys(registeredGroups).length },
     'State loaded',
@@ -83,28 +71,26 @@ function loadState(): void {
 
 /**
  * Return the message cursor for a group, recovering from the last bot reply
- * if lastAgentTimestamp is missing (new group, corrupted state, restart).
+ * if cursor.json is missing (new group, corrupted state, restart).
  */
 function getOrRecoverCursor(chatJid: string): string {
-  const existing = lastAgentTimestamp[chatJid];
+  const existing = cursors[chatJid];
   if (existing) return existing;
 
-  const botTs = getLastBotMessageTimestamp(chatJid, ASSISTANT_NAME);
-  if (botTs) {
+  const group = registeredGroups[chatJid];
+  if (!group) return '';
+
+  const fromLog = getLastBotTimestamp(group.folder);
+  if (fromLog) {
     logger.info(
-      { chatJid, recoveredFrom: botTs },
-      'Recovered message cursor from last bot reply',
+      { chatJid, recoveredFrom: fromLog },
+      'Recovered message cursor from last bot reply in log.jsonl',
     );
-    lastAgentTimestamp[chatJid] = botTs;
-    saveState();
-    return botTs;
+    cursors[chatJid] = fromLog;
+    void writeCursor(group.folder, fromLog).catch(() => {});
+    return fromLog;
   }
   return '';
-}
-
-function saveState(): void {
-  setRouterState('last_timestamp', lastTimestamp);
-  setRouterState('last_agent_timestamp', JSON.stringify(lastAgentTimestamp));
 }
 
 function registerGroup(jid: string, group: RegisteredGroup): void {
@@ -151,29 +137,15 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
   );
 }
 
-/**
- * Get available groups list for the agent.
- * Returns groups ordered by most recent activity.
- */
-export function getAvailableGroups(): AvailableGroup[] {
-  const chats = getAllChats();
-  const registeredJids = new Set(Object.keys(registeredGroups));
-
-  return chats
-    .filter((c) => c.jid !== '__group_sync__' && c.is_group)
-    .map((c) => ({
-      jid: c.jid,
-      name: c.name,
-      lastActivity: c.last_message_time,
-      isRegistered: registeredJids.has(c.jid),
-    }));
-}
-
 /** @internal - exported for testing */
 export function _setRegisteredGroups(
   groups: Record<string, RegisteredGroup>,
 ): void {
   registeredGroups = groups;
+}
+
+function botMessageId(): string {
+  return `bot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /**
@@ -193,10 +165,10 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   const isMainGroup = group.isMain === true;
 
-  const missedMessages = getMessagesSince(
-    chatJid,
-    getOrRecoverCursor(chatJid),
-    ASSISTANT_NAME,
+  const cursor = getOrRecoverCursor(chatJid);
+  const missedMessages = readMessagesSince(
+    group.folder,
+    cursor,
     MAX_MESSAGES_PER_PROMPT,
   );
 
@@ -219,10 +191,12 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   // Advance cursor before dispatch so concurrent loop iterations don't
   // re-pick up these messages. Roll back if the agent errors before any
   // output reached the user.
-  const previousCursor = lastAgentTimestamp[chatJid] || '';
-  lastAgentTimestamp[chatJid] =
-    missedMessages[missedMessages.length - 1].timestamp;
-  saveState();
+  const previousCursor = cursors[chatJid] ?? '';
+  const newCursor = missedMessages[missedMessages.length - 1].timestamp;
+  cursors[chatJid] = newCursor;
+  await writeCursor(group.folder, newCursor).catch((err) =>
+    logger.warn({ chatJid, err }, 'writeCursor failed'),
+  );
 
   logger.info(
     { group: group.name, messageCount: missedMessages.length },
@@ -241,8 +215,8 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   } catch (err) {
     logger.error({ group: group.name, err }, 'Agent error');
     // Roll back cursor so retries can re-process these messages
-    lastAgentTimestamp[chatJid] = previousCursor;
-    saveState();
+    cursors[chatJid] = previousCursor;
+    await writeCursor(group.folder, previousCursor).catch(() => {});
     return false;
   } finally {
     await channel.setTyping?.(chatJid, false).catch(() => {});
@@ -260,59 +234,39 @@ async function startMessageLoop(): Promise<void> {
 
   while (true) {
     try {
-      const jids = Object.keys(registeredGroups);
-      const { messages, newTimestamp } = getNewMessages(
-        jids,
-        lastTimestamp,
-        ASSISTANT_NAME,
-      );
+      // Make sure any in-flight inbound appends are flushed before reading
+      await flushWrites();
 
-      if (messages.length > 0) {
-        logger.info({ count: messages.length }, 'New messages');
+      for (const chatJid of Object.keys(registeredGroups)) {
+        const group = registeredGroups[chatJid];
+        if (!group) continue;
 
-        // Advance the "seen" cursor for all messages immediately
-        lastTimestamp = newTimestamp;
-        saveState();
+        const cursor = getOrRecoverCursor(chatJid);
+        const missed = readMessagesSince(
+          group.folder,
+          cursor,
+          MAX_MESSAGES_PER_PROMPT,
+        );
+        if (missed.length === 0) continue;
 
-        // Deduplicate by group
-        const messagesByGroup = new Map<string, NewMessage[]>();
-        for (const msg of messages) {
-          const existing = messagesByGroup.get(msg.chat_jid);
-          if (existing) {
-            existing.push(msg);
-          } else {
-            messagesByGroup.set(msg.chat_jid, [msg]);
-          }
-        }
-
-        for (const [chatJid, groupMessages] of messagesByGroup) {
-          const group = registeredGroups[chatJid];
-          if (!group) continue;
-
-          const isMainGroup = group.isMain === true;
-          const needsTrigger = !isMainGroup && group.requiresTrigger !== false;
-
-          // For non-main groups, only act on trigger messages.
-          // Non-trigger messages accumulate in DB and get pulled as
-          // context when a trigger eventually arrives.
-          if (needsTrigger) {
-            const triggerPattern = getTriggerPattern(group.trigger);
-            const allowlistCfg = loadSenderAllowlist();
-            const hasTrigger = groupMessages.some(
-              (m) =>
-                triggerPattern.test(m.content.trim()) &&
-                (m.is_from_me ||
-                  isTriggerAllowed(chatJid, m.sender, allowlistCfg)),
-            );
-            if (!hasTrigger) continue;
-          }
-
-          // Dispatch to the in-process agent. processGroupMessages handles
-          // formatting, cursor advancement, and rollback on error.
-          processGroupMessages(chatJid).catch((err) =>
-            logger.error({ chatJid, err }, 'processGroupMessages failed'),
+        const isMainGroup = group.isMain === true;
+        if (!isMainGroup && group.requiresTrigger !== false) {
+          const triggerPattern = getTriggerPattern(group.trigger);
+          const allowlistCfg = loadSenderAllowlist();
+          const hasTrigger = missed.some(
+            (m) =>
+              triggerPattern.test(m.content.trim()) &&
+              (m.is_from_me ||
+                isTriggerAllowed(chatJid, m.sender, allowlistCfg)),
           );
+          if (!hasTrigger) continue;
         }
+
+        // Dispatch to the in-process agent. processGroupMessages handles
+        // formatting, cursor advancement, and rollback on error.
+        processGroupMessages(chatJid).catch((err) =>
+          logger.error({ chatJid, err }, 'processGroupMessages failed'),
+        );
       }
     } catch (err) {
       logger.error({ err }, 'Error in message loop');
@@ -323,14 +277,15 @@ async function startMessageLoop(): Promise<void> {
 
 /**
  * Startup recovery: check for unprocessed messages in registered groups.
- * Handles crash between advancing lastTimestamp and processing messages.
+ * Handles crash between message append and cursor advancement.
  */
-function recoverPendingMessages(): void {
+async function recoverPendingMessages(): Promise<void> {
+  await flushWrites();
   for (const [chatJid, group] of Object.entries(registeredGroups)) {
-    const pending = getMessagesSince(
-      chatJid,
-      getOrRecoverCursor(chatJid),
-      ASSISTANT_NAME,
+    const cursor = getOrRecoverCursor(chatJid);
+    const pending = readMessagesSince(
+      group.folder,
+      cursor,
       MAX_MESSAGES_PER_PROMPT,
     );
     if (pending.length > 0) {
@@ -346,6 +301,18 @@ function recoverPendingMessages(): void {
 }
 
 async function main(): Promise<void> {
+  // Migrate legacy chats/messages tables → per-group jsonl before initDatabase
+  // drops them. Idempotent: on subsequent starts the tables are gone and this
+  // is a no-op.
+  const { migrateDbToJsonl } = await import('./migrations.js');
+  const report = await migrateDbToJsonl();
+  if (report.migrated && report.rowsWritten > 0) {
+    logger.info(
+      { ...report },
+      'Migrated legacy DB messages to log.jsonl',
+    );
+  }
+
   initDatabase();
   logger.info('Database initialized');
   loadState();
@@ -355,6 +322,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutdown signal received');
     await shutdownAgent();
+    await flushWrites();
     for (const ch of channels) await ch.disconnect();
     process.exit(0);
   };
@@ -415,8 +383,13 @@ async function main(): Promise<void> {
         return;
       }
 
-      // Sender allowlist drop mode: discard messages from denied senders before storing
-      if (!msg.is_from_me && !msg.is_bot_message && registeredGroups[chatJid]) {
+      // Only registered groups have a log; everything else is dropped.
+      const group = registeredGroups[chatJid];
+      if (!group) return;
+
+      // Sender allowlist drop mode: discard messages from denied senders
+      // before appending so they never enter context or trigger checks.
+      if (!msg.is_from_me && !msg.is_bot_message) {
         const cfg = loadSenderAllowlist();
         if (
           shouldDropMessage(chatJid, cfg) &&
@@ -431,15 +404,11 @@ async function main(): Promise<void> {
           return;
         }
       }
-      storeMessage(msg);
+
+      appendMessage(group.folder, msg).catch((err) =>
+        logger.error({ err, chatJid }, 'group-log appendMessage failed'),
+      );
     },
-    onChatMetadata: (
-      chatJid: string,
-      timestamp: string,
-      name?: string,
-      channel?: string,
-      isGroup?: boolean,
-    ) => storeChatMetadata(chatJid, timestamp, name, channel, isGroup),
     registeredGroups: () => registeredGroups,
   };
 
@@ -464,10 +433,30 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Wire ports for the in-process pi agent.
+  // Wire ports for the in-process pi agent. The router port routes outbound
+  // text to the right channel AND mirrors the bot's reply into the group's
+  // log.jsonl so future cursor recovery can locate it.
   const routerPort: RouterPort = {
-    send: async (jid, text) => {
+    send: async (jid, text, sender) => {
       await routeOutbound(channels, jid, text);
+      const group = registeredGroups[jid];
+      if (group) {
+        await appendMessage(group.folder, {
+          id: botMessageId(),
+          chat_jid: jid,
+          sender: 'bot',
+          sender_name: sender ?? ASSISTANT_NAME,
+          content: text,
+          timestamp: new Date().toISOString(),
+          is_from_me: true,
+          is_bot_message: true,
+        }).catch((err) =>
+          logger.error(
+            { err, chatJid: jid },
+            'group-log append (bot reply) failed',
+          ),
+        );
+      }
     },
   };
 
@@ -503,7 +492,7 @@ async function main(): Promise<void> {
       channels,
     },
   });
-  recoverPendingMessages();
+  await recoverPendingMessages();
   startMessageLoop().catch((err) => {
     logger.fatal({ err }, 'Message loop crashed unexpectedly');
     process.exit(1);

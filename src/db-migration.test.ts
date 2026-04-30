@@ -5,7 +5,7 @@ import path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 
 describe('database migrations', () => {
-  it('defaults Telegram backfill chats to direct messages', async () => {
+  it('drops legacy chats/messages tables when opening an old DB', async () => {
     const repoRoot = process.cwd();
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nanoclaw-db-test-'));
 
@@ -21,43 +21,39 @@ describe('database migrations', () => {
           name TEXT,
           last_message_time TEXT
         );
+        CREATE TABLE messages (
+          id TEXT,
+          chat_jid TEXT,
+          content TEXT,
+          timestamp TEXT,
+          PRIMARY KEY (id, chat_jid)
+        );
       `);
       legacyDb
         .prepare(
           `INSERT INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)`,
         )
         .run('tg:12345', 'Telegram DM', '2024-01-01T00:00:00.000Z');
-      legacyDb
-        .prepare(
-          `INSERT INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)`,
-        )
-        .run('tg:-10012345', 'Telegram Group', '2024-01-01T00:00:01.000Z');
-      legacyDb
-        .prepare(
-          `INSERT INTO chats (jid, name, last_message_time) VALUES (?, ?, ?)`,
-        )
-        .run('room@g.us', 'WhatsApp Group', '2024-01-01T00:00:02.000Z');
       legacyDb.close();
 
       vi.resetModules();
-      const { initDatabase, getAllChats, _closeDatabase } =
-        await import('./db.js');
-
+      const { initDatabase, _closeDatabase } = await import('./db.js');
       initDatabase();
 
-      const chats = getAllChats();
-      expect(chats.find((chat) => chat.jid === 'tg:12345')).toMatchObject({
-        channel: 'telegram',
-        is_group: 0,
-      });
-      expect(chats.find((chat) => chat.jid === 'tg:-10012345')).toMatchObject({
-        channel: 'telegram',
-        is_group: 0,
-      });
-      expect(chats.find((chat) => chat.jid === 'room@g.us')).toMatchObject({
-        channel: 'whatsapp',
-        is_group: 1,
-      });
+      // Verify legacy tables are gone
+      const checkDb = new Database(dbPath, { readonly: true });
+      const tables = checkDb
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`,
+        )
+        .all() as Array<{ name: string }>;
+      const tableNames = tables.map((t) => t.name);
+      checkDb.close();
+
+      expect(tableNames).not.toContain('chats');
+      expect(tableNames).not.toContain('messages');
+      expect(tableNames).toContain('scheduled_tasks');
+      expect(tableNames).toContain('registered_groups');
 
       _closeDatabase();
     } finally {

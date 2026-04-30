@@ -42,30 +42,12 @@ function makeDeps(): {
 
 function makeChannelOpts(): ChannelOpts & {
   messages: Array<{ jid: string; msg: NewMessage }>;
-  metadata: Array<{
-    jid: string;
-    timestamp: string;
-    name?: string;
-    channel?: string;
-    isGroup?: boolean;
-  }>;
 } {
   const messages: Array<{ jid: string; msg: NewMessage }> = [];
-  const metadata: Array<{
-    jid: string;
-    timestamp: string;
-    name?: string;
-    channel?: string;
-    isGroup?: boolean;
-  }> = [];
   return {
     messages,
-    metadata,
     onMessage(jid, msg) {
       messages.push({ jid, msg });
-    },
-    onChatMetadata(jid, timestamp, name, channel, isGroup) {
-      metadata.push({ jid, timestamp, name, channel, isGroup });
     },
     registeredGroups(): Record<string, RegisteredGroup> {
       return {};
@@ -179,7 +161,7 @@ describe('FeishuChannel', () => {
   });
 
   describe('inbound text', () => {
-    it('emits NewMessage and chat metadata on text event', async () => {
+    it('emits NewMessage on text event', async () => {
       const { deps, handlers } = makeDeps();
       const ch = new FeishuChannel(opts, { appId: 'a', appSecret: 's', deps });
       await ch.connect();
@@ -191,12 +173,6 @@ describe('FeishuChannel', () => {
       expect(entry.msg.sender).toBe('ou_user');
       expect(entry.msg.id).toBe('om_1');
       expect(entry.msg.timestamp).toBe('2024-04-20T08:00:00.000Z');
-      expect(opts.metadata).toHaveLength(1);
-      expect(opts.metadata[0]).toMatchObject({
-        jid: 'feishu:oc_abc',
-        channel: 'feishu',
-        isGroup: true,
-      });
     });
 
     it('carries parent_id into reply_to_message_id', async () => {
@@ -217,16 +193,6 @@ describe('FeishuChannel', () => {
         buildTextEvent({ senderOpenId: 'ou_bot' }),
       );
       expect(opts.messages[0].msg.is_from_me).toBe(true);
-    });
-
-    it('treats p2p chat_type as non-group', async () => {
-      const { deps, handlers } = makeDeps();
-      const ch = new FeishuChannel(opts, { appId: 'a', appSecret: 's', deps });
-      await ch.connect();
-      await handlers['im.message.receive_v1'](
-        buildTextEvent({ chatType: 'p2p' }),
-      );
-      expect(opts.metadata[0].isGroup).toBe(false);
     });
 
     it('deduplicates identical message_id deliveries', async () => {
