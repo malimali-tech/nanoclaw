@@ -10,7 +10,7 @@ import { migrateDbToJsonl } from './migrations.js';
 afterEach(() => {
   if (fs.existsSync(GROUPS_DIR)) {
     for (const entry of fs.readdirSync(GROUPS_DIR)) {
-      if (entry.startsWith('__test-mig-')) {
+      if (entry.startsWith('__migtest-')) {
         fs.rmSync(path.join(GROUPS_DIR, entry), {
           recursive: true,
           force: true,
@@ -44,9 +44,36 @@ function seedLegacyDb(dbPath: string, folder: string): void {
     `INSERT INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
-  insert.run('m1', 'feishu:oc_x', 'u1', 'Alice', 'hi', '2025-01-01T00:00:00.000Z', 0, 0);
-  insert.run('m2', 'feishu:oc_x', 'bot', 'Andy', 'hello', '2025-01-01T00:00:01.000Z', 1, 1);
-  insert.run('m3', 'feishu:oc_x', 'u1', 'Alice', 'thanks', '2025-01-01T00:00:02.000Z', 0, 0);
+  insert.run(
+    'm1',
+    'feishu:oc_x',
+    'u1',
+    'Alice',
+    'hi',
+    '2025-01-01T00:00:00.000Z',
+    0,
+    0,
+  );
+  insert.run(
+    'm2',
+    'feishu:oc_x',
+    'bot',
+    'Andy',
+    'hello',
+    '2025-01-01T00:00:01.000Z',
+    1,
+    1,
+  );
+  insert.run(
+    'm3',
+    'feishu:oc_x',
+    'u1',
+    'Alice',
+    'thanks',
+    '2025-01-01T00:00:02.000Z',
+    0,
+    0,
+  );
   // Cursor in router_state
   db.prepare(`INSERT INTO router_state (key, value) VALUES (?, ?)`).run(
     'last_agent_timestamp',
@@ -70,7 +97,7 @@ describe('migrateDbToJsonl', () => {
   });
 
   it('migrates messages and cursor for a registered group', async () => {
-    const folder = `__test-mig-${Math.random().toString(36).slice(2, 8)}`;
+    const folder = `__migtest-${Math.random().toString(36).slice(2, 8)}`;
     const tmp = fs.mkdtempSync(path.join(path.resolve('store'), 'mig-ok-'));
     try {
       const dbPath = path.join(tmp, 'messages.db');
@@ -99,7 +126,7 @@ describe('migrateDbToJsonl', () => {
   });
 
   it('skips messages from groups missing in registered_groups', async () => {
-    const folder = `__test-mig-${Math.random().toString(36).slice(2, 8)}`;
+    const folder = `__migtest-${Math.random().toString(36).slice(2, 8)}`;
     const tmp = fs.mkdtempSync(path.join(path.resolve('store'), 'mig-skip-'));
     try {
       const dbPath = path.join(tmp, 'messages.db');
@@ -133,7 +160,9 @@ describe('migrateDbToJsonl', () => {
     try {
       const dbPath = path.join(tmp, 'messages.db');
       const db = new Database(dbPath);
-      db.exec(`CREATE TABLE registered_groups (jid TEXT PRIMARY KEY, folder TEXT);`);
+      db.exec(
+        `CREATE TABLE registered_groups (jid TEXT PRIMARY KEY, folder TEXT);`,
+      );
       db.close();
 
       const report = await migrateDbToJsonl({ dbPath });

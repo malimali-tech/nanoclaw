@@ -18,18 +18,18 @@ import {
 import type { NewMessage } from './types.js';
 
 // Tests target real on-disk paths under the repo's groups/ dir, using a
-// unique `__test-*` folder per test that is swept in afterEach. This keeps
+// unique `__gltest-*` folder per test that is swept in afterEach. This keeps
 // the module-under-test untouched (no path mocks) and exercises the same
 // fs paths production uses.
 
 function uniqueFolder(): string {
-  return `__test-${Math.random().toString(36).slice(2, 10)}`;
+  return `__gltest-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 afterEach(() => {
   if (fs.existsSync(GROUPS_DIR)) {
     for (const entry of fs.readdirSync(GROUPS_DIR)) {
-      if (entry.startsWith('__test-')) {
+      if (entry.startsWith('__gltest-')) {
         fs.rmSync(path.join(GROUPS_DIR, entry), {
           recursive: true,
           force: true,
@@ -120,11 +120,7 @@ describe('group-log', () => {
         msg({ id: 'c', timestamp: '2025-01-01T00:00:02.000Z' }),
       );
 
-      const result = readMessagesSince(
-        folder,
-        '2025-01-01T00:00:00.000Z',
-        100,
-      );
+      const result = readMessagesSince(folder, '2025-01-01T00:00:00.000Z', 100);
       expect(result.map((m) => m.id)).toEqual(['b', 'c']);
     });
 

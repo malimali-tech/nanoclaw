@@ -38,9 +38,7 @@ interface RegisteredRow {
 
 function tableExists(db: Database.Database, name: string): boolean {
   const row = db
-    .prepare(
-      `SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name=?`,
-    )
+    .prepare(`SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name=?`)
     .get(name) as { x: number } | undefined;
   return !!row;
 }
@@ -169,8 +167,7 @@ export async function migrateDbToJsonl(opts?: {
       {
         groupsTouched: Object.keys(written).length,
         rowsWritten:
-          rows.length -
-          Object.values(skipped).reduce((a, b) => a + b, 0),
+          rows.length - Object.values(skipped).reduce((a, b) => a + b, 0),
       },
       'migrate-db-to-jsonl: complete (legacy chats/messages tables will be dropped by initDatabase)',
     );
@@ -195,4 +192,3 @@ export async function migrateDbToJsonl(opts?: {
     cursorsWritten,
   };
 }
-

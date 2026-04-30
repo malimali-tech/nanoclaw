@@ -52,11 +52,7 @@ export function appendMessage(folder: string, msg: NewMessage): Promise<void> {
   const prev = writeChain.get(folder) ?? Promise.resolve();
   const next = prev.then(async () => {
     ensureMetaDir(folder);
-    await fsp.appendFile(
-      logPath(folder),
-      `${JSON.stringify(msg)}\n`,
-      'utf-8',
-    );
+    await fsp.appendFile(logPath(folder), `${JSON.stringify(msg)}\n`, 'utf-8');
   });
   writeChain.set(
     folder,

@@ -307,10 +307,7 @@ async function main(): Promise<void> {
   const { migrateDbToJsonl } = await import('./migrations.js');
   const report = await migrateDbToJsonl();
   if (report.migrated && report.rowsWritten > 0) {
-    logger.info(
-      { ...report },
-      'Migrated legacy DB messages to log.jsonl',
-    );
+    logger.info({ ...report }, 'Migrated legacy DB messages to log.jsonl');
   }
 
   initDatabase();

@@ -1,5 +1,14 @@
 /**
  * Setup CLI entry point.
+ *
+ * Most setup checks (environment / timezone / verify / mount allowlist write)
+ * are now driven directly by the Claude Code `/setup` skill via Read/Bash —
+ * see `.claude/skills/setup/SKILL.md`. The two steps that remain here have
+ * real complexity worth scripting:
+ *
+ *   --step service   Generate launchd plist or systemd unit, install + load
+ *   --step register  Insert a registered group + folder scaffolding
+ *
  * Usage: npx tsx setup/index.ts --step <name> [args...]
  */
 import { logger } from '../src/logger.js';
@@ -9,12 +18,8 @@ const STEPS: Record<
   string,
   () => Promise<{ run: (args: string[]) => Promise<void> }>
 > = {
-  timezone: () => import('./timezone.js'),
-  environment: () => import('./environment.js'),
   register: () => import('./register.js'),
-  mounts: () => import('./mounts.js'),
   service: () => import('./service.js'),
-  verify: () => import('./verify.js'),
 };
 
 async function main(): Promise<void> {

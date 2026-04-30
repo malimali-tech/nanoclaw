@@ -5,199 +5,217 @@ description: Run initial NanoClaw setup. Use when user wants to install dependen
 
 # NanoClaw Setup
 
-Run setup steps automatically. Only pause when user action is required (channel authentication, configuration choices). Setup uses `bash setup.sh` for bootstrap, then `npx tsx setup/index.ts --step <name>` for all other steps. Steps emit structured status blocks to stdout. Verbose logs go to `logs/setup.log`.
+Drive setup directly from this skill: do all checks via Read/Bash, only delegate to `npx tsx setup/index.ts --step <name>` when the step has real complexity worth scripting (currently only `service`, used to generate the launchd plist or systemd unit). The bootstrap script `setup.sh` runs once before Node is guaranteed to exist.
 
 **Principle:** When something is broken or missing, fix it. Don't tell the user to go fix it themselves unless it genuinely requires their manual action (e.g. authenticating a channel, pasting a secret token). If a dependency is missing, install it. If a service won't start, diagnose and repair. Ask the user for permission when needed, then do the work.
 
-**UX Note:** Use `AskUserQuestion` for multiple-choice questions only (e.g. "which channels?"). Do NOT use it when free-text input is needed (e.g. phone numbers, tokens, paths) — just ask the question in plain text and wait for the user's reply.
+**UX:** Use `AskUserQuestion` only for multiple-choice. Free-text input (tokens, paths, phone numbers) — ask in plain text and wait.
 
 ## 0. Git & Fork Setup
 
-Check the git remote configuration to ensure the user has a fork and upstream is configured.
+`git remote -v` and branch:
 
-Run:
-- `git remote -v`
+- **`origin` is `qwibitai/nanoclaw`** (user cloned, didn't fork): AskUserQuestion "Set up a fork now?". If yes, ask for GitHub username, then:
+  ```bash
+  git remote rename origin upstream
+  git remote add origin https://github.com/<username>/nanoclaw.git
+  git push --force origin main
+  ```
+  If they say no: `git remote add upstream https://github.com/qwibitai/nanoclaw.git` so updates still flow.
 
-**Case A — `origin` points to `qwibitai/nanoclaw` (user cloned directly):**
+- **`origin` is the user's fork, no `upstream`**: `git remote add upstream https://github.com/qwibitai/nanoclaw.git`
 
-The user cloned instead of forking. AskUserQuestion: "You cloned NanoClaw directly. We recommend forking so you can push your customizations. Would you like to set up a fork?"
-- Fork now (recommended) — walk them through it
-- Continue without fork — they'll only have local changes
+- **Both `origin` (fork) and `upstream` exist**: continue.
 
-If fork: instruct the user to fork `qwibitai/nanoclaw` on GitHub (they need to do this in their browser), then ask them for their GitHub username. Run:
-```bash
-git remote rename origin upstream
-git remote add origin https://github.com/<their-username>/nanoclaw.git
-git push --force origin main
-```
-Verify with `git remote -v`.
+## 1. Bootstrap (Node + deps)
 
-If continue without fork: add upstream so they can still pull updates:
-```bash
-git remote add upstream https://github.com/qwibitai/nanoclaw.git
-```
+`bash setup.sh` and parse the status block.
 
-**Case B — `origin` points to user's fork, no `upstream` remote:**
+- `NODE_OK=false` → AskUserQuestion to install Node 22. macOS: `brew install node@22` or nvm. Linux: NodeSource setup script or nvm. Re-run `bash setup.sh`.
+- `DEPS_OK=false` → read `logs/setup.log`, delete `node_modules`, re-run. If native module build fails, install build tools (`xcode-select --install` / `apt install build-essential`) and retry.
+- `NATIVE_OK=false` → better-sqlite3 didn't load. Same fix as above.
 
-Add upstream:
-```bash
-git remote add upstream https://github.com/qwibitai/nanoclaw.git
-```
+Record `PLATFORM` and `IS_WSL`.
 
-**Case C — both `origin` (user's fork) and `upstream` (qwibitai) exist:**
-
-Already configured. Continue.
-
-**Verify:** `git remote -v` should show `origin` → user's repo, `upstream` → `qwibitai/nanoclaw.git`.
-
-## 1. Bootstrap (Node.js + Dependencies)
-
-Run `bash setup.sh` and parse the status block.
-
-- If NODE_OK=false → Node.js is missing or too old. Use `AskUserQuestion: Would you like me to install Node.js 22?` If confirmed:
-  - macOS: `brew install node@22` (if brew available) or install nvm then `nvm install 22`
-  - Linux: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`, or nvm
-  - After installing Node, re-run `bash setup.sh`
-- If DEPS_OK=false → Read `logs/setup.log`. Try: delete `node_modules`, re-run `bash setup.sh`. If native module build fails, install build tools (`xcode-select --install` on macOS, `build-essential` on Linux), then retry.
-- If NATIVE_OK=false → better-sqlite3 failed to load. Install build tools and re-run.
-- Record PLATFORM and IS_WSL for later steps.
-
-## 2. Check Environment
-
-Run `npx tsx setup/index.ts --step environment` and parse the status block.
-
-- If HAS_AUTH=true → WhatsApp is already configured, note for step 5
-- If HAS_REGISTERED_GROUPS=true → note existing config, offer to skip or reconfigure
-
-### OpenClaw Migration Detection
-
-Check for an existing OpenClaw installation:
+## 2. OpenClaw Migration Detection
 
 ```bash
 ls -d ~/.openclaw 2>/dev/null || ls -d ~/.clawdbot 2>/dev/null
 ```
 
-If a directory is found, AskUserQuestion:
+If found, AskUserQuestion: **Migrate now** / **Fresh start** / **Migrate later**. "Migrate now" → invoke `/migrate-from-openclaw`, then return here.
 
-1. **Migrate now** — "Import identity, credentials, and settings from OpenClaw before continuing setup."
-2. **Fresh start** — "Skip migration and set up NanoClaw from scratch."
-3. **Migrate later** — "Continue setup now, run `/migrate-from-openclaw` anytime later."
+## 3. Environment Sanity (do it directly)
 
-If "Migrate now": invoke `/migrate-from-openclaw`, then return here and continue at step 2a (Timezone).
+You don't need a script — run these and decide:
 
-## 2a. Timezone
-
-Run `npx tsx setup/index.ts --step timezone` and parse the status block.
-
-- If NEEDS_USER_INPUT=true → The system timezone could not be autodetected (e.g. POSIX-style TZ like `IST-2`). AskUserQuestion: "What is your timezone?" with common options (America/New_York, Europe/London, Asia/Jerusalem, Asia/Tokyo) and an "Other" escape. Then re-run: `npx tsx setup/index.ts --step timezone -- --tz <their-answer>`.
-- If STATUS=success → Timezone is configured. Note RESOLVED_TZ for reference.
-
-## 4. Credentials
-
-NanoClaw runs the coding agent in-process via `@mariozechner/pi-coding-agent`, with bash commands sandboxed by `sandbox-exec` (macOS) or `bubblewrap` (Linux). Pi-coding-agent supports many providers — configure whichever one you have via env vars in `.env`, or run `pi auth login` to populate `~/.pi/agent/auth.json`.
-
-AskUserQuestion: Which provider do you want to use?
-
-1. **Anthropic (Claude)** — description: "API key from console.anthropic.com (`ANTHROPIC_API_KEY`) or OAuth token (`ANTHROPIC_OAUTH_TOKEN`)."
-2. **OpenAI** — description: "API key from platform.openai.com (`OPENAI_API_KEY`)."
-3. **Google (Gemini)** — description: "API key from aistudio.google.com (`GEMINI_API_KEY`)."
-4. **Other** — description: "DeepSeek, Groq, xAI, Mistral, Cerebras, AWS Bedrock, Azure OpenAI, or `pi auth login` for `~/.pi/agent/auth.json`."
-
-Add the chosen credential to `.env`. Examples:
 ```bash
-echo 'ANTHROPIC_API_KEY=<their-key>' >> .env
-echo 'OPENAI_API_KEY=<their-key>' >> .env
-echo 'GEMINI_API_KEY=<their-key>' >> .env
-echo 'DEEPSEEK_API_KEY=<their-key>' >> .env
+# Platform/Docker
+uname -s              # darwin / linux
+which docker && docker info >/dev/null 2>&1 && echo "docker:running" || echo "docker:not-running"
+
+# Existing config
+[ -f .env ] && echo "has .env" || echo "no .env"
+[ -d store/auth ] && [ "$(ls -A store/auth 2>/dev/null)" ] && echo "has auth" || echo "no auth"
+
+# Existing registered groups (skip if no DB yet)
+[ -f store/messages.db ] && \
+  node -e "const Database = require('better-sqlite3'); try { const db = new Database('store/messages.db', {readonly:true}); const r = db.prepare('SELECT COUNT(*) AS c FROM registered_groups').get(); console.log('registered_groups:', r.c); } catch(e){ console.log('registered_groups: 0'); }"
 ```
 
-For users who prefer pi-mono's own auth file: tell them to run `pi auth login` in another terminal and confirm `~/.pi/agent/auth.json` exists. No `.env` entry is required in that case.
+If `.env` exists and `registered_groups > 0`: this looks like a re-setup. AskUserQuestion whether to **Reconfigure** or **Skip ahead to verify**.
 
-Verify the agent loads credentials: `npm run dev` should start without authentication errors.
+## 4. Timezone
 
-## 5. Set Up Channels
+```bash
+node -p "Intl.DateTimeFormat().resolvedOptions().timeZone"
+```
 
-AskUserQuestion (multiSelect): Which messaging channels do you want to enable?
-- WhatsApp (authenticates via QR code or pairing code)
-- Telegram (authenticates via bot token from @BotFather)
-- Slack (authenticates via Slack app with Socket Mode)
-- Discord (authenticates via Discord bot token)
+If the result is a valid IANA name (contains `/`, e.g. `Asia/Shanghai`, `America/New_York`), record it as `RESOLVED_TZ`. Otherwise (POSIX-style like `IST-2`, or empty), AskUserQuestion with common options + Other.
 
-**Delegate to each selected channel's own skill.** Each channel skill handles its own code installation, authentication, registration, and JID resolution. This avoids duplicating channel-specific logic and ensures JIDs are always correct.
+Then write to `.env`:
 
-For each selected channel, invoke its skill:
+```bash
+# preserve existing keys; only add/update TZ
+if grep -q '^TZ=' .env 2>/dev/null; then
+  # use sed -i (macOS needs '' arg)
+  perl -i -pe 's/^TZ=.*/TZ='"$RESOLVED_TZ"'/' .env
+else
+  echo "TZ=$RESOLVED_TZ" >> .env
+fi
+```
 
-- **WhatsApp:** Invoke `/add-whatsapp`
-- **Telegram:** Invoke `/add-telegram`
-- **Slack:** Invoke `/add-slack`
-- **Discord:** Invoke `/add-discord`
+(If `.env` doesn't exist, just `echo "TZ=$RESOLVED_TZ" > .env`.)
 
-Each skill will:
-1. Install the channel code (via `git merge` of the skill branch)
-2. Collect credentials/tokens and write to `.env`
-3. Authenticate (WhatsApp QR/pairing, or verify token-based connection)
-4. Register the chat with the correct JID format
-5. Build and verify
+## 5. Credentials
 
-**After all channel skills complete**, install dependencies and rebuild — channel merges may introduce new packages:
+Bash commands run inside an OS-level sandbox (`sandbox-exec` on macOS, `bubblewrap` on Linux). The agent runs in-process via `@mariozechner/pi-coding-agent`; configure your provider via `.env` env vars or `~/.pi/agent/auth.json`.
+
+AskUserQuestion: which provider?
+
+1. **Anthropic (Claude)** — `ANTHROPIC_API_KEY` (or `ANTHROPIC_OAUTH_TOKEN`). console.anthropic.com.
+2. **OpenAI** — `OPENAI_API_KEY`. platform.openai.com.
+3. **Google (Gemini)** — `GEMINI_API_KEY`. aistudio.google.com.
+4. **Other** — DeepSeek / Groq / xAI / Mistral / Cerebras / Bedrock / Azure, or `pi auth login` to populate `~/.pi/agent/auth.json` (no `.env` change needed).
+
+Append the chosen key to `.env`:
+
+```bash
+echo 'ANTHROPIC_API_KEY=<key>' >> .env  # or OPENAI_API_KEY / GEMINI_API_KEY / DEEPSEEK_API_KEY ...
+```
+
+## 6. Channels
+
+AskUserQuestion (multiSelect): WhatsApp / Telegram / Slack / Discord. Feishu is built-in; if the user wants Feishu, run `/add-feishu` is unnecessary — just collect `FEISHU_APP_ID` and `FEISHU_APP_SECRET` (and optionally `FEISHU_DOMAIN=feishu` or `lark`) and `echo` them to `.env`.
+
+For each selected non-Feishu channel, invoke its skill:
+
+- WhatsApp → `/add-whatsapp`
+- Telegram → `/add-telegram`
+- Slack → `/add-slack`
+- Discord → `/add-discord`
+
+Each skill installs code (git-merge a branch), collects credentials, authenticates, and registers the chat. After all channel skills:
 
 ```bash
 npm install && npm run build
 ```
 
-If the build fails, read the error output and fix it (usually a missing dependency). Then continue to step 6.
+If build fails, read the error and fix (usually a missing dep added by the merge).
 
-## 6. Mount Allowlist
+## 7. Mount Allowlist
 
-AskUserQuestion: Agent access to external directories?
+AskUserQuestion: Allow agent access to external directories?
 
-**No:** `npx tsx setup/index.ts --step mounts -- --empty`
-**Yes:** Collect paths/permissions. `npx tsx setup/index.ts --step mounts -- --json '{"allowedRoots":[...],"blockedPatterns":[],"nonMainReadOnly":true}'`
+**No:**
+```bash
+mkdir -p ~/.config/nanoclaw
+cat > ~/.config/nanoclaw/mount-allowlist.json <<'JSON'
+{
+  "allowedRoots": [],
+  "blockedPatterns": [],
+  "nonMainReadOnly": true
+}
+JSON
+```
 
-## 7. Start Service
+**Yes:** Collect paths and rw-flags from the user, then write the same file with the appropriate `allowedRoots` array. Example:
 
-If service already running: unload first.
+```bash
+cat > ~/.config/nanoclaw/mount-allowlist.json <<'JSON'
+{
+  "allowedRoots": [
+    {"path": "~/projects", "allowReadWrite": true, "description": "scratch"}
+  ],
+  "blockedPatterns": [".ssh", ".gnupg", ".aws"],
+  "nonMainReadOnly": true
+}
+JSON
+```
+
+## 8. Service (this one stays scripted — plist/unit generation is non-trivial)
+
+If a previous service is loaded, unload first:
+
 - macOS: `launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist`
-- Linux: `systemctl --user stop nanoclaw` (or `systemctl stop nanoclaw` if root)
+- Linux (user): `systemctl --user stop nanoclaw`
+- Linux (root): `systemctl stop nanoclaw`
 
-Run `npx tsx setup/index.ts --step service` and parse the status block.
+Then:
 
-**If FALLBACK=wsl_no_systemd:** WSL without systemd detected. Tell user they can either enable systemd in WSL (`echo -e "[boot]\nsystemd=true" | sudo tee /etc/wsl.conf` then restart WSL) or use the generated `start-nanoclaw.sh` wrapper.
+```bash
+npx tsx setup/index.ts --step service
+```
 
-**If SERVICE_LOADED=false:**
-- Read `logs/setup.log` for the error.
-- macOS: check `launchctl list | grep nanoclaw`. If PID=`-` and status non-zero, read `logs/nanoclaw.error.log`.
-- Linux: check `systemctl --user status nanoclaw`.
-- Re-run the service step after fixing.
+Parse the status block.
 
-## 8. Verify
+- `FALLBACK=wsl_no_systemd` → WSL without systemd. Either enable systemd (`echo -e '[boot]\nsystemd=true' | sudo tee /etc/wsl.conf` + restart WSL) or use the generated `start-nanoclaw.sh` wrapper.
+- `SERVICE_LOADED=false` → read `logs/setup.log`, then:
+  - macOS: `launchctl list | grep nanoclaw`. If PID is `-` and status non-zero, read `logs/nanoclaw.error.log`.
+  - Linux: `systemctl --user status nanoclaw` (or `systemctl status nanoclaw` if root).
+  - Re-run the service step after fixing.
 
-Run `npx tsx setup/index.ts --step verify` and parse the status block.
+## 9. Verify (do it directly)
 
-**If STATUS=failed, fix each:**
-- SERVICE=stopped → `npm run build`, then restart: `launchctl kickstart -k gui/$(id -u)/com.nanoclaw` (macOS) or `systemctl --user restart nanoclaw` (Linux) or `bash start-nanoclaw.sh` (WSL nohup)
-- SERVICE=not_found → re-run step 7
-- CREDENTIALS=missing → re-run step 4 (verify `.env` has a supported provider env var, or `~/.pi/agent/auth.json` exists)
-- CHANNEL_AUTH shows `not_found` for any channel → re-invoke that channel's skill (e.g. `/add-telegram`)
-- REGISTERED_GROUPS=0 → re-invoke the channel skills from step 5
-- MOUNT_ALLOWLIST=missing → `npx tsx setup/index.ts --step mounts -- --empty`
+```bash
+# Service status (pick one)
+launchctl list | grep -E 'PID|com.nanoclaw' 2>/dev/null    # macOS
+systemctl --user is-active nanoclaw 2>/dev/null             # Linux user
+systemctl is-active nanoclaw 2>/dev/null                    # Linux root
 
-Tell user to test: send a message in their registered chat. Show: `tail -f logs/nanoclaw.log`
+# Credentials present?
+grep -E '^(ANTHROPIC_API_KEY|ANTHROPIC_OAUTH_TOKEN|OPENAI_API_KEY|GEMINI_API_KEY|DEEPSEEK_API_KEY|GROQ_API_KEY|XAI_API_KEY|MISTRAL_API_KEY|CEREBRAS_API_KEY|AWS_BEARER_TOKEN_BEDROCK|AZURE_OPENAI_API_KEY)=' .env 2>/dev/null \
+  || ls ~/.pi/agent/auth.json 2>/dev/null \
+  || echo "NO CREDENTIALS"
+
+# Channels configured?
+grep -E '^(FEISHU_APP_ID|TELEGRAM_BOT_TOKEN|SLACK_BOT_TOKEN|DISCORD_BOT_TOKEN)=' .env
+
+# Registered groups
+node -e "const Database = require('better-sqlite3'); try { const db = new Database('store/messages.db',{readonly:true}); console.log('groups:', db.prepare('SELECT COUNT(*) AS c FROM registered_groups').get().c); } catch(e){ console.log('groups: 0'); }"
+
+# Mount allowlist
+ls ~/.config/nanoclaw/mount-allowlist.json 2>/dev/null && echo "allowlist:configured" || echo "allowlist:missing"
+```
+
+Decide what to fix:
+
+- Service stopped → `npm run build`, then restart (`launchctl kickstart -k gui/$(id -u)/com.nanoclaw` / `systemctl --user restart nanoclaw` / re-run step 8 in WSL).
+- No credentials → step 5.
+- No channels in `.env` → step 6.
+- 0 registered groups → re-invoke a channel skill or `/add-feishu`.
+- No mount allowlist → step 7.
+
+When everything's green, tell the user to send a message in their registered chat and offer `tail -f logs/nanoclaw.log` to watch.
 
 ## Troubleshooting
 
-**Service not starting:** Check `logs/nanoclaw.error.log`. Common: wrong Node path (re-run step 7), missing credentials (`.env` needs a pi-coding-agent provider env var, or `~/.pi/agent/auth.json` must exist), missing channel credentials (re-invoke channel skill).
+- **Service won't start** — `cat logs/nanoclaw.error.log`. Common: missing credentials, wrong Node path in plist, missing channel credentials, missing system tools (e.g. `ripgrep` is required by sandbox-runtime — `brew install ripgrep` or `apt install ripgrep`).
+- **Agent fails** — `tail logs/nanoclaw.log` for pi-coding-agent errors. Verify `.env` provider key, and that `sandbox-exec` (macOS) / `bwrap` (Linux) is on PATH.
+- **No reply** — trigger pattern? Main channel doesn't need a trigger; non-main groups need `@<ASSISTANT_NAME>` (default `@Andy`). Check `logs/nanoclaw.log`.
+- **Channel disconnected** — credentials missing or invalid in `.env`. Restart the service after any `.env` change.
 
-**Agent fails to start:** Check `logs/nanoclaw.log` for pi-coding-agent errors. Verify credentials in `.env` and that `sandbox-exec` (macOS) / `bwrap` (Linux) is available on PATH.
+## 10. Diagnostics
 
-**No response to messages:** Check trigger pattern. Main channel doesn't need prefix. Check DB: `npx tsx setup/index.ts --step verify`. Check `logs/nanoclaw.log`.
-
-**Channel not connecting:** Verify the channel's credentials are set in `.env`. Channels auto-enable when their credentials are present. For WhatsApp: check `store/auth/creds.json` exists. For token-based channels: check token values in `.env`. Restart the service after any `.env` change.
-
-**Unload service:** macOS: `launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist` | Linux: `systemctl --user stop nanoclaw`
-
-
-## 9. Diagnostics
-
-1. Use the Read tool to read `.claude/skills/setup/diagnostics.md`.
-2. Follow every step in that file before completing setup.
+1. Read `.claude/skills/setup/diagnostics.md`.
+2. Follow it before completing setup.
