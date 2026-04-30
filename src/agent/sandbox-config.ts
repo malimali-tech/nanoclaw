@@ -3,7 +3,24 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { SandboxRuntimeConfig } from '@anthropic-ai/sandbox-runtime';
 
+export type Runtime = 'docker' | 'sandbox-exec' | 'off';
+
+export interface DockerRuntimeConfig {
+  image: string;
+  containerNamePrefix: string;
+  stopTimeoutSec: number;
+}
+
 export interface SandboxConfig extends SandboxRuntimeConfig {
+  /** Selects which tool runtime to use. Default: docker. */
+  runtime?: Runtime;
+  /** Docker-specific knobs (only consulted when runtime === 'docker'). */
+  docker?: DockerRuntimeConfig;
+  /**
+   * Legacy alias for `runtime: 'off'`. When `enabled === false`, sandbox-exec
+   * (and only sandbox-exec) is bypassed. Kept for older configs; prefer
+   * `runtime` explicitly.
+   */
   enabled?: boolean;
 }
 
@@ -20,31 +37,28 @@ if (!fs.existsSync(DEFAULT_PATH)) {
   );
 }
 
-function readJsonOrEmpty(p: string): Partial<SandboxConfig> {
-  try {
-    return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf-8')) : {};
-  } catch {
-    return {};
+// Single, process-wide sandbox policy. Loaded once at startup.
+//
+// Per-group overrides (groups/<g>/.pi/sandbox.json) were removed: they let an
+// agent rewrite the policy applied to its own bash tool — a sandbox whose
+// rules are writable by the sandboxed process is not a sandbox.
+export function loadSandboxConfig(): SandboxConfig {
+  const cfg = JSON.parse(
+    fs.readFileSync(DEFAULT_PATH, 'utf-8'),
+  ) as SandboxConfig;
+  // Default runtime if missing in older configs.
+  if (!cfg.runtime) {
+    cfg.runtime = cfg.enabled === false ? 'off' : 'docker';
   }
+  return cfg;
 }
 
-// Top-level keys replaced wholesale; nested `network`/`filesystem` are merged
-// shallowly (one level). Leaf arrays like allowedDomains and denyWrite are
-// REPLACED by the override, not concatenated. To extend a default list, the
-// project config must include the defaults explicitly.
-function mergeSandboxConfig(
-  a: SandboxConfig,
-  b: Partial<SandboxConfig>,
-): SandboxConfig {
-  const out: SandboxConfig = { ...a };
-  if (b.enabled !== undefined) out.enabled = b.enabled;
-  if (b.network) out.network = { ...a.network, ...b.network };
-  if (b.filesystem) out.filesystem = { ...a.filesystem, ...b.filesystem };
-  return out;
-}
+const DEFAULT_DOCKER: DockerRuntimeConfig = {
+  image: 'nanoclaw-tool:latest',
+  containerNamePrefix: 'nanoclaw-tool',
+  stopTimeoutSec: 1,
+};
 
-export function loadSandboxConfig(groupCwd: string): SandboxConfig {
-  const base = readJsonOrEmpty(DEFAULT_PATH) as SandboxConfig;
-  const project = readJsonOrEmpty(path.join(groupCwd, '.pi', 'sandbox.json'));
-  return mergeSandboxConfig(base, project);
+export function dockerRuntimeConfig(cfg: SandboxConfig): DockerRuntimeConfig {
+  return { ...DEFAULT_DOCKER, ...(cfg.docker ?? {}) };
 }

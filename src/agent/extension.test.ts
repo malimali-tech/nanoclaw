@@ -1,6 +1,18 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { nanoclawExtension } from './extension.js';
+import * as toolRuntime from './tool-runtime.js';
+import type { ChatToolBindings } from './tool-runtime.js';
 import type { ExtensionCtx } from './types.js';
+
+const NO_BINDINGS: ChatToolBindings = {
+  bash: null,
+  read: null,
+  write: null,
+  edit: null,
+  grep: null,
+  find: null,
+  ls: null,
+};
 
 function makeCtx(over: Partial<ExtensionCtx> = {}): ExtensionCtx {
   return {
@@ -40,6 +52,55 @@ function makePi() {
 }
 
 describe('nanoclawExtension', () => {
+  let bindingsSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    bindingsSpy = vi.spyOn(toolRuntime, 'getChatToolBindings');
+    bindingsSpy.mockReturnValue(NO_BINDINGS);
+  });
+
+  afterEach(() => {
+    bindingsSpy.mockRestore();
+  });
+
+  it('does not register tool overrides when bindings are all null (off mode)', () => {
+    const { pi, tools } = makePi();
+    nanoclawExtension(makeCtx())(pi);
+    for (const name of ['bash', 'read', 'write', 'edit', 'grep', 'find', 'ls']) {
+      expect(tools.find((t) => t.name === name)).toBeUndefined();
+    }
+    expect(pi.on).not.toHaveBeenCalledWith('user_bash', expect.anything());
+  });
+
+  it('registers bash + user_bash hook when bash binding is provided (sandbox-exec mode)', () => {
+    bindingsSpy.mockReturnValue({
+      ...NO_BINDINGS,
+      bash: { exec: vi.fn() } as any,
+    });
+    const { pi, tools } = makePi();
+    nanoclawExtension(makeCtx())(pi);
+    expect(tools.find((t) => t.name === 'bash')).toBeDefined();
+    expect(pi.on).toHaveBeenCalledWith('user_bash', expect.any(Function));
+  });
+
+  it('registers all 7 tool overrides when full bindings are provided (docker mode)', () => {
+    bindingsSpy.mockReturnValue({
+      bash: { exec: vi.fn() } as any,
+      read: { readFile: vi.fn(), access: vi.fn() } as any,
+      write: { writeFile: vi.fn(), mkdir: vi.fn() } as any,
+      edit: { readFile: vi.fn(), writeFile: vi.fn(), access: vi.fn() } as any,
+      grep: { isDirectory: vi.fn(), readFile: vi.fn() } as any,
+      find: { exists: vi.fn(), glob: vi.fn() } as any,
+      ls: { exists: vi.fn(), stat: vi.fn(), readdir: vi.fn() } as any,
+    });
+    const { pi, tools } = makePi();
+    nanoclawExtension(makeCtx())(pi);
+    for (const name of ['bash', 'read', 'write', 'edit', 'grep', 'find', 'ls']) {
+      expect(tools.find((t) => t.name === name)).toBeDefined();
+    }
+    expect(pi.on).toHaveBeenCalledWith('user_bash', expect.any(Function));
+  });
+
   it('registers send_message and forwards to router', async () => {
     const ctx = makeCtx();
     const { pi, tools } = makePi();

@@ -9,11 +9,14 @@ import {
   getAgentDir,
   type AgentSession,
 } from '@mariozechner/pi-coding-agent';
-import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
 import { GROUPS_DIR } from '../config.js';
 import { logger } from '../logger.js';
 import { SessionPool, type DisposableSession } from './session-pool.js';
-import { loadSandboxConfig, type SandboxConfig } from './sandbox-config.js';
+import {
+  disposeChatRuntime,
+  initToolRuntime,
+  shutdownToolRuntime,
+} from './tool-runtime.js';
 import { nanoclawExtension } from './extension.js';
 import { resolveModel } from './model.js';
 import type { ExtensionCtx } from './types.js';
@@ -34,28 +37,15 @@ type SharedPorts = Pick<
   'router' | 'taskScheduler' | 'groupRegistry' | 'channels'
 >;
 
-let sandboxReady = false;
-
-async function ensureSandbox(groupCwd: string): Promise<void> {
-  if (sandboxReady) return;
-  const cfg: SandboxConfig = loadSandboxConfig(groupCwd);
-
-  if (cfg.enabled === false) {
-    log('sandbox disabled by config');
-    sandboxReady = true;
-    return;
-  }
-
-  if (process.platform !== 'darwin' && process.platform !== 'linux') {
-    log(
-      `sandbox unsupported on ${process.platform}; bash will run unsandboxed`,
-    );
-    sandboxReady = true;
-    return;
-  }
-  await SandboxManager.initialize(cfg);
-  log('sandbox initialized');
-  sandboxReady = true;
+/**
+ * Initialize the tool runtime exactly once. Must be awaited before any
+ * AgentSession is built — both the message loop and the task scheduler
+ * depend on the runtime being ready before they spawn the first session.
+ *
+ * Idempotent. Backwards-compatible name (used to be `ensureSandbox`).
+ */
+export async function ensureSandbox(): Promise<void> {
+  await initToolRuntime();
 }
 
 function buildCtx(args: {
@@ -74,7 +64,7 @@ function buildCtx(args: {
 
 async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
   const groupCwd = path.join(GROUPS_DIR, ctx.groupFolder);
-  await ensureSandbox(groupCwd);
+  await initToolRuntime();
   const authStorage = AuthStorage.create();
   const modelRegistry = ModelRegistry.create(authStorage);
   const loader = new DefaultResourceLoader({
@@ -103,6 +93,9 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
       await pooled.sendChain;
       await flushBuffer(pooled, ctx);
       session.dispose();
+      // Tear down the chat's container (no-op in non-docker modes). Done
+      // after session.dispose so any final tool calls have already settled.
+      disposeChatRuntime(ctx.groupFolder);
     },
   };
 
@@ -167,5 +160,5 @@ export async function handleMessage(args: {
 export async function shutdownAgent(): Promise<void> {
   if (pool) await pool.disposeAll();
   pool = null;
-  sandboxReady = false;
+  await shutdownToolRuntime();
 }

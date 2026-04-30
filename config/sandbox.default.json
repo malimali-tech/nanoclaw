@@ -1,4 +1,10 @@
 {
+  "runtime": "docker",
+  "docker": {
+    "image": "nanoclaw-tool:latest",
+    "containerNamePrefix": "nanoclaw-tool",
+    "stopTimeoutSec": 1
+  },
   "enabled": true,
   "network": {
     "allowedDomains": [

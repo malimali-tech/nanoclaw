@@ -1,55 +1,18 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { describe, it, expect } from 'vitest';
 import { loadSandboxConfig } from './sandbox-config.js';
 
-const tmpDirs: string[] = [];
-
-function mkTmp(): string {
-  const p = fs.mkdtempSync(path.join(os.tmpdir(), 'sbcfg-'));
-  tmpDirs.push(p);
-  return p;
-}
-
-afterEach(() => {
-  while (tmpDirs.length > 0) {
-    const p = tmpDirs.pop()!;
-    fs.rmSync(p, { recursive: true, force: true });
-  }
-});
-
 describe('loadSandboxConfig', () => {
-  it('returns built-in default when no project override exists', () => {
-    const tmp = mkTmp();
-    const cfg = loadSandboxConfig(tmp);
+  it('returns the built-in default config', () => {
+    const cfg = loadSandboxConfig();
     expect(cfg.enabled).toBe(true);
     expect(cfg.network?.allowedDomains).toContain('registry.npmjs.org');
+    expect(cfg.filesystem?.allowWrite).toContain('.');
   });
 
-  it('deep-merges project override over defaults', () => {
-    const tmp = mkTmp();
-    fs.mkdirSync(path.join(tmp, '.pi'), { recursive: true });
-    fs.writeFileSync(
-      path.join(tmp, '.pi', 'sandbox.json'),
-      JSON.stringify({
-        network: { allowedDomains: ['my.example.com'] },
-        filesystem: { denyWrite: ['secret.txt'] },
-      }),
-    );
-    const cfg = loadSandboxConfig(tmp);
-    expect(cfg.network?.allowedDomains).toEqual(['my.example.com']);
-    expect(cfg.filesystem?.denyWrite).toEqual(['secret.txt']);
-    expect(cfg.filesystem?.allowWrite).toContain('.'); // default preserved
-  });
-
-  it('disables when project sets enabled=false', () => {
-    const tmp = mkTmp();
-    fs.mkdirSync(path.join(tmp, '.pi'), { recursive: true });
-    fs.writeFileSync(
-      path.join(tmp, '.pi', 'sandbox.json'),
-      JSON.stringify({ enabled: false }),
-    );
-    expect(loadSandboxConfig(tmp).enabled).toBe(false);
+  it('takes no arguments — per-group overrides are intentionally unsupported', () => {
+    // Calling with a path argument used to load groups/<g>/.pi/sandbox.json,
+    // letting an agent rewrite its own sandbox policy. The signature is now
+    // a no-arg function; this test exists to document the removal.
+    expect(loadSandboxConfig.length).toBe(0);
   });
 });

@@ -89,7 +89,15 @@ fi
 
 ## 5. Credentials
 
-Bash commands run inside an OS-level sandbox (`sandbox-exec` on macOS, `bubblewrap` on Linux). The agent runs in-process via `@mariozechner/pi-coding-agent`; configure your provider via `.env` env vars or `~/.pi/agent/auth.json`.
+Tool isolation runs in **docker mode** by default — each chat gets its own container. Build the tool image once before first run:
+
+```bash
+./container/build.sh
+```
+
+(Requires Docker Desktop on macOS/Windows or `docker` daemon on Linux.) If Docker isn't an option, set `"runtime": "sandbox-exec"` in `config/sandbox.default.json` to fall back to `sandbox-exec` (macOS) / `bubblewrap` (Linux) — bash-only isolation, no per-chat container.
+
+The agent runs in-process via `@mariozechner/pi-coding-agent`; configure your provider via `.env` env vars or `~/.pi/agent/auth.json`.
 
 AskUserQuestion: which provider?
 
@@ -225,12 +233,7 @@ When everything's green, tell the user to send a message in their registered cha
 
 ## Troubleshooting
 
-- **Service won't start** — `cat logs/nanoclaw.error.log`. Common: missing credentials, wrong Node path in plist, missing channel credentials, missing system tools (e.g. `ripgrep` is required by sandbox-runtime — `brew install ripgrep` or `apt install ripgrep`).
-- **Agent fails** — `tail logs/nanoclaw.log` for pi-coding-agent errors. Verify `.env` provider key, and that `sandbox-exec` (macOS) / `bwrap` (Linux) is on PATH.
+- **Service won't start** — `cat logs/nanoclaw.error.log`. Common: missing credentials, wrong Node path in plist, missing channel credentials. In docker mode also: Docker daemon not running (`docker info`) or image not built (`./container/build.sh`). In sandbox-exec mode: missing `ripgrep` (`brew install ripgrep` / `apt install ripgrep`).
+- **Agent fails** — `tail logs/nanoclaw.log` for pi-coding-agent errors. Verify `.env` provider key. In docker mode: confirm `nanoclaw-tool:latest` exists (`docker image inspect nanoclaw-tool:latest`). In sandbox-exec mode: `sandbox-exec` (macOS) / `bwrap` (Linux) on PATH.
 - **No reply** — trigger pattern? Main channel doesn't need a trigger; non-main groups need `@<ASSISTANT_NAME>` (default `@Andy`). Check `logs/nanoclaw.log`.
 - **Channel disconnected** — credentials missing or invalid in `.env`. Restart the service after any `.env` change.
-
-## 10. Diagnostics
-
-1. Read `.claude/skills/setup/diagnostics.md`.
-2. Follow it before completing setup.

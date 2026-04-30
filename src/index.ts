@@ -44,7 +44,12 @@ import {
 import { makeTaskSchedulerPort, startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
-import { configureAgent, handleMessage, shutdownAgent } from './agent/run.js';
+import {
+  configureAgent,
+  ensureSandbox,
+  handleMessage,
+  shutdownAgent,
+} from './agent/run.js';
 import type { GroupRegistryPort, RouterPort } from './agent/types.js';
 
 // Re-export for backwards compatibility during refactor
@@ -307,6 +312,11 @@ async function main(): Promise<void> {
   logger.info('Database initialized');
   loadState();
   restoreRemoteControl();
+
+  // Initialize sandbox before any AgentSession is created. Both the message
+  // loop and the task scheduler rely on the global SandboxManager state +
+  // wrapped bash ops being ready before they spawn the first session.
+  await ensureSandbox();
 
   // Graceful shutdown handlers
   const shutdown = async (signal: string) => {

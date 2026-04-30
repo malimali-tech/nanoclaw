@@ -1,11 +1,23 @@
 // src/agent/extension.ts
+import path from 'path';
 import { Type } from 'typebox';
 import type {
   ExtensionAPI,
   AgentToolResult,
 } from '@mariozechner/pi-coding-agent';
-import { defineTool } from '@mariozechner/pi-coding-agent';
+import {
+  createBashTool,
+  createEditTool,
+  createFindTool,
+  createGrepTool,
+  createLsTool,
+  createReadTool,
+  createWriteTool,
+  defineTool,
+} from '@mariozechner/pi-coding-agent';
 import { CronExpressionParser } from 'cron-parser';
+import { GROUPS_DIR } from '../config.js';
+import { getChatToolBindings } from './tool-runtime.js';
 import type { ExtensionCtx, ScheduleType } from './types.js';
 
 const okText = (text: string): AgentToolResult<unknown> => ({
@@ -40,6 +52,38 @@ function validateSchedule(type: ScheduleType, value: string): string | null {
 
 export function nanoclawExtension(ctx: ExtensionCtx) {
   return (pi: ExtensionAPI) => {
+    // Replace each pi default tool whose runtime mode wants isolation.
+    // Docker mode supplies all 7; sandbox-exec supplies only bash; off
+    // supplies none. The override is keyed by tool name (pi's defaults
+    // register first; ours overwrite by re-registering with the same name).
+    const groupCwd = path.join(GROUPS_DIR, ctx.groupFolder);
+    const bindings = getChatToolBindings(ctx.groupFolder, ctx.isMain);
+
+    if (bindings.bash) {
+      pi.registerTool(
+        createBashTool(groupCwd, { operations: bindings.bash }),
+      );
+      pi.on('user_bash', () => ({ operations: bindings.bash! }));
+    }
+    if (bindings.read) {
+      pi.registerTool(createReadTool(groupCwd, { operations: bindings.read }));
+    }
+    if (bindings.write) {
+      pi.registerTool(createWriteTool(groupCwd, { operations: bindings.write }));
+    }
+    if (bindings.edit) {
+      pi.registerTool(createEditTool(groupCwd, { operations: bindings.edit }));
+    }
+    if (bindings.grep) {
+      pi.registerTool(createGrepTool(groupCwd, { operations: bindings.grep }));
+    }
+    if (bindings.find) {
+      pi.registerTool(createFindTool(groupCwd, { operations: bindings.find }));
+    }
+    if (bindings.ls) {
+      pi.registerTool(createLsTool(groupCwd, { operations: bindings.ls }));
+    }
+
     pi.registerTool(
       defineTool({
         name: 'send_message',

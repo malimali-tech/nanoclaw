@@ -4,7 +4,9 @@ Personal Claude assistant. See [README.md](README.md) for philosophy and setup. 
 
 ## Quick Context
 
-Single Node.js process with a skill-based channel system. Feishu / Lark is currently the only built-in channel; it self-registers at startup via `src/channels/feishu.ts`. Messages route to `@mariozechner/pi-coding-agent` running in-process on the host. Each group has its own working directory and per-group session state. Bash commands from the agent run inside an OS-level sandbox (`sandbox-exec` on macOS, `bubblewrap` on Linux); see `config/sandbox.default.json` for the network/filesystem rules. Set `enabled: false` to disable the sandbox.
+Single Node.js process with a skill-based channel system. Feishu / Lark is currently the only built-in channel; it self-registers at startup via `src/channels/feishu.ts`. Messages route to `@mariozechner/pi-coding-agent` running in-process on the host. Each group has its own working directory and per-group session state.
+
+**Tool isolation.** Agent tool calls are isolated per chat. The runtime is selected in `config/sandbox.default.json` (`runtime: "docker" | "sandbox-exec" | "off"`); default is **docker**. In docker mode each chat gets a dedicated container (`nanoclaw-tool-<group>`) with bind mounts that physically expose only that chat's group folder + global; bash forwards through `docker exec`. Read/Write/Edit/Grep/Find/Ls stay on the host (so binaries / images / NUL bytes work) but are wrapped with a per-chat path-guard that mirrors the container's mount surface. `sandbox-exec` is a fallback for environments without Docker (CI, dev laptops); it sandboxes only bash via `sandbox-exec` / `bubblewrap`.
 
 ## Key Files
 
@@ -19,16 +21,32 @@ Single Node.js process with a skill-based channel system. Feishu / Lark is curre
 | `src/agent/run.ts` | In-process pi-coding-agent runtime entry point |
 | `src/agent/extension.ts` | NanoClaw IPC tools as a pi extension |
 | `src/agent/session-pool.ts` | Per-group AgentSession pool with idle TTL |
-| `src/agent/sandbox-config.ts` | Sandbox config loader (default + per-group override) |
+| `src/agent/sandbox-config.ts` | Sandbox config loader (single global policy + runtime selector) |
+| `src/agent/tool-runtime.ts` | Selects runtime (docker / sandbox-exec / off) and produces per-chat tool bindings |
+| `src/agent/container-pool.ts` | Per-chat docker container lifecycle (aligned with SessionPool) |
+| `src/agent/container-mounts.ts` | Per-chat bind-mount set (group folder, global, main-only project) |
+| `src/agent/container-runtime.ts` | Thin `docker` CLI wrapper (info / image inspect / run / stop) |
+| `src/agent/docker-bash.ts` | `BashOperations` that forwards via `docker exec` into the chat's container |
+| `src/agent/host-fs-tools.ts` | Read/Write/Edit/Grep/Find/Ls Operations backed by host fs + path-guard |
+| `src/agent/path-guard.ts` | Validates host paths against the chat's allowed roots |
+| `src/agent/sandbox-bash.ts` | (sandbox-exec mode) Sandboxed `BashOperations` wrapper for pi's bash |
 | `src/agent/types.ts` | Extension ctx and port interfaces |
+| `container/Dockerfile` | Tool sandbox image (debian-slim + bash + ripgrep + git + curl) |
+| `container/build.sh` | `docker build -t nanoclaw-tool:latest container/` |
 | `groups/{name}/CLAUDE.md` | Per-group memory (isolated) |
-| `config/sandbox.default.json` | Default sandbox profile (network + filesystem rules) |
+| `config/sandbox.default.json` | Runtime + policy file |
 
 ## LLM Provider
 
 NanoClaw runs `@mariozechner/pi-coding-agent` in-process. Configure your provider via environment variables (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`) or `~/.pi/agent/auth.json`. See [pi-mono docs](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) for the full provider list and authentication options.
 
-Bash commands run inside an OS-level sandbox (`sandbox-exec` on macOS, `bubblewrap` on Linux) configured by `config/sandbox.default.json` and per-group overrides at `groups/<group>/.pi/sandbox.json`.
+Tool isolation is selected by `runtime` in `config/sandbox.default.json`. **Default: `docker`.** Initialization happens once at startup in `src/index.ts` via `ensureSandbox()` (which calls `initToolRuntime()`):
+
+- **docker mode** (default): verify daemon reachable + image `nanoclaw-tool:latest` exists; create per-chat container on first session prompt (`ContainerPool.ensure`), tear down on session evict. Bash → `docker exec`. Read/Write/Edit/Grep/Find/Ls → host fs with `PathGuard` that mirrors the container's mount surface (own group folder + global + main-only project RO).
+- **sandbox-exec mode** (fallback): `SandboxManager.initialize()` + self-check that `wrapWithSandbox` emits the OS wrapper. Bash only is sandboxed; fs tools run with pi defaults (no isolation). Use only when Docker is unavailable.
+- **off mode**: pi defaults across the board. Dev only.
+
+Build the image once before first run in docker mode: `./container/build.sh`.
 
 ## Skills
 

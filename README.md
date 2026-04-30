@@ -37,7 +37,7 @@
 
 [OpenClaw](https://github.com/openclaw/openclaw) is an impressive project, but I wouldn't have been able to sleep if I had given complex software I didn't understand full access to my life. OpenClaw has nearly half a million lines of code, 53 config files, and 70+ dependencies. Its security is at the application level (allowlists, pairing codes) rather than true OS-level isolation. Everything runs in one Node process with shared memory.
 
-NanoClaw provides that same core functionality, but in a codebase small enough to understand: one process and a handful of files. The coding agent runs in-process via [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent), and bash commands are isolated at the OS level using `sandbox-exec` (macOS) or `bubblewrap` (Linux) — not merely behind permission checks.
+NanoClaw provides that same core functionality, but in a codebase small enough to understand: one process and a handful of files. The coding agent runs in-process via [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent), and agent tool calls are isolated **per chat** — by default each chat gets a dedicated Docker container (`nanoclaw-tool-<group>`) that bind-mounts only that chat's group folder. Cross-chat reads are physically prevented by the kernel rather than by an application-layer ACL. A lighter `sandbox-exec` / `bubblewrap` fallback is available for environments without Docker.
 
 ## Quick Start
 
@@ -65,7 +65,7 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 
 **Small enough to understand.** One process, a few source files and no microservices. If you want to understand the full NanoClaw codebase, just ask Claude Code to walk you through it.
 
-**Secure by isolation.** Bash commands from the agent run inside an OS-level sandbox — `sandbox-exec` on macOS, `bubblewrap` on Linux — configured by `config/sandbox.default.json` with optional per-group overrides. Filesystem and network access are restricted by policy, not just by permission checks.
+**Secure by per-chat isolation.** Each chat owns a dedicated Docker container with bind mounts that physically expose only that chat's group folder + global memory (main additionally gets project source RO with `.env` shadowed). Bash forwards into that container via `docker exec`. Read/Write/Edit/Grep/Find/Ls run on the host (so binary files / images / NUL bytes still work) but go through a per-chat path-guard that mirrors the same surface. Cross-chat file access is blocked by the kernel + the path-guard, not by an application-layer ACL. The runtime is selected in `config/sandbox.default.json` (`runtime: "docker"` is default; `"sandbox-exec"` is the no-Docker fallback).
 
 **Built for the individual user.** NanoClaw isn't a monolithic framework; it's software that fits each user's exact needs. Instead of becoming bloatware, NanoClaw is designed to be bespoke. You make your own fork and have Claude Code modify it to match your needs.
 
@@ -83,11 +83,11 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 ## What It Supports
 
 - **Feishu / Lark messaging** - Talk to your assistant from Feishu (国内) or Lark (国际) groups via WebSocket long-connection — no public URL needed. This fork ships only the Feishu channel; other channels are upstream skills that don't apply here.
-- **Isolated group context** - Each group has its own `CLAUDE.md` memory and working directory; bash commands are sandboxed with a per-group sandbox profile.
+- **Isolated group context** - Each group has its own `CLAUDE.md` memory, working directory, and (in docker mode) its own tool sandbox container — one chat's files are physically invisible to another chat's bash.
 - **Main channel** - Your private channel (self-chat) for admin control; every group is completely isolated
 - **Scheduled tasks** - Recurring jobs that run the agent and can message you back
 - **Web access** - Search and fetch content from the Web
-- **OS-level sandbox** - Bash commands run via `sandbox-exec` (macOS) or `bubblewrap` (Linux); rules live in `config/sandbox.default.json` with per-group overrides at `groups/<group>/.pi/sandbox.json`
+- **Per-chat tool sandbox** - Default: each chat = one Docker container, bash routed via `docker exec`, fs tools path-guarded on host. Fallback: `sandbox-exec` (macOS) / `bubblewrap` (Linux) for Docker-less environments. Selected by `runtime` in `config/sandbox.default.json`
 - **Multi-provider** - Pi-coding-agent supports Anthropic, OpenAI, Gemini, and more — configure via env vars or `~/.pi/agent/auth.json`
 - **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks
 
@@ -134,7 +134,8 @@ Users then run `/add-<your-skill>` on their fork and get clean code that does ex
 - macOS, Linux, or Windows (via WSL2)
 - Node.js 20+
 - [Claude Code](https://claude.ai/download)
-- macOS: `sandbox-exec` (built-in). Linux: `bubblewrap` (`apt install bubblewrap` / `dnf install bubblewrap`).
+- **Default (docker mode):** Docker Desktop (macOS/Windows) or `docker` daemon (Linux). Then `./container/build.sh` once to build the `nanoclaw-tool:latest` image.
+- **Fallback (sandbox-exec mode):** macOS: `sandbox-exec` (built-in). Linux: `bubblewrap` (`apt install bubblewrap` / `dnf install bubblewrap`). Set `"runtime": "sandbox-exec"` in `config/sandbox.default.json`.
 
 ## Architecture
 
@@ -142,7 +143,13 @@ Users then run `/add-<your-skill>` on their fork and get clean code that does ex
 Channels --> SQLite --> Polling loop --> pi-coding-agent (in-process, sandboxed bash) --> Response
 ```
 
-Single Node.js process. Channels are added via skills and self-register at startup — the orchestrator connects whichever ones have credentials present. The agent runs in-process via `@mariozechner/pi-coding-agent`; bash commands are wrapped in `sandbox-exec` (macOS) or `bubblewrap` (Linux) using rules from `config/sandbox.default.json` (with optional per-group overrides). Per-group message queue with concurrency control.
+Single Node.js process. Channels are added via skills and self-register at startup — the orchestrator connects whichever ones have credentials present. The agent runs in-process via `@mariozechner/pi-coding-agent`. Tool isolation is selected by `runtime` in `config/sandbox.default.json`:
+
+- `docker` (default): one container per chat. `src/agent/container-pool.ts` owns lifecycle (created on first prompt via `SessionPool`, removed on idle eviction). `src/agent/container-mounts.ts` decides per-chat bind mounts. `src/agent/docker-bash.ts` forwards bash via `docker exec`. `src/agent/host-fs-tools.ts` keeps Read/Write/Edit/Grep/Find/Ls on the host (binary-correct) but wraps each call with `src/agent/path-guard.ts` against the chat's allowed roots.
+- `sandbox-exec`: bash via `SandboxManager.wrapWithSandbox` (macOS sandbox-exec / Linux bubblewrap); fs tools run with pi defaults. Fallback for Docker-less environments.
+- `off`: pi defaults across the board. Dev only.
+
+`src/agent/tool-runtime.ts` is the single switching point.
 
 For the full architecture details, see the [pi-mono migration design doc](docs/plans/2026-04-29-pi-mono-host-agent-design.md).
 
@@ -154,7 +161,13 @@ Key files:
 - `src/agent/run.ts` - In-process pi-coding-agent runtime entry point
 - `src/agent/extension.ts` - NanoClaw IPC tools as a pi extension
 - `src/agent/session-pool.ts` - Per-group AgentSession pool with idle TTL
-- `src/agent/sandbox-config.ts` - Sandbox config loader (default + per-group override)
+- `src/agent/sandbox-config.ts` - Runtime selector + policy loader
+- `src/agent/tool-runtime.ts` - Initializes runtime + produces per-chat tool bindings
+- `src/agent/container-pool.ts` / `container-mounts.ts` / `container-runtime.ts` - Docker mode
+- `src/agent/docker-bash.ts` - Bash via `docker exec` (docker mode)
+- `src/agent/host-fs-tools.ts` + `path-guard.ts` - Read/Write/Edit/Grep/Find/Ls on host with per-chat path-guard
+- `src/agent/sandbox-bash.ts` - Bash via `SandboxManager.wrapWithSandbox` (sandbox-exec mode)
+- `container/Dockerfile` + `container/build.sh` - Tool sandbox image
 - `src/task-scheduler.ts` - Runs scheduled tasks
 - `src/db.ts` - SQLite operations (messages, groups, sessions, state)
 - `groups/*/CLAUDE.md` - Per-group memory
@@ -164,15 +177,15 @@ Key files:
 
 **Why no containers?**
 
-NanoClaw used to spawn one Linux container per agent invocation. The pi-mono migration moved to host-side execution with OS-level sandboxing of bash commands (`sandbox-exec` on macOS, `bubblewrap` on Linux). It's faster, has no per-message cold start, and the security boundary still isolates filesystem and network access at the kernel level.
+NanoClaw originally spawned one Linux container per agent invocation, with the entire agent (LLM loop + tools + claude-code CLI) inside. The pi-mono migration moved the LLM loop to the host. Now in docker mode the container is just a per-chat **tool jail**: bash commands forward into it, but the LLM loop, credentials, and stateful extension tools (`send_message`, `schedule_task`) stay on the host. This drops the credential proxy, IPC channel, and agent-runner Node app the old setup needed (~1700 LOC), while keeping per-chat mount-physical isolation. Cost: a per-chat container (`sleep infinity`) and ~100ms per `docker exec` tool call.
 
 **Can I run this on Linux or Windows?**
 
-Yes. macOS uses the built-in `sandbox-exec`. Linux requires `bubblewrap` (`apt install bubblewrap` / `dnf install bubblewrap`). Windows works via WSL2 (Linux path). Just run `/setup`.
+Yes. Default docker mode works wherever Docker / Docker Desktop runs (macOS, Linux, Windows via WSL2). The sandbox-exec fallback uses macOS's built-in `sandbox-exec` or Linux `bubblewrap` (`apt install bubblewrap` / `dnf install bubblewrap`). Run `/setup` to be guided.
 
 **Is this secure?**
 
-Bash commands from the agent run in an OS-level sandbox with restricted filesystem and network access — defined declaratively in `config/sandbox.default.json` with per-group overrides. You can audit and tighten the rules. The codebase is small enough that you can review the entire surface area, including how the sandbox is invoked.
+Default docker mode runs each chat's bash in its own container with bind-mounted access to that chat's group folder only — the kernel itself prevents cross-chat reads, not an in-process ACL. Read/Write/Edit/Grep/Find/Ls run on the host (so binaries and image previews work) but go through a per-chat path-guard mirroring the container's mount surface. The codebase is small enough that you can review the entire isolation path: `tool-runtime.ts` → `container-pool.ts` + `path-guard.ts`. On startup the runtime fails fast if Docker isn't reachable or the `nanoclaw-tool` image isn't built — no silent fallback to "unsandboxed". The sandbox-exec fallback similarly self-checks that `wrapWithSandbox` actually emits the OS wrapper.
 
 **Why no configuration files?**
 
