@@ -137,13 +137,6 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
   );
 }
 
-/** @internal - exported for testing */
-export function _setRegisteredGroups(
-  groups: Record<string, RegisteredGroup>,
-): void {
-  registeredGroups = groups;
-}
-
 function botMessageId(): string {
   return `bot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
