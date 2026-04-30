@@ -4,7 +4,7 @@ Personal Claude assistant. See [README.md](README.md) for philosophy and setup. 
 
 ## Quick Context
 
-Single Node.js process with a skill-based channel system. Feishu / Lark is currently the only built-in channel; it self-registers at startup via `src/channels/feishu.ts`. Messages route to `@mariozechner/pi-coding-agent` running in-process on the host. Each group has its own working directory and per-group session state. By default, bash commands from the agent run inside an OS-level sandbox (`sandbox-exec` on macOS, `bubblewrap` on Linux); see `config/sandbox.default.json` for the network/filesystem rules. Setting `runtime: 'docker'` in that file instead forwards all 7 tools (`bash`, `read`, `write`, `edit`, `grep`, `find`, `ls`) to the long-running `nanoclaw-sandbox` Docker container — the LLM loop and credentials stay on host. The container is user-managed via `./scripts/sandbox.sh`; nanoclaw only health-checks it.
+Single Node.js process with a skill-based channel system. Feishu / Lark is currently the only built-in channel; it self-registers at startup via `src/channels/feishu.ts`. Messages route to `@mariozechner/pi-coding-agent` running in-process on the host. Each group has its own working directory and per-group session state. Bash commands from the agent run inside an OS-level sandbox (`sandbox-exec` on macOS, `bubblewrap` on Linux); see `config/sandbox.default.json` for the network/filesystem rules. Set `enabled: false` to disable the sandbox.
 
 ## Key Files
 

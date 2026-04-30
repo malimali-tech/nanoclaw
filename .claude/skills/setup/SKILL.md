@@ -115,21 +115,6 @@ For users who prefer pi-mono's own auth file: tell them to run `pi auth login` i
 
 Verify the agent loads credentials: `npm run dev` should start without authentication errors.
 
-## 4a. Optional: Docker tool sandbox
-
-NanoClaw can forward all agent tools (`bash`, `read`, `write`, `edit`, `grep`, `find`, `ls`) into a long-running Docker container instead of using `sandbox-exec` / `bubblewrap`. This is opt-in — skip if the user does not want Docker.
-
-AskUserQuestion: "Do you want to enable the Docker tool sandbox? (Stronger isolation, requires Docker installed.)"
-
-If yes:
-
-1. Verify Docker is installed and running: `docker info`. If not, instruct the user to install Docker Desktop (macOS) or `docker.io` (Linux) and start the daemon, then re-run this step.
-2. Create the container: `./scripts/sandbox.sh create`. Verify with `./scripts/sandbox.sh status`.
-3. Edit `config/sandbox.default.json` and set `"runtime": "docker"` (or set the same field in a per-group `groups/<group>/.pi/sandbox.json` to scope it).
-4. Restart nanoclaw after step 7 so the new runtime takes effect.
-
-If no: leave `runtime` at its default (`sandbox-runtime`) and continue.
-
 ## 5. Set Up Channels
 
 AskUserQuestion (multiSelect): Which messaging channels do you want to enable?

@@ -1,5 +1,7 @@
 # Docker Tool Sandbox Implementation Plan
 
+> **Status:** REVERTED. This feature was removed from `main`. Kept for historical reference.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Move pi-coding-agent file/shell tool execution into a long-running Docker container while keeping pi-mono and credentials on host.

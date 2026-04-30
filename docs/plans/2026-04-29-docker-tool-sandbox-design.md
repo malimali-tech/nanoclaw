@@ -1,7 +1,7 @@
 # Docker Tool Sandbox — Design
 
 **Date:** 2026-04-29
-**Status:** approved, awaiting implementation plan
+**Status:** REVERTED — feature removed from `main`. The OS-level `sandbox-runtime` is the only sandbox going forward. The Docker tool forwarding path produced binary/MIME caveats that outweighed its marginal isolation benefit. Kept for historical reference.
 **Predecessor:** `docs/plans/2026-04-29-pi-mono-host-agent-plan.md` (pi-mono in-process migration)
 
 ## Problem

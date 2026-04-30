@@ -4,6 +4,10 @@ All notable changes to NanoClaw will be documented in this file.
 
 For detailed release notes, see the [full changelog on the documentation site](https://docs.nanoclaw.dev/changelog).
 
+## [Unreleased]
+
+- Removed Docker tool sandbox runtime (`runtime: 'docker'` in `config/sandbox.default.json`). The OS-level `sandbox-runtime` (`sandbox-exec` on macOS, `bubblewrap` on Linux) remains the default and only sandbox. The `docker?` config block, `runtime` field, `scripts/sandbox.sh`, and the `docker-operations` / `docker-exec` / `path-map` / `container-health` modules are gone. Set `enabled: false` to disable the sandbox.
+
 ## [1.2.36] - 2026-03-26
 
 - [BREAKING] Replaced pino logger with built-in logger. WhatsApp users must re-merge the WhatsApp fork to pick up the Baileys logger compatibility fix: `git fetch whatsapp main && git merge whatsapp/main`. If the `whatsapp` remote is not configured: `git remote add whatsapp https://github.com/qwibitai/nanoclaw-whatsapp.git`.

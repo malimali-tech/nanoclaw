@@ -80,8 +80,6 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 
 **Pi-coding-agent in-process.** NanoClaw embeds [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) directly — no subprocess, no container build. The provider is selected via standard environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …) or `~/.pi/agent/auth.json`.
 
-**Optional Docker tool sandbox.** For stronger isolation, set `runtime: 'docker'` in `config/sandbox.default.json` to forward all 7 pi-coding-agent tools (`bash`, `read`, `write`, `edit`, `grep`, `find`, `ls`) into a long-running `nanoclaw-sandbox` Debian container via `docker exec`. The pi-mono LLM loop and your provider credentials never leave the host — only file/shell operations cross into the container, which mounts the repo read-only and shadows `.env` so the agent cannot read host LLM keys. NanoClaw does not auto-create the container; you manage its lifecycle with `./scripts/sandbox.sh {create,start,stop,remove,status,shell}`. The default remains `runtime: 'sandbox-runtime'` (OS-level `sandbox-exec` / `bubblewrap`); Docker is opt-in. See [docs/plans/2026-04-29-docker-tool-sandbox-design.md](docs/plans/2026-04-29-docker-tool-sandbox-design.md) for the full design.
-
 ## What It Supports
 
 - **Feishu / Lark messaging** - Talk to your assistant from Feishu (国内) or Lark (国际) groups via WebSocket long-connection — no public URL needed. Other channels can be added back later as skills.
