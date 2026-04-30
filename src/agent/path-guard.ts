@@ -65,10 +65,7 @@ export function buildAllowedRoots(
   return roots;
 }
 
-export function makePathGuard(
-  groupFolder: string,
-  isMain: boolean,
-): PathGuard {
+export function makePathGuard(groupFolder: string, isMain: boolean): PathGuard {
   const groupDir = resolveGroupFolderPath(groupFolder);
   const roots = buildAllowedRoots(groupFolder, isMain);
 

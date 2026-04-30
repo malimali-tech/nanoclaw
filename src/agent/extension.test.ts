@@ -66,7 +66,15 @@ describe('nanoclawExtension', () => {
   it('does not register tool overrides when bindings are all null (off mode)', () => {
     const { pi, tools } = makePi();
     nanoclawExtension(makeCtx())(pi);
-    for (const name of ['bash', 'read', 'write', 'edit', 'grep', 'find', 'ls']) {
+    for (const name of [
+      'bash',
+      'read',
+      'write',
+      'edit',
+      'grep',
+      'find',
+      'ls',
+    ]) {
       expect(tools.find((t) => t.name === name)).toBeUndefined();
     }
     expect(pi.on).not.toHaveBeenCalledWith('user_bash', expect.anything());
@@ -95,7 +103,15 @@ describe('nanoclawExtension', () => {
     });
     const { pi, tools } = makePi();
     nanoclawExtension(makeCtx())(pi);
-    for (const name of ['bash', 'read', 'write', 'edit', 'grep', 'find', 'ls']) {
+    for (const name of [
+      'bash',
+      'read',
+      'write',
+      'edit',
+      'grep',
+      'find',
+      'ls',
+    ]) {
       expect(tools.find((t) => t.name === name)).toBeDefined();
     }
     expect(pi.on).toHaveBeenCalledWith('user_bash', expect.any(Function));

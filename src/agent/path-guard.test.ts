@@ -36,9 +36,9 @@ describe('path-guard', () => {
 
   it('blocks reads of sibling group folders', () => {
     const guard = makePathGuard(ALICE, false);
-    expect(() =>
-      guard.assertReadable(path.join(bobDir, 'notes.md')),
-    ).toThrow(/outside chat workspace/);
+    expect(() => guard.assertReadable(path.join(bobDir, 'notes.md'))).toThrow(
+      /outside chat workspace/,
+    );
   });
 
   it('blocks reads of host-level secrets via absolute path', () => {
@@ -53,9 +53,9 @@ describe('path-guard', () => {
 
   it('blocks .. traversal', () => {
     const guard = makePathGuard(ALICE, false);
-    expect(() =>
-      guard.assertReadable(`../${BOB}/notes.md`),
-    ).toThrow(/outside chat workspace/);
+    expect(() => guard.assertReadable(`../${BOB}/notes.md`)).toThrow(
+      /outside chat workspace/,
+    );
   });
 
   it('non-main can read global but not write to it', () => {

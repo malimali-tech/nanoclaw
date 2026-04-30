@@ -50,9 +50,7 @@ export function makeReadOps(guard: PathGuard): ReadOperations {
     async access(p) {
       guard.assertReadable(p);
       await new Promise<void>((resolve, reject) =>
-        fsAccess(p, constants.R_OK, (err) =>
-          err ? reject(err) : resolve(),
-        ),
+        fsAccess(p, constants.R_OK, (err) => (err ? reject(err) : resolve())),
       );
     },
     async detectImageMimeType(p) {
@@ -111,7 +109,10 @@ export function makeGrepOps(guard: PathGuard): GrepOperations {
   };
 }
 
-export function makeFindOps(guard: PathGuard, defaultCwd: string): FindOperations {
+export function makeFindOps(
+  guard: PathGuard,
+  defaultCwd: string,
+): FindOperations {
   return {
     exists(p) {
       try {

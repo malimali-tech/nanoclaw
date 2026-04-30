@@ -19,10 +19,7 @@ import {
   hostGatewayArgs,
   stopAndRemoveContainer,
 } from './container-runtime.js';
-import {
-  buildVolumeMounts,
-  safeContainerName,
-} from './container-mounts.js';
+import { buildVolumeMounts, safeContainerName } from './container-mounts.js';
 import type { DockerRuntimeConfig } from './sandbox-config.js';
 import { logger } from '../logger.js';
 
@@ -51,7 +48,10 @@ export class ContainerPool {
     const cached = this.entries.get(groupFolder);
     if (cached) return cached.name;
 
-    const name = safeContainerName(this.docker.containerNamePrefix, groupFolder);
+    const name = safeContainerName(
+      this.docker.containerNamePrefix,
+      groupFolder,
+    );
 
     if (containerExists(name)) {
       if (!containerRunning(name)) {

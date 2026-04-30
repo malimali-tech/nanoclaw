@@ -30,7 +30,10 @@ function mapHostCwd(hostCwd: string, groupFolder: string): string {
   // Allow a sub-cwd inside the group folder to be honored.
   if (hostCwd.startsWith(groupHost + path.sep)) {
     const rel = path.relative(groupHost, hostCwd);
-    return path.posix.join(CONTAINER_PATHS.group, rel.split(path.sep).join('/'));
+    return path.posix.join(
+      CONTAINER_PATHS.group,
+      rel.split(path.sep).join('/'),
+    );
   }
   // Anything outside the group folder is silently re-anchored to the
   // group root. Bash can't escape there anyway since the host cwd isn't

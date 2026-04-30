@@ -60,16 +60,16 @@ export function nanoclawExtension(ctx: ExtensionCtx) {
     const bindings = getChatToolBindings(ctx.groupFolder, ctx.isMain);
 
     if (bindings.bash) {
-      pi.registerTool(
-        createBashTool(groupCwd, { operations: bindings.bash }),
-      );
+      pi.registerTool(createBashTool(groupCwd, { operations: bindings.bash }));
       pi.on('user_bash', () => ({ operations: bindings.bash! }));
     }
     if (bindings.read) {
       pi.registerTool(createReadTool(groupCwd, { operations: bindings.read }));
     }
     if (bindings.write) {
-      pi.registerTool(createWriteTool(groupCwd, { operations: bindings.write }));
+      pi.registerTool(
+        createWriteTool(groupCwd, { operations: bindings.write }),
+      );
     }
     if (bindings.edit) {
       pi.registerTool(createEditTool(groupCwd, { operations: bindings.edit }));

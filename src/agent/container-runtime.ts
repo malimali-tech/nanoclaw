@@ -38,11 +38,10 @@ export function ensureContainerRuntimeRunning(): void {
 
 /** Verify the named image exists locally. */
 export function ensureImageExists(image: string): void {
-  const result = spawnSync(
-    CONTAINER_RUNTIME_BIN,
-    ['image', 'inspect', image],
-    { stdio: 'pipe', timeout: 10000 },
-  );
+  const result = spawnSync(CONTAINER_RUNTIME_BIN, ['image', 'inspect', image], {
+    stdio: 'pipe',
+    timeout: 10000,
+  });
   if (result.status !== 0) {
     throw new Error(
       `Container image '${image}' not found locally.\n` +
