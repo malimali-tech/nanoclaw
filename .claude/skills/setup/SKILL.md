@@ -104,24 +104,39 @@ Append the chosen key to `.env`:
 echo 'ANTHROPIC_API_KEY=<key>' >> .env  # or OPENAI_API_KEY / GEMINI_API_KEY / DEEPSEEK_API_KEY ...
 ```
 
-## 6. Channels
+## 6. Channel: Feishu / Lark
 
-AskUserQuestion (multiSelect): WhatsApp / Telegram / Slack / Discord. Feishu is built-in; if the user wants Feishu, run `/add-feishu` is unnecessary — just collect `FEISHU_APP_ID` and `FEISHU_APP_SECRET` (and optionally `FEISHU_DOMAIN=feishu` or `lark`) and `echo` them to `.env`.
+This fork ships only the Feishu / Lark channel (`src/channels/feishu.ts`). Collect credentials and write them to `.env`:
 
-For each selected non-Feishu channel, invoke its skill:
-
-- WhatsApp → `/add-whatsapp`
-- Telegram → `/add-telegram`
-- Slack → `/add-slack`
-- Discord → `/add-discord`
-
-Each skill installs code (git-merge a branch), collects credentials, authenticates, and registers the chat. After all channel skills:
+1. Open the Feishu Developer Console (or Lark Open Platform): https://open.feishu.cn/app (国内) or https://open.larksuite.com/app (国际).
+2. Create a self-build app, enable **Bot** capability, then enable **Events and Callbacks → Mode of event/callback subscription → Receive events through persistent connection**.
+3. Add the `im:message` event subscription and `im.message.receive_v1` listener.
+4. Copy **App ID** and **App Secret** from "Credentials & Basic Info".
+5. Append to `.env` (ask the user for the values, then):
 
 ```bash
-npm install && npm run build
+{
+  echo "FEISHU_APP_ID=<app-id>"
+  echo "FEISHU_APP_SECRET=<app-secret>"
+  echo "FEISHU_DOMAIN=feishu"   # or "lark" for international Lark workspaces
+} >> .env
 ```
 
-If build fails, read the error and fix (usually a missing dep added by the merge).
+6. Get the bot's `chat_id`: have a human invite the bot into the target chat, then send any message in that chat. After Step 8 starts the service, the chat_id will appear as `feishu:oc_xxxxxxxxxxxx` in `logs/nanoclaw.log` under `[feishu] inbound chat_id=...`. Register it as the main group via:
+
+```bash
+npx tsx setup/index.ts --step register -- \
+  --jid 'feishu:oc_xxxxxxxxxxxx' \
+  --name '<display name>' \
+  --folder feishu_main \
+  --is-main
+```
+
+Rebuild after `.env` changes:
+
+```bash
+npm run build
+```
 
 ## 7. Mount Allowlist
 

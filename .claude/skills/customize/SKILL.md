@@ -1,6 +1,6 @@
 ---
 name: customize
-description: Add new capabilities or modify NanoClaw behavior. Use when user wants to add channels (Telegram, Slack, email input), change triggers, add integrations, modify the router, or make any other customizations. This is an interactive skill that asks questions to understand what the user wants.
+description: Add new capabilities or modify NanoClaw behavior. Use when user wants to add a new input channel, change triggers, add integrations, modify the router, or make any other customizations. This is an interactive skill that asks questions to understand what the user wants.
 ---
 
 # NanoClaw Customization
@@ -9,102 +9,88 @@ This skill helps users add capabilities or modify behavior. Use AskUserQuestion 
 
 ## Workflow
 
-1. **Understand the request** - Ask clarifying questions
-3. **Plan the changes** - Identify files to modify. If a skill exists for the request (e.g., `/add-telegram` for adding Telegram), invoke it instead of implementing manually.
-4. **Implement** - Make changes directly to the code
-5. **Test guidance** - Tell user how to verify
+1. **Understand the request** — ask clarifying questions
+2. **Plan the changes** — identify files to modify. Reuse existing patterns rather than inventing parallel ones.
+3. **Implement** — make changes directly to the code
+4. **Test guidance** — tell the user how to verify
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/index.ts` | Orchestrator: state, message loop, agent invocation |
-| `src/channels/whatsapp.ts` | WhatsApp connection, auth, send/receive |
-| `src/ipc.ts` | IPC watcher and task processing |
-| `src/router.ts` | Message formatting and outbound routing |
-| `src/types.ts` | TypeScript interfaces (includes Channel) |
+| `src/index.ts` | Orchestrator: state, message loop, agent invocation, channel wiring |
+| `src/channels/feishu.ts` | The built-in Feishu / Lark channel — reference implementation of the `Channel` interface |
+| `src/channels/registry.ts` | Channel self-registration registry |
+| `src/router.ts` | Message formatting + outbound routing helpers |
+| `src/group-log.ts` | Per-group `log.jsonl` append/tail/cursor (used for inbound + bot replies) |
+| `src/types.ts` | TypeScript interfaces (`Channel`, `NewMessage`, `RegisteredGroup`, …) |
 | `src/config.ts` | Assistant name, trigger pattern, directories |
-| `src/db.ts` | Database initialization and queries |
-| `src/whatsapp-auth.ts` | Standalone WhatsApp authentication script |
-| `groups/CLAUDE.md` | Global memory/persona |
+| `src/db.ts` | SQLite for scheduled tasks / sessions / registered groups |
+| `groups/main/CLAUDE.md` | Main-group persona + admin context |
+| `groups/global/CLAUDE.md` | Global memory copied into every new group |
 
 ## Common Customization Patterns
 
-### Adding a New Input Channel (e.g., Telegram, Slack, Email)
+### Adding a new input channel
 
 Questions to ask:
-- Which channel? (Telegram, Slack, Discord, email, SMS, etc.)
-- Same trigger word or different?
-- Same memory hierarchy or separate?
-- Should messages from this channel go to existing groups or new ones?
+- Which channel?
+- Same trigger word as the assistant default, or per-group override?
+- Should messages share the existing main group, or create separate groups?
 
-Implementation pattern:
-1. Create `src/channels/{name}.ts` implementing the `Channel` interface from `src/types.ts` (see `src/channels/whatsapp.ts` for reference)
-2. Add the channel instance to `main()` in `src/index.ts` and wire callbacks (`onMessage`, `onChatMetadata`)
-3. Messages are stored via the `onMessage` callback; routing is automatic via `ownsJid()`
+Implementation pattern (study `src/channels/feishu.ts` first):
+1. Create `src/channels/<name>.ts` exporting a class that implements the `Channel` interface from `src/types.ts` (`name`, `connect`, `disconnect`, `sendMessage`, `isConnected`, `ownsJid`, optional `setTyping`).
+2. The class constructor takes `ChannelOpts` (`onMessage` + `registeredGroups`). Inbound messages go through `channelOpts.onMessage(jid, NewMessage)`.
+3. Choose a JID prefix (Feishu uses `feishu:`, Telegram conventionally `tg:`, Discord `dc:`, etc.) so `ownsJid` can filter cleanly.
+4. At the bottom of the new file, call `registerChannel('<name>', factory)` from `src/channels/registry.ts`. The factory reads credentials from `.env` and returns `null` if they're missing — that lets unconfigured channels self-disable.
+5. Add `import './<name>.js';` to `src/channels/index.ts`.
+6. Add channel-specific env vars to `.env` and `.env.example`.
+7. Append the SDK to `package.json` and `npm install`.
+8. Test with `npm run dev`, send a message, check `tail -f logs/nanoclaw.log` and `groups/<folder>/.nanoclaw/log.jsonl`.
 
-### Adding a New MCP Integration
+### Adding a new agent tool / capability
 
-Questions to ask:
-- What service? (Calendar, Notion, database, etc.)
-- What operations needed? (read, write, both)
-- Which groups should have access?
+Tools live as `pi-coding-agent` extensions. See `src/agent/extension.ts` for `nanoclawExtension(ctx)` — it registers `send_message`, `schedule_task`, `register_group`, etc. To add a tool:
+1. Add a new `pi.registerTool(defineTool({...}))` block.
+2. Wire any host-side dependency through `ExtensionCtx` (currently `router`, `taskScheduler`, `groupRegistry`, `channels`).
+3. Document it in `groups/global/CLAUDE.md` so the agent knows it exists.
 
-Implementation:
-1. Add MCP server config to the container settings (see `src/container-runner.ts` for how MCP servers are mounted)
-2. Document available tools in `groups/CLAUDE.md`
+### Changing assistant behavior
 
-### Changing Assistant Behavior
+- Name / trigger word — `ASSISTANT_NAME` in `.env` (or `src/config.ts` defaults).
+- Persona — `groups/main/CLAUDE.md` for the main group, `groups/global/CLAUDE.md` for the template applied to new groups.
+- Per-group behavior — edit `groups/<folder>/CLAUDE.md`.
+- Routing semantics (trigger matching, allowlist, main-group privileges) — `src/index.ts:processGroupMessages` and `src/sender-allowlist.ts`.
 
-Questions to ask:
-- What aspect? (name, trigger, persona, response style)
-- Apply to all groups or specific ones?
+### Adding a new MCP integration
 
-Simple changes → edit `src/config.ts`
-Persona changes → edit `groups/CLAUDE.md`
-Per-group behavior → edit specific group's `CLAUDE.md`
+NanoClaw runs `@mariozechner/pi-coding-agent` in-process. Configure MCP servers via the standard pi-coding-agent / pi-mono mechanisms (e.g. `~/.pi/agent/config.json` or pi extensions). The agent picks them up at session creation time inside `src/agent/run.ts:buildSession`.
 
-### Adding New Commands
+### Changing deployment
 
-Questions to ask:
-- What should the command do?
-- Available in all groups or main only?
-- Does it need new MCP tools?
-
-Implementation:
-1. Commands are handled by the agent naturally — add instructions to `groups/CLAUDE.md` or the group's `CLAUDE.md`
-2. For trigger-level routing changes, modify `processGroupMessages()` in `src/index.ts`
-
-### Changing Deployment
-
-Questions to ask:
-- Target platform? (Linux server, Docker, different Mac)
-- Service manager? (systemd, Docker, supervisord)
-
-Implementation:
-1. Create appropriate service files
-2. Update paths in config
-3. Provide setup instructions
+- Service file — `setup/service.ts` generates a launchd plist (macOS) or systemd unit (Linux). Edit there for env vars, log paths, restart policy.
+- Sandbox profile — `config/sandbox.default.json` (network/filesystem rules) + per-group override at `groups/<folder>/.pi/sandbox.json`.
+- Mount allowlist — `~/.config/nanoclaw/mount-allowlist.json`.
 
 ## After Changes
 
-Always tell the user:
 ```bash
-# Rebuild and restart
 npm run build
-# macOS:
-launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
-launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
-# Linux:
+# macOS
+launchctl kickstart -k gui/$(id -u)/com.nanoclaw
+# Linux (user)
 # systemctl --user restart nanoclaw
 ```
+
+Then send a test message and watch `tail -f logs/nanoclaw.log`.
 
 ## Example Interaction
 
 User: "Add Telegram as an input channel"
 
-1. Ask: "Should Telegram use the same @Andy trigger, or a different one?"
-2. Ask: "Should Telegram messages create separate conversation contexts, or share with WhatsApp groups?"
-3. Create `src/channels/telegram.ts` implementing the `Channel` interface (see `src/channels/whatsapp.ts`)
-4. Add the channel to `main()` in `src/index.ts`
-5. Tell user how to authenticate and test
+1. Confirm prerequisites — bot token from @BotFather, target chat ID.
+2. Create `src/channels/telegram.ts` modeled on `src/channels/feishu.ts` (use `grammy` or `node-telegram-bot-api` for transport).
+3. Pick JID prefix `tg:`; `ownsJid(jid)` returns `jid.startsWith('tg:')`.
+4. Add `import './telegram.js';` to `src/channels/index.ts`.
+5. Add `TELEGRAM_BOT_TOKEN` to `.env`.
+6. Build, restart, send `/start` to the bot, observe `[telegram] inbound chat_id=…` in the log, register the chat with `npx tsx setup/index.ts --step register -- --jid 'tg:<id>' --name 'My Chat' --folder telegram_main --is-main`.
