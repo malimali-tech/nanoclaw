@@ -173,8 +173,7 @@ export class FeishuChannel implements Channel {
     const senderOpenId = event?.sender?.sender_id?.open_id ?? '';
     const rawText = this.extractText(msg);
     const content = this.stripBotMention(rawText, msg.mentions);
-    const chatType: 'p2p' | 'group' =
-      msg.chat_type === 'p2p' ? 'p2p' : 'group';
+    const chatType: 'p2p' | 'group' = msg.chat_type === 'p2p' ? 'p2p' : 'group';
 
     const timestamp = this.parseTimestamp(msg.create_time);
     const normalized: NewMessage = {

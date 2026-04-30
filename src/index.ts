@@ -20,10 +20,7 @@ import {
   initDatabase,
   setRegisteredGroup,
 } from './db.js';
-import {
-  isValidGroupFolder,
-  resolveGroupFolderPath,
-} from './group-folder.js';
+import { isValidGroupFolder, resolveGroupFolderPath } from './group-folder.js';
 import {
   appendMessage,
   flushWrites,
@@ -427,7 +424,12 @@ async function main(): Promise<void> {
       isMain: false,
     };
     logger.info(
-      { jid: discovery.jid, folder, chatType: discovery.chatType, name: group.name },
+      {
+        jid: discovery.jid,
+        folder,
+        chatType: discovery.chatType,
+        name: group.name,
+      },
       'auto-registering chat (open provisioning)',
     );
     registerGroup(discovery.jid, group);
