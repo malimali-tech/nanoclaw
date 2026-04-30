@@ -1,34 +1,44 @@
 # NanoClaw Security Model
 
+> **Note (2026-04):** Earlier versions ran agents in per-message Docker containers. NanoClaw now runs the agent in-process (`@mariozechner/pi-coding-agent`) and sandboxes only the **bash** tool at the OS level via `sandbox-exec` (macOS) / `bubblewrap` (Linux). This document reflects that model.
+
 ## Trust Model
 
 | Entity | Trust Level | Rationale |
 |--------|-------------|-----------|
 | Main group | Trusted | Private self-chat, admin control |
 | Non-main groups | Untrusted | Other users may be malicious |
-| Container agents | Sandboxed | Isolated execution environment |
+| Bash tool invocations | Sandboxed | OS-level network/filesystem ACL |
+| Read/Write/Edit/Grep/Find/Ls tools | Host-level, mount-allowlist-gated | Path access controlled by `mount-allowlist.json` |
 | Incoming messages | User input | Potential prompt injection |
 
 ## Security Boundaries
 
-### 1. Container Isolation (Primary Boundary)
+### 1. OS-level bash sandbox (primary boundary)
 
-Agents execute in containers (lightweight Linux VMs), providing:
-- **Process isolation** - Container processes cannot affect the host
-- **Filesystem isolation** - Only explicitly mounted directories are visible
-- **Non-root execution** - Runs as unprivileged `node` user (uid 1000)
-- **Ephemeral containers** - Fresh environment per invocation (`--rm`)
+Bash commands the agent executes are wrapped by `@anthropic-ai/sandbox-runtime`:
 
-This is the primary security boundary. Rather than relying on application-level permission checks, the attack surface is limited by what's mounted.
+- **macOS**: `sandbox-exec` profile generated from `config/sandbox.default.json`
+- **Linux**: `bubblewrap` namespace + bind-mount profile
 
-### 2. Mount Security
+The profile declaratively constrains:
 
-**External Allowlist** - Mount permissions stored at `~/.config/nanoclaw/mount-allowlist.json`, which is:
-- Outside project root
-- Never mounted into containers
+- **Network** — `network.allowedDomains` whitelist; everything else blocked
+- **Filesystem reads** — `filesystem.denyRead` blocks `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh` by default
+- **Filesystem writes** — `filesystem.allowWrite` defaults to the project root and `/tmp`; `filesystem.denyWrite` blocks `.env`, `*.pem`, `*.key`, `*.p12`
+
+Per-group overrides live at `groups/<folder>/.pi/sandbox.json` and shallow-merge with the default profile. Set `enabled: false` to disable the sandbox (not recommended).
+
+### 2. Mount allowlist
+
+Read/Write/Edit/Grep/Find/Ls tools run in-process (no sandbox), but path access is gated by an **external allowlist** at `~/.config/nanoclaw/mount-allowlist.json`:
+
+- Lives outside the project root, never visible to the agent
 - Cannot be modified by agents
+- Specifies which directories outside `groups/<folder>/` the agent may read or write
 
-**Default Blocked Patterns:**
+**Default blocked patterns** (always denied even if listed in `allowedRoots`):
+
 ```
 .ssh, .gnupg, .aws, .azure, .gcloud, .kube, .docker,
 credentials, .env, .netrc, .npmrc, id_rsa, id_ed25519,
@@ -36,68 +46,66 @@ private_key, .secret
 ```
 
 **Protections:**
+
 - Symlink resolution before validation (prevents traversal attacks)
-- Container path validation (rejects `..` and absolute paths)
-- `nonMainReadOnly` option forces read-only for non-main groups
+- `nonMainReadOnly` option forces read-only for non-main groups regardless of root config
 
-**Read-Only Project Root:**
+### 3. Session isolation
 
-The main group's project root is mounted read-only. Writable paths the agent needs (store, group folder, IPC, `.claude/`) are mounted separately. This prevents the agent from modifying host application code (`src/`, `dist/`, `package.json`, etc.) which would bypass the sandbox entirely on next restart. The `store/` directory is mounted read-write so the main agent can access the SQLite database directly.
+Each group has its own working directory at `groups/<folder>/`:
 
-### 3. Session Isolation
+- Per-group `CLAUDE.md` (memory)
+- Per-group `.nanoclaw/log.jsonl` (message history)
+- Per-group `.nanoclaw/cursor.json` (processing position)
+- Per-group pi-coding-agent `SessionManager` state
 
-Each group has isolated Claude sessions at `data/sessions/{group}/.claude/`:
-- Groups cannot see other groups' conversation history
-- Session data includes full message history and file contents read
-- Prevents cross-group information disclosure
+Groups cannot see each other's `log.jsonl` or memory. Cross-group operations require explicit IPC tools (`schedule_task`, `register_group`) which check `isMain`.
 
-### 4. IPC Authorization
+### 4. IPC authorization
 
-Messages and task operations are verified against group identity:
+Tools registered by the nanoclaw extension verify the caller's group identity:
 
-| Operation | Main Group | Non-Main Group |
+| Operation | Main group | Non-main group |
 |-----------|------------|----------------|
-| Send message to own chat | ✓ | ✓ |
-| Send message to other chats | ✓ | ✗ |
-| Schedule task for self | ✓ | ✓ |
-| Schedule task for others | ✓ | ✗ |
-| View all tasks | ✓ | Own only |
-| Manage other groups | ✓ | ✗ |
+| `send_message` to own chat | ✓ | ✓ |
+| `schedule_task` for self | ✓ | ✓ |
+| `schedule_task` for other group | ✓ (via `target_group_jid`) | ✗ |
+| `list_tasks` (all) | ✓ | Own only |
+| `register_group` | ✓ | ✗ |
 
-## Privilege Comparison
+## Privilege comparison
 
-| Capability | Main Group | Non-Main Group |
+| Capability | Main group | Non-main group |
 |------------|------------|----------------|
-| Project root access | `/workspace/project` (ro) | None |
-| Store (SQLite DB) | `/workspace/project/store` (rw) | None |
-| Group folder | `/workspace/group` (rw) | `/workspace/group` (rw) |
-| Global memory | Implicit via project | `/workspace/global` (ro) |
-| Additional mounts | Configurable | Read-only unless allowed |
-| Network access | Unrestricted | Unrestricted |
-| MCP tools | All | All |
+| Trigger word required | No | Yes (`@<ASSISTANT_NAME>`) |
+| Working directory | `groups/main/` | `groups/<folder>/` |
+| Additional mounts | Configurable via allowlist | Read-only unless allowlist explicitly allows |
+| Schedule tasks for other groups | ✓ | ✗ |
+| `/remote-control` command | ✓ | ✗ |
 
-## Security Architecture Diagram
+## Architecture diagram
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                        UNTRUSTED ZONE                             │
-│  Incoming Messages (potentially malicious)                         │
+│  Incoming messages (potentially malicious)                        │
 └────────────────────────────────┬─────────────────────────────────┘
                                  │
-                                 ▼ Trigger check, input escaping
+                                 ▼  Trigger check + sender allowlist
 ┌──────────────────────────────────────────────────────────────────┐
 │                     HOST PROCESS (TRUSTED)                        │
-│  • Message routing                                                │
-│  • IPC authorization                                              │
-│  • Mount validation (external allowlist)                          │
-│  • Container lifecycle                                            │
+│  • Channel routing & message ingestion                            │
+│  • Per-group cursor + log.jsonl                                   │
+│  • IPC tool authorization                                         │
+│  • Mount allowlist enforcement                                    │
+│  • pi-coding-agent (in-process)                                   │
 └────────────────────────────────┬─────────────────────────────────┘
                                  │
-                                 ▼ Explicit mounts only, no secrets
+                                 ▼  Bash invocations only
 ┌──────────────────────────────────────────────────────────────────┐
-│                CONTAINER (ISOLATED/SANDBOXED)                     │
-│  • Agent execution                                                │
-│  • Bash commands (sandboxed)                                      │
-│  • File operations (limited to mounts)                            │
+│              OS-LEVEL SANDBOX (sandbox-exec / bwrap)              │
+│  • Network: allowedDomains whitelist                              │
+│  • Filesystem: denyRead / allowWrite / denyWrite                  │
+│  • Per-group override at groups/<folder>/.pi/sandbox.json         │
 └──────────────────────────────────────────────────────────────────┘
 ```

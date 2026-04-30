@@ -6,10 +6,9 @@ The files in this directory are original design documents and developer referenc
 
 | This directory | Documentation site |
 |---|---|
-| [SPEC.md](SPEC.md) | [Architecture](https://docs.nanoclaw.dev/concepts/architecture) |
-| [SECURITY.md](SECURITY.md) | [Security model](https://docs.nanoclaw.dev/concepts/security) |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | [Introduction](https://docs.nanoclaw.dev/introduction) |
+| [SECURITY.md](SECURITY.md) | [Security model](https://docs.nanoclaw.dev/concepts/security) |
 | [skills-as-branches.md](skills-as-branches.md) | [Skills system](https://docs.nanoclaw.dev/integrations/skills-system) |
-| [DEBUG_CHECKLIST.md](DEBUG_CHECKLIST.md) | [Troubleshooting](https://docs.nanoclaw.dev/advanced/troubleshooting) |
-| [docker-sandboxes.md](docker-sandboxes.md) | [Docker Sandboxes](https://docs.nanoclaw.dev/advanced/docker-sandboxes) |
-| [APPLE-CONTAINER-NETWORKING.md](APPLE-CONTAINER-NETWORKING.md) | [Container runtime](https://docs.nanoclaw.dev/advanced/container-runtime) |
+| [BRANCH-FORK-MAINTENANCE.md](BRANCH-FORK-MAINTENANCE.md) | (no equivalent) |
+
+Historical design plans live under `docs/plans/`. Several older docs (`SPEC.md`, `SDK_DEEP_DIVE.md`, `docker-sandboxes.md`, `DEBUG_CHECKLIST.md`, `APPLE-CONTAINER-NETWORKING.md`) described the pre-pi-mono container architecture and were removed in 2026-04 — see `git log` if you need the history.

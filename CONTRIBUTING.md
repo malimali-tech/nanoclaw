@@ -78,21 +78,6 @@ Workflows and guides with no code changes. The SKILL.md is the entire skill — 
 - Use `AskUserQuestion` for interactive prompts
 - These stay on `main` and are always available to every user
 
-#### 4. Container skills (agent runtime)
-
-Skills that run inside the agent container, not on the host. These teach the container agent how to use tools, format output, or perform tasks. They are synced into each group's `.claude/skills/` directory when a container starts.
-
-**Location:** `container/skills/<name>/`
-
-**Examples:** `agent-browser` (web browsing), `capabilities` (/capabilities command), `status` (/status command), `slack-formatting` (Slack mrkdwn syntax)
-
-**Key difference:** These are NOT invoked by the user on the host. They're loaded by Claude Code inside the container and influence how the agent behaves.
-
-**Guidelines:**
-- Follow the same SKILL.md + frontmatter format
-- Use `allowed-tools` frontmatter to scope tool permissions
-- Keep them focused — the agent's context window is shared across all container skills
-
 ### SKILL.md format
 
 All skills use the [Claude Code skills standard](https://code.claude.com/docs/en/skills):
@@ -129,7 +114,7 @@ Test your contribution on a fresh clone before submitting. For skills, run the s
 |----------|-------|
 | Feature skill | `PR: Skill` + `PR: Feature` |
 | Utility skill | `PR: Skill` |
-| Operational/container skill | `PR: Skill` |
+| Operational skill | `PR: Skill` |
 | Fix | `PR: Fix` |
 | Simplification | `PR: Refactor` |
 | Documentation | `PR: Docs` |

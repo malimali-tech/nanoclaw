@@ -37,7 +37,6 @@ Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) f
 - **Feature skills** — merge a `skill/*` branch to add capabilities (e.g. `/add-feishu`)
 - **Utility skills** — ship code files alongside SKILL.md (e.g. `/claw`)
 - **Operational skills** — instruction-only workflows, always on `main` (e.g. `/setup`, `/debug`)
-- **Container skills** — loaded inside agent containers at runtime (`container/skills/`)
 
 | Skill | When to Use |
 |-------|-------------|
