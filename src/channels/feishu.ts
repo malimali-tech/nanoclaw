@@ -1,7 +1,8 @@
 import * as Lark from '@larksuiteoapi/node-sdk';
 
 import { ASSISTANT_NAME } from '../config.js';
-import { Channel, NewMessage } from '../types.js';
+import { Channel, NewMessage, StreamHandle } from '../types.js';
+import { FeishuStreamHandle } from './feishu-stream/handle.js';
 import { ChannelOpts, registerChannel } from './registry.js';
 
 interface FeishuMention {
@@ -43,7 +44,7 @@ type MaybeBotAddedEnvelope =
   | FeishuBotAddedEvent;
 
 export interface FeishuChannelDeps {
-  client: Pick<Lark.Client, 'im' | 'request'>;
+  client: Pick<Lark.Client, 'im' | 'request' | 'cardkit'>;
   wsClient: {
     start: (args: { eventDispatcher: Lark.EventDispatcher }) => Promise<void>;
   };
@@ -142,6 +143,22 @@ export class FeishuChannel implements Channel {
         msg_type: 'post',
         content,
       },
+    });
+  }
+
+  /**
+   * Stream a turn into a single CardKit card edited in place. The card is
+   * created lazily on the first text delta — turns that the agent emits
+   * nothing for don't leave a stray empty card behind.
+   */
+  async openStream(jid: string): Promise<StreamHandle> {
+    const chatId = this.extractChatId(jid);
+    return new FeishuStreamHandle({
+      client: this.deps.client,
+      chatId,
+      // If the card pipeline trips (CardKit ratelimit, missing scope, etc.)
+      // the handle falls back to a normal post so the user sees *something*.
+      fallbackSend: (text) => this.sendMessage(jid, text),
     });
   }
 

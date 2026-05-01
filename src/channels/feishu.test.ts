@@ -33,6 +33,10 @@ function makeDeps(): {
       im: { message: { create: messageCreate } } as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       request: request as any,
+      // CardKit slice is only touched by openStream(); tests that don't
+      // exercise streaming leave it as an empty stub.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cardkit: {} as any,
     },
     wsClient: { start: wsStart },
     dispatcher,

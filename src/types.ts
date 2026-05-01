@@ -121,9 +121,7 @@ export interface StreamHandle {
     result: unknown,
     isError: boolean,
   ): Promise<void>;
-  finalize(opts?: {
-    reason?: 'normal' | 'aborted' | 'error';
-  }): Promise<void>;
+  finalize(opts?: { reason?: 'normal' | 'aborted' | 'error' }): Promise<void>;
 }
 
 export interface Channel {

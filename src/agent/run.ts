@@ -158,11 +158,13 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
         pooled.sendChain = pooled.sendChain.then(async () => {
           const stream = await ensureStream(pooled, ctx);
           if (stream) {
-            await stream.appendText(ame.delta).catch((err) =>
-              log(
-                `stream.appendText failed: ${err instanceof Error ? err.message : String(err)}`,
-              ),
-            );
+            await stream
+              .appendText(ame.delta)
+              .catch((err) =>
+                log(
+                  `stream.appendText failed: ${err instanceof Error ? err.message : String(err)}`,
+                ),
+              );
           } else {
             pooled.routerBuffer += ame.delta;
           }
@@ -171,11 +173,13 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
         pooled.sendChain = pooled.sendChain.then(async () => {
           const stream = await ensureStream(pooled, ctx);
           if (!stream) return; // no streaming → reasoning is dropped (matches old behaviour)
-          await stream.appendReasoning(ame.delta).catch((err) =>
-            log(
-              `stream.appendReasoning failed: ${err instanceof Error ? err.message : String(err)}`,
-            ),
-          );
+          await stream
+            .appendReasoning(ame.delta)
+            .catch((err) =>
+              log(
+                `stream.appendReasoning failed: ${err instanceof Error ? err.message : String(err)}`,
+              ),
+            );
         });
       }
     } else if (event.type === 'tool_execution_start') {
@@ -183,11 +187,13 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
       pooled.sendChain = pooled.sendChain.then(async () => {
         const stream = await ensureStream(pooled, ctx);
         if (!stream) return;
-        await stream.appendToolUse(toolCallId, toolName, args).catch((err) =>
-          log(
-            `stream.appendToolUse failed: ${err instanceof Error ? err.message : String(err)}`,
-          ),
-        );
+        await stream
+          .appendToolUse(toolCallId, toolName, args)
+          .catch((err) =>
+            log(
+              `stream.appendToolUse failed: ${err instanceof Error ? err.message : String(err)}`,
+            ),
+          );
       });
     } else if (event.type === 'tool_execution_end') {
       const { toolCallId, toolName, result, isError } = event;
