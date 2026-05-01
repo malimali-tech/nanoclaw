@@ -69,7 +69,7 @@ Workflows and guides with no code changes. The SKILL.md is the entire skill — 
 
 **Location:** `.claude/skills/` on `main`
 
-**Examples:** `/setup`, `/debug`, `/customize`
+**Examples:** `/setup`, `/debug`
 
 **Guidelines:**
 - Pure instructions — no code files, no branch merges

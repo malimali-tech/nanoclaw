@@ -40,7 +40,7 @@ The codebase assumes you have an AI collaborator. It doesn't need to be excessiv
 
 ### Skills Over Features
 
-When people contribute, they shouldn't add a new channel or integration directly to the core. They should contribute a skill (e.g. the upstream `/add-macos-statusbar` / `/customize` model) that transforms the codebase. Users fork the repo, run skills to customize, and end up with clean code that does exactly what they need — not a bloated system trying to support everyone's use case simultaneously.
+When people contribute, they shouldn't add a new channel or integration directly to the core. They should contribute a skill (e.g. the upstream `/add-macos-statusbar` model) that transforms the codebase. Users fork the repo, run skills to customize, and end up with clean code that does exactly what they need — not a bloated system trying to support everyone's use case simultaneously.
 
 ---
 
@@ -158,7 +158,6 @@ A personal Claude assistant accessible via messaging, with minimal custom code.
 
 ### Skills
 - `/setup` - Install dependencies, configure channels, start services
-- `/customize` - General-purpose skill for adding capabilities
 - `/debug` - Logs / sandbox / agent troubleshooting
 - `/add-macos-statusbar` - macOS menu bar indicator (optional)
 

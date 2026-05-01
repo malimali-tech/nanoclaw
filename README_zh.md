@@ -44,7 +44,7 @@ claude
 
 然后运行 `/setup`。Claude Code 会处理一切：依赖安装、凭据配置、沙箱设置、服务启动。
 
-> **注意：** 以 `/` 开头的命令（`/setup`、`/customize` 等）是 [Claude Code 技能](https://code.claude.com/docs/en/skills)。请在 `claude` CLI 提示符里输入，不是普通 shell。还没装 Claude Code 可在 [claude.com/product/claude-code](https://claude.com/product/claude-code) 获取。
+> **注意：** 以 `/` 开头的命令（`/setup`、`/debug` 等）是 [Claude Code 技能](https://code.claude.com/docs/en/skills)。请在 `claude` CLI 提示符里输入，不是普通 shell。还没装 Claude Code 可在 [claude.com/product/claude-code](https://claude.com/product/claude-code) 获取。
 
 ## 设计哲学
 
@@ -61,7 +61,7 @@ claude
 - 没有监控面板，问 Claude 当前在跑什么。
 - 没有调试工具，描述问题让 Claude 修。
 
-**技能优于功能。** 与其往代码库里加新集成，不如以 [Claude Code 技能](https://code.claude.com/docs/en/skills) 形式贡献（例如 `/add-macos-statusbar`、`/customize`）来改造你的 fork。Feishu 在这个 fork 里直接 baked into `main`，不再走技能路径。
+**技能优于功能。** 与其往代码库里加新集成，不如以 [Claude Code 技能](https://code.claude.com/docs/en/skills) 形式贡献（例如 `/add-macos-statusbar`）来改造你的 fork。Feishu 在这个 fork 里直接 baked into `main`，不再走技能路径。
 
 **Pi-coding-agent 进程内运行。** NanoClaw 直接嵌入 [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent)——没有子进程、没有容器构建。Provider 通过标准环境变量选择（`ANTHROPIC_API_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`DEEPSEEK_API_KEY`…）或 `~/.pi/agent/auth.json`。
 
@@ -100,8 +100,6 @@ NanoClaw 没有配置文件，要改什么直接告诉 Claude Code：
 - "以后回答都简短直接一点"
 - "我说早上好的时候加个自定义问候"
 - "每周存一份对话总结"
-
-或者运行 `/customize` 走引导式流程。
 
 代码足够小，让 Claude 改不会失控。
 

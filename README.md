@@ -59,7 +59,7 @@ claude
 
 Then run `/setup`. Claude Code handles everything: dependencies, authentication, sandbox configuration, and service setup.
 
-> **Note:** Commands prefixed with `/` (like `/setup`, `/customize`) are [Claude Code skills](https://code.claude.com/docs/en/skills). Type them inside the `claude` CLI prompt, not in your regular terminal. If you don't have Claude Code installed, get it at [claude.com/product/claude-code](https://claude.com/product/claude-code).
+> **Note:** Commands prefixed with `/` (like `/setup`, `/debug`) are [Claude Code skills](https://code.claude.com/docs/en/skills). Type them inside the `claude` CLI prompt, not in your regular terminal. If you don't have Claude Code installed, get it at [claude.com/product/claude-code](https://claude.com/product/claude-code).
 
 ## Philosophy
 
@@ -76,7 +76,7 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 - No monitoring dashboard; ask Claude what's happening.
 - No debugging tools; describe the problem and Claude fixes it.
 
-**Skills over features.** Instead of adding new integrations to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) (e.g. `/add-macos-statusbar`, `/customize`) that transform your fork. You end up with clean code that does exactly what you need. Feishu itself isn't a skill in this fork — it's baked into `main`.
+**Skills over features.** Instead of adding new integrations to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) (e.g. `/add-macos-statusbar`) that transform your fork. You end up with clean code that does exactly what you need. Feishu itself isn't a skill in this fork — it's baked into `main`.
 
 **Pi-coding-agent in-process.** NanoClaw embeds [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) directly — no subprocess, no container build. The provider is selected via standard environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …) or `~/.pi/agent/auth.json`.
 
@@ -116,8 +116,6 @@ NanoClaw doesn't use configuration files. To make changes, just tell Claude Code
 - "Remember in the future to make responses shorter and more direct"
 - "Add a custom greeting when I say good morning"
 - "Store conversation summaries weekly"
-
-Or run `/customize` for guided changes.
 
 The codebase is small enough that Claude can safely modify it.
 
