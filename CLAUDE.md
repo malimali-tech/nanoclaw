@@ -59,11 +59,9 @@ Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) f
 | Skill | When to Use |
 |-------|-------------|
 | `/setup` | First-time installation, authentication, service configuration |
-| `/customize` | Adding channels, integrations, changing behavior |
-| `/debug` | Container issues, logs, troubleshooting |
-| `/update-nanoclaw` | Bring upstream NanoClaw updates into a customized install |
-| `/qodo-pr-resolver` | Fetch and fix Qodo PR review issues interactively or in batch |
-| `/get-qodo-rules` | Load org- and repo-level coding rules from Qodo before code tasks |
+| `/customize` | Modifying NanoClaw behavior (triggers, integrations, router) |
+| `/debug` | Logs, troubleshooting, sandbox/agent issues |
+| `/add-macos-statusbar` | Install macOS menu bar indicator (one-time, macOS only) |
 
 ## Contributing
 

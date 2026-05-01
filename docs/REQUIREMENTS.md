@@ -159,7 +159,8 @@ A personal Claude assistant accessible via messaging, with minimal custom code.
 ### Skills
 - `/setup` - Install dependencies, configure channels, start services
 - `/customize` - General-purpose skill for adding capabilities
-- `/update-nanoclaw` - Pull upstream changes, merge with customizations
+- `/debug` - Logs / sandbox / agent troubleshooting
+- `/add-macos-statusbar` - macOS menu bar indicator (optional)
 
 ### Deployment
 - Runs on macOS (launchd), Linux (systemd), or Windows (WSL2)

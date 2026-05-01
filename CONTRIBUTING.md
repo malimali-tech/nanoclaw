@@ -45,10 +45,8 @@ Add capabilities to NanoClaw by merging a git branch. The SKILL.md contains setu
 **Contributing a feature skill:**
 1. Fork the repo and branch from `main`
 2. Make the code changes (new files, modified source, updated `package.json`, etc.)
-3. Add a SKILL.md in `.claude/skills/<name>/` with setup instructions — step 1 should be merging the branch
-4. Open a PR. We'll create the `skill/<name>` branch from your work
-
-See [docs/skills-as-branches.md](docs/skills-as-branches.md) for the full system design.
+3. Add a SKILL.md in `.claude/skills/<name>/` with setup instructions
+4. Open a PR.
 
 #### 2. Utility skills (with code files)
 
@@ -71,7 +69,7 @@ Workflows and guides with no code changes. The SKILL.md is the entire skill — 
 
 **Location:** `.claude/skills/` on `main`
 
-**Examples:** `/setup`, `/debug`, `/customize`, `/update-nanoclaw`, `/update-skills`
+**Examples:** `/setup`, `/debug`, `/customize`
 
 **Guidelines:**
 - Pure instructions — no code files, no branch merges
