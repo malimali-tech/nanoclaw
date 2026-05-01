@@ -209,8 +209,9 @@ Upstream: <upstream HEAD hash>
 
 List each skill with its branch name. These are reapplied by merging the upstream skill branch.
 
-- `add-feishu` — branch `skill/feishu` (or fork remote `feishu/main`)
 - `add-karpathy-llm-wiki` — branch `skill/karpathy-llm-wiki`
+
+(Feishu isn't a skill in this fork — it's baked into `main`, no branch to reapply.)
 
 Custom skills (user-created, not from upstream): `.claude/skills/my-custom-skill/` — copy as-is from main tree.
 

@@ -226,7 +226,7 @@ Decide what to fix:
 - Service stopped → `npm run build`, then restart (`launchctl kickstart -k gui/$(id -u)/com.nanoclaw` / `systemctl --user restart nanoclaw` / re-run step 8 in WSL).
 - No credentials → step 5.
 - No channels in `.env` → step 6.
-- 0 registered groups → re-invoke a channel skill or `/add-feishu`.
+- 0 registered groups → in Feishu, send `@<bot>` in the chat you want to register; auto-registration kicks in on first inbound (see `src/index.ts:autoRegister`).
 - No mount allowlist → step 7.
 
 When everything's green, tell the user to send a message in their registered chat and offer `tail -f logs/nanoclaw.log` to watch.

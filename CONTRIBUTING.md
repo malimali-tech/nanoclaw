@@ -35,11 +35,11 @@ Add capabilities to NanoClaw by merging a git branch. The SKILL.md contains setu
 
 **Location:** `.claude/skills/` on `main` (instructions only), code on `skill/*` branch
 
-**Examples:** `/add-feishu`, `/add-karpathy-llm-wiki`, `/add-parallel`, `/add-ollama-tool`, `/add-macos-statusbar`
+**Examples:** `/add-karpathy-llm-wiki`, `/add-parallel`, `/add-ollama-tool`, `/add-macos-statusbar` (Feishu is baked into `main` here, not a skill — this fork is feishu-only).
 
 **How they work:**
-1. User runs `/add-feishu`
-2. Claude follows the SKILL.md: fetches and merges the `skill/feishu` branch
+1. User runs `/add-karpathy-llm-wiki`
+2. Claude follows the SKILL.md: fetches and merges the `skill/karpathy-llm-wiki` branch
 3. Claude walks through interactive setup (env vars, app creation on the platform, etc.)
 
 **Contributing a feature skill:**
@@ -48,7 +48,7 @@ Add capabilities to NanoClaw by merging a git branch. The SKILL.md contains setu
 3. Add a SKILL.md in `.claude/skills/<name>/` with setup instructions — step 1 should be merging the branch
 4. Open a PR. We'll create the `skill/<name>` branch from your work
 
-See `/add-feishu` for a working example. See [docs/skills-as-branches.md](docs/skills-as-branches.md) for the full system design.
+See [docs/skills-as-branches.md](docs/skills-as-branches.md) for the full system design.
 
 #### 2. Utility skills (with code files)
 

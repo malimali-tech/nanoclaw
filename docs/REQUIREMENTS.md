@@ -40,7 +40,7 @@ The codebase assumes you have an AI collaborator. It doesn't need to be excessiv
 
 ### Skills Over Features
 
-When people contribute, they shouldn't add a new channel or integration directly to the core. They should contribute a skill (e.g. the upstream `/add-feishu` / `/add-karpathy-llm-wiki` model) that transforms the codebase. Users fork the repo, run skills to customize, and end up with clean code that does exactly what they need — not a bloated system trying to support everyone's use case simultaneously.
+When people contribute, they shouldn't add a new channel or integration directly to the core. They should contribute a skill (e.g. the upstream `/add-karpathy-llm-wiki` / `/add-parallel` model) that transforms the codebase. Users fork the repo, run skills to customize, and end up with clean code that does exactly what they need — not a bloated system trying to support everyone's use case simultaneously.
 
 ---
 

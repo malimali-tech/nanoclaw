@@ -44,7 +44,7 @@ claude
 
 そして `/setup` を実行。Claude Code がすべてを処理します：依存関係、認証、サンドボックス設定、サービス起動。
 
-> **注意：** `/`で始まるコマンド（`/setup`、`/add-feishu`など）は [Claude Code スキル](https://code.claude.com/docs/en/skills)です。通常のターミナルではなく、`claude` CLI プロンプト内で入力してください。Claude Code をインストールしていない場合は、[claude.com/product/claude-code](https://claude.com/product/claude-code)から入手してください。
+> **注意：** `/`で始まるコマンド（`/setup`、`/customize`など）は [Claude Code スキル](https://code.claude.com/docs/en/skills)です。通常のターミナルではなく、`claude` CLI プロンプト内で入力してください。Claude Code をインストールしていない場合は、[claude.com/product/claude-code](https://claude.com/product/claude-code)から入手してください。
 
 ## 設計哲学
 
@@ -61,7 +61,7 @@ claude
 - 監視ダッシュボードなし。Claude に何が起きているか聞く。
 - デバッグツールなし。問題を説明すれば Claude が直す。
 
-**機能追加ではなくスキル。** コードベースに新しい統合を追加する代わりに、コントリビューターは [Claude Code スキル](https://code.claude.com/docs/en/skills)（例：`/add-feishu`、`/add-karpathy-llm-wiki`）を提出してフォークを変換します。あなたが必要なものだけを正確に実行するクリーンなコードが手に入ります。
+**機能追加ではなくスキル。** コードベースに新しい統合を追加する代わりに、コントリビューターは [Claude Code スキル](https://code.claude.com/docs/en/skills)（例：`/add-karpathy-llm-wiki`、`/add-parallel`）を提出してフォークを変換します。Feishu は本フォークでは `main` に直接組み込まれており、スキルではありません。
 
 **Pi-coding-agent をプロセス内で実行。** NanoClaw は [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) を直接埋め込みます — サブプロセスもコンテナビルドもありません。Provider は標準の環境変数（`ANTHROPIC_API_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、…）または `~/.pi/agent/auth.json` で選択します。
 

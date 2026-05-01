@@ -59,7 +59,7 @@ claude
 
 Then run `/setup`. Claude Code handles everything: dependencies, authentication, sandbox configuration, and service setup.
 
-> **Note:** Commands prefixed with `/` (like `/setup`, `/add-feishu`) are [Claude Code skills](https://code.claude.com/docs/en/skills). Type them inside the `claude` CLI prompt, not in your regular terminal. If you don't have Claude Code installed, get it at [claude.com/product/claude-code](https://claude.com/product/claude-code).
+> **Note:** Commands prefixed with `/` (like `/setup`, `/customize`) are [Claude Code skills](https://code.claude.com/docs/en/skills). Type them inside the `claude` CLI prompt, not in your regular terminal. If you don't have Claude Code installed, get it at [claude.com/product/claude-code](https://claude.com/product/claude-code).
 
 ## Philosophy
 
@@ -76,7 +76,7 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 - No monitoring dashboard; ask Claude what's happening.
 - No debugging tools; describe the problem and Claude fixes it.
 
-**Skills over features.** Instead of adding new integrations to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) (e.g. `/add-feishu`, `/add-karpathy-llm-wiki`) that transform your fork. You end up with clean code that does exactly what you need.
+**Skills over features.** Instead of adding new integrations to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) (e.g. `/add-karpathy-llm-wiki`, `/add-parallel`, `/add-ollama-tool`) that transform your fork. You end up with clean code that does exactly what you need. Feishu itself isn't a skill in this fork — it's baked into `main`.
 
 **Pi-coding-agent in-process.** NanoClaw embeds [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) directly — no subprocess, no container build. The provider is selected via standard environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …) or `~/.pi/agent/auth.json`.
 
