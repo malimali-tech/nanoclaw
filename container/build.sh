@@ -18,4 +18,4 @@ docker build -t "$IMAGE" .
 
 echo
 echo "Built ${IMAGE}. Verify with:"
-echo "  docker run --rm ${IMAGE} bash -c 'rg --version | head -1'"
+echo "  docker run --rm ${IMAGE} bash -c 'rg --version | head -1; python3 --version; uv --version; agent-browser --version'"
