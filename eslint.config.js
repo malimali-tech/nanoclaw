@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint'
 import noCatchAll from 'eslint-plugin-no-catch-all'
 
 export default [
-  { ignores: ['node_modules/', 'dist/', 'container/', 'groups/'] },
+  { ignores: ['node_modules/', 'dist/', 'container/', 'groups/', 'src/feishu/'] },
   { files: ['src/**/*.{js,ts}'] },
   { languageOptions: { globals: globals.node } },
   pluginJs.configs.recommended,
