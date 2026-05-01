@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { GROUPS_DIR } from '../config.js';
 import { resolveGroupFolderPath } from '../group-folder.js';
+import { globalSkillsDirs } from './global-skills.js';
 
 export interface AllowedRoot {
   /** Absolute, realpath-resolved root directory. */
@@ -60,6 +61,14 @@ export function buildAllowedRoots(
     // container mount is also RO, so writes would fail there too — keep
     // the two surfaces in lockstep).
     roots.push({ root: realIfExists(process.cwd()), writable: false });
+  }
+
+  // Global skills directories — every chat needs to Read SKILL.md and
+  // skill assets/scripts. Read-only: skills are managed by the operator
+  // out-of-band via `npx skills` / `pi skills`; the agent must not
+  // mutate them from inside a chat.
+  for (const dir of globalSkillsDirs()) {
+    roots.push({ root: realIfExists(dir), writable: false });
   }
 
   return roots;

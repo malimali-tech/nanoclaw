@@ -7,10 +7,13 @@ import {
   SessionManager,
   createAgentSession,
   getAgentDir,
+  loadSkillsFromDir,
   type AgentSession,
+  type Skill,
 } from '@mariozechner/pi-coding-agent';
 import { GROUPS_DIR } from '../config.js';
 import { logger } from '../logger.js';
+import { globalSkillsDirs } from './global-skills.js';
 import { SessionPool, type DisposableSession } from './session-pool.js';
 import {
   disposeChatRuntime,
@@ -25,6 +28,11 @@ const IDLE_MS_RAW = parseInt(process.env.NANOCLAW_AGENT_IDLE_TTL_MS ?? '', 10);
 const IDLE_MS =
   Number.isFinite(IDLE_MS_RAW) && IDLE_MS_RAW > 0 ? IDLE_MS_RAW : 600000;
 const log = (m: string) => logger.info(`[agent] ${m}`);
+
+// Global skills directories live in src/agent/global-skills.ts so the
+// path-guard and container-mount layers see the same list. Pi's default
+// scan already covers `~/.pi/agent/skills/` and `<cwd>/.pi/skills/`; we
+// add `~/.agents/skills/` (where `npx skills` installs) on top.
 
 interface PooledSession extends DisposableSession {
   session: AgentSession;
@@ -46,6 +54,34 @@ type SharedPorts = Pick<
  */
 export async function ensureSandbox(): Promise<void> {
   await initToolRuntime();
+}
+
+/**
+ * Append skills from every directory returned by `globalSkillsDirs()` to
+ * whatever pi loaded by default. Name collisions: pi's defaults win
+ * (consistent with pi's own collision policy — first-seen keeps the slot).
+ * Used as the `skillsOverride` callback on every DefaultResourceLoader.
+ */
+function mergeGlobalSkills(base: {
+  skills: Skill[];
+  diagnostics: ReturnType<typeof loadSkillsFromDir>['diagnostics'];
+}): {
+  skills: Skill[];
+  diagnostics: ReturnType<typeof loadSkillsFromDir>['diagnostics'];
+} {
+  const seen = new Set(base.skills.map((s) => s.name));
+  const merged = [...base.skills];
+  const diagnostics = [...base.diagnostics];
+  for (const dir of globalSkillsDirs()) {
+    const extra = loadSkillsFromDir({ dir, source: 'user' });
+    diagnostics.push(...extra.diagnostics);
+    for (const s of extra.skills) {
+      if (seen.has(s.name)) continue;
+      merged.push(s);
+      seen.add(s.name);
+    }
+  }
+  return { skills: merged, diagnostics };
 }
 
 function buildCtx(args: {
@@ -71,6 +107,7 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
     cwd: groupCwd,
     agentDir: getAgentDir(),
     extensionFactories: [nanoclawExtension(ctx)],
+    skillsOverride: mergeGlobalSkills,
   });
   await loader.reload();
 

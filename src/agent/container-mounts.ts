@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { GROUPS_DIR } from '../config.js';
 import { resolveGroupFolderPath } from '../group-folder.js';
+import { globalSkillsDirs } from './global-skills.js';
 
 export interface VolumeMount {
   hostPath: string;
@@ -86,6 +87,16 @@ export function buildVolumeMounts(
         readonly: true,
       });
     }
+  }
+
+  // Global skills bind-mounted at their host paths so bash sees them at
+  // the exact path pi advertised to the LLM in <available_skills>.
+  // Read-only — skills are operator-managed (`npx skills`, `pi skills`),
+  // not chat-managed. If a skill calls `python3 scripts/x.py` it works
+  // iff python3 is in the image; missing runtimes are an image concern,
+  // not a mount concern.
+  for (const dir of globalSkillsDirs()) {
+    mounts.push({ hostPath: dir, containerPath: dir, readonly: true });
   }
 
   return mounts;
