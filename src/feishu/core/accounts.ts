@@ -9,7 +9,10 @@
  * unset fields fall back to the top-level defaults.
  */
 
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId as _sdkNormalizeAccountId } from 'openclaw/plugin-sdk/account-id';
+import {
+  DEFAULT_ACCOUNT_ID,
+  normalizeAccountId as _sdkNormalizeAccountId,
+} from 'openclaw/plugin-sdk/account-id';
 
 const normalizeAccountId: (id: string) => string | undefined =
   typeof _sdkNormalizeAccountId === 'function'
@@ -18,7 +21,13 @@ const normalizeAccountId: (id: string) => string | undefined =
 
 import type { ClawdbotConfig } from 'openclaw/plugin-sdk';
 
-import type { ConfiguredLarkAccount, FeishuConfig, LarkAccount, LarkBrand, LarkCredentials } from './types';
+import type {
+  ConfiguredLarkAccount,
+  FeishuConfig,
+  LarkAccount,
+  LarkBrand,
+  LarkCredentials,
+} from './types';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -30,8 +39,14 @@ function getLarkConfig(cfg: ClawdbotConfig): FeishuConfig | undefined {
 }
 
 /** Return the per-account override map, if present. */
-function getAccountMap(section: FeishuConfig): Record<string, Partial<FeishuConfig>> | undefined {
-  return (section as FeishuConfig & { accounts?: Record<string, Partial<FeishuConfig>> }).accounts;
+function getAccountMap(
+  section: FeishuConfig,
+): Record<string, Partial<FeishuConfig>> | undefined {
+  return (
+    section as FeishuConfig & {
+      accounts?: Record<string, Partial<FeishuConfig>>;
+    }
+  ).accounts;
 }
 
 /** Strip the `accounts` key and return the remaining top-level config. */
@@ -46,7 +61,10 @@ function baseConfig(section: FeishuConfig): Omit<FeishuConfig, 'accounts'> {
  *  Performs a one-level deep merge for plain-object fields so that partial
  *  account overrides (e.g. `footer: { model: false }`) are merged with
  *  the base instead of replacing the entire object. */
-function mergeAccountConfig(base: Omit<FeishuConfig, 'accounts'>, override: Partial<FeishuConfig>): FeishuConfig {
+function mergeAccountConfig(
+  base: Omit<FeishuConfig, 'accounts'>,
+  override: Partial<FeishuConfig>,
+): FeishuConfig {
   const result: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(override)) {
     if (value === undefined) continue;
@@ -96,7 +114,9 @@ export function getLarkAccountIds(cfg: ClawdbotConfig): string[] {
   // 当 accounts 存在时，如果顶层也配置了 appId/appSecret（即默认机器人），
   // 将 DEFAULT_ACCOUNT_ID 加入列表，确保顶层机器人不会被忽略。
   // 但如果 accountMap 已经包含 default，则不重复添加。
-  const hasDefault = accountIds.some((id) => id.trim().toLowerCase() === DEFAULT_ACCOUNT_ID);
+  const hasDefault = accountIds.some(
+    (id) => id.trim().toLowerCase() === DEFAULT_ACCOUNT_ID,
+  );
   if (!hasDefault) {
     const base = baseConfig(section);
     if (base.appId && base.appSecret) {
@@ -118,8 +138,13 @@ export function getDefaultLarkAccountId(cfg: ClawdbotConfig): string {
  *
  * Falls back to the default account when `accountId` is omitted or `null`.
  */
-export function getLarkAccount(cfg: ClawdbotConfig, accountId?: string | null): LarkAccount {
-  const requestedId = accountId ? (normalizeAccountId(accountId) ?? DEFAULT_ACCOUNT_ID) : DEFAULT_ACCOUNT_ID;
+export function getLarkAccount(
+  cfg: ClawdbotConfig,
+  accountId?: string | null,
+): LarkAccount {
+  const requestedId = accountId
+    ? (normalizeAccountId(accountId) ?? DEFAULT_ACCOUNT_ID)
+    : DEFAULT_ACCOUNT_ID;
 
   const section = getLarkConfig(cfg);
 
@@ -195,7 +220,10 @@ export function getLarkAccount(cfg: ClawdbotConfig, accountId?: string | null): 
  * @param accountId - Optional target account ID
  * @returns Config with `channels.feishu` replaced by the merged account config
  */
-export function createAccountScopedConfig(cfg: ClawdbotConfig, accountId?: string | null): ClawdbotConfig {
+export function createAccountScopedConfig(
+  cfg: ClawdbotConfig,
+  accountId?: string | null,
+): ClawdbotConfig {
   const account = getLarkAccount(cfg, accountId);
 
   return {
@@ -227,7 +255,9 @@ export function getEnabledLarkAccounts(cfg: ClawdbotConfig): LarkAccount[] {
  *
  * Returns `null` when `appId` or `appSecret` is missing.
  */
-export function getLarkCredentials(feishuCfg?: FeishuConfig): LarkCredentials | null {
+export function getLarkCredentials(
+  feishuCfg?: FeishuConfig,
+): LarkCredentials | null {
   if (!feishuCfg) return null;
 
   const appId = feishuCfg.appId;
@@ -245,6 +275,8 @@ export function getLarkCredentials(feishuCfg?: FeishuConfig): LarkCredentials | 
 }
 
 /** Type guard: narrow `LarkAccount` to `ConfiguredLarkAccount`. */
-export function isConfigured(account: LarkAccount): account is ConfiguredLarkAccount {
+export function isConfigured(
+  account: LarkAccount,
+): account is ConfiguredLarkAccount {
   return account.configured;
 }

@@ -27,7 +27,10 @@ import {
 import { registerCommands } from './src/commands/index';
 import { larkLogger } from './src/core/lark-logger';
 import { emitSecurityWarnings } from './src/core/security-check';
-import { recordToolUseEnd, recordToolUseStart } from './src/card/tool-use-trace-store';
+import {
+  recordToolUseEnd,
+  recordToolUseStart,
+} from './src/card/tool-use-trace-store';
 import { sanitizeParamsForLog } from './src/card/reasoning-utils';
 
 const log = larkLogger('plugin');
@@ -37,7 +40,12 @@ const log = larkLogger('plugin');
 // ---------------------------------------------------------------------------
 
 export { monitorFeishuProvider } from './src/channel/monitor';
-export { sendMessageFeishu, sendCardFeishu, updateCardFeishu, editMessageFeishu } from './src/messaging/outbound/send';
+export {
+  sendMessageFeishu,
+  sendCardFeishu,
+  updateCardFeishu,
+  editMessageFeishu,
+} from './src/messaging/outbound/send';
 export { getMessageFeishu } from './src/messaging/outbound/fetch';
 export {
   uploadImageLark,
@@ -104,7 +112,8 @@ export { isMessageExpired } from './src/messaging/inbound/dedup';
 const plugin = {
   id: 'openclaw-lark',
   name: 'Feishu',
-  description: 'Lark/Feishu channel plugin with im/doc/wiki/drive/task/calendar tools',
+  description:
+    'Lark/Feishu channel plugin with im/doc/wiki/drive/task/calendar tools',
   configSchema: emptyPluginConfigSchema(),
   register(api: OpenClawPluginApi): void {
     LarkClient.setRuntime(api.runtime);
@@ -137,7 +146,9 @@ const plugin = {
       });
       if (!event.toolName.startsWith('feishu_')) return;
       const paramsPreview = sanitizeParamsForLog(event.params);
-      log.info(`tool call: ${event.toolName} session=${ctx.sessionKey ?? '-'} params=${paramsPreview}`);
+      log.info(
+        `tool call: ${event.toolName} session=${ctx.sessionKey ?? '-'} params=${paramsPreview}`,
+      );
     });
 
     api.on('after_tool_call', (event, ctx) => {
@@ -157,7 +168,9 @@ const plugin = {
           `tool fail: ${event.toolName} session=${ctx.sessionKey ?? '-'} ${event.error} (${event.durationMs ?? 0}ms)`,
         );
       } else {
-        log.info(`tool done: ${event.toolName} session=${ctx.sessionKey ?? '-'} ok (${event.durationMs ?? 0}ms)`);
+        log.info(
+          `tool done: ${event.toolName} session=${ctx.sessionKey ?? '-'} ok (${event.durationMs ?? 0}ms)`,
+        );
       }
     });
 

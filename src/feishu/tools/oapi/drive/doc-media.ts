@@ -25,7 +25,14 @@ import { Type } from '@sinclair/typebox';
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { imageSize } from 'image-size';
 import { validateLocalMediaRoots } from '../../../messaging/outbound/media-url-utils';
-import { StringEnum, assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json, registerTool } from '../helpers';
+import {
+  StringEnum,
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -72,11 +79,13 @@ const MIME_TO_EXT: Record<string, string> = {
   'video/webm': '.webm',
   'application/pdf': '.pdf',
   'application/msword': '.doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    '.docx',
   'application/vnd.ms-excel': '.xls',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
   'application/vnd.ms-powerpoint': '.ppt',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+    '.pptx',
   'application/zip': '.zip',
   'application/x-rar-compressed': '.rar',
   'text/plain': '.txt',
@@ -106,10 +115,12 @@ const DocMediaSchema = Type.Union([
   Type.Object({
     action: Type.Literal('insert'),
     doc_id: Type.String({
-      description: '文档 ID 或文档 URL（必填）。支持从 URL 自动提取 document_id',
+      description:
+        '文档 ID 或文档 URL（必填）。支持从 URL 自动提取 document_id',
     }),
     file_path: Type.String({
-      description: '本地文件的绝对路径（必填）。图片支持 jpg/png/gif/webp 等，文件支持任意格式，最大 20MB',
+      description:
+        '本地文件的绝对路径（必填）。图片支持 jpg/png/gif/webp 等，文件支持任意格式，最大 20MB',
     }),
     type: Type.Optional(
       StringEnum(['image', 'file'], {
@@ -118,7 +129,8 @@ const DocMediaSchema = Type.Union([
     ),
     align: Type.Optional(
       StringEnum(['left', 'center', 'right'], {
-        description: '对齐方式（仅图片生效）："center"（默认居中）、"left"（居左）、"right"（居右）',
+        description:
+          '对齐方式（仅图片生效）："center"（默认居中）、"left"（居左）、"right"（居右）',
       }),
     ),
     caption: Type.Optional(
@@ -132,10 +144,12 @@ const DocMediaSchema = Type.Union([
   Type.Object({
     action: Type.Literal('download'),
     resource_token: Type.String({
-      description: '资源的唯一标识（file_token 用于文档素材，whiteboard_id 用于画板）',
+      description:
+        '资源的唯一标识（file_token 用于文档素材，whiteboard_id 用于画板）',
     }),
     resource_type: StringEnum(['media', 'whiteboard'], {
-      description: '资源类型：media（文档素材：图片、视频、文件等）或 whiteboard（画板缩略图）',
+      description:
+        '资源类型：media（文档素材：图片、视频、文件等）或 whiteboard（画板缩略图）',
     }),
     output_path: Type.String({
       description:
@@ -203,7 +217,9 @@ async function handleInsert(
   }
 
   const fileName = path.basename(filePath);
-  log.info(`insert: doc=${documentId}, type=${mediaType}, file=${fileName}, size=${fileSize}`);
+  log.info(
+    `insert: doc=${documentId}, type=${mediaType}, file=${fileName}, size=${fileSize}`,
+  );
 
   // 2. 创建空 Block（追加到文档末尾）
   const createRes: any = await client.invoke(
@@ -335,19 +351,29 @@ async function handleDownload(
   client: ReturnType<ReturnType<typeof createToolContext>['toolClient']>,
   log: ReturnType<typeof createToolContext>['log'],
 ) {
-  log.info(`download: resource_type=${p.resource_type}, token="${p.resource_token}"`);
+  log.info(
+    `download: resource_type=${p.resource_type}, token="${p.resource_token}"`,
+  );
 
   let res: any;
   if (p.resource_type === 'media') {
     res = await client.invoke(
       'feishu_doc_media.download',
-      (sdk, opts) => sdk.drive.v1.media.download({ path: { file_token: p.resource_token } }, opts),
+      (sdk, opts) =>
+        sdk.drive.v1.media.download(
+          { path: { file_token: p.resource_token } },
+          opts,
+        ),
       { as: 'user' },
     );
   } else {
     res = await client.invoke(
       'feishu_doc_media.download',
-      (sdk, opts) => sdk.board.v1.whiteboard.downloadAsImage({ path: { whiteboard_id: p.resource_token } }, opts),
+      (sdk, opts) =>
+        sdk.board.v1.whiteboard.downloadAsImage(
+          { path: { whiteboard_id: p.resource_token } },
+          opts,
+        ),
       { as: 'user' },
     );
   }

@@ -10,7 +10,10 @@
 
 import { optimizeMarkdownStyle } from './markdown-style';
 import type { FooterSessionMetrics } from './reply-dispatcher-types';
-import { EMPTY_TOOL_USE_PLACEHOLDER, type ToolUseDisplayStep } from './tool-use-display';
+import {
+  EMPTY_TOOL_USE_PLACEHOLDER,
+  type ToolUseDisplayStep,
+} from './tool-use-display';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -42,7 +45,11 @@ export interface FeishuCard {
     summary?: { content: string };
   };
   header?: {
-    title: { tag: 'plain_text'; content: string; i18n_content?: Record<string, string> };
+    title: {
+      tag: 'plain_text';
+      content: string;
+      i18n_content?: Record<string, string>;
+    };
     template: string;
   };
   elements: CardElement[];
@@ -86,7 +93,10 @@ export function splitReasoningText(text?: string): {
   const trimmed = text.trim();
 
   // Case 1: "Reasoning:\n..." prefix — the entire payload is reasoning
-  if (trimmed.startsWith(REASONING_PREFIX) && trimmed.length > REASONING_PREFIX.length) {
+  if (
+    trimmed.startsWith(REASONING_PREFIX) &&
+    trimmed.length > REASONING_PREFIX.length
+  ) {
     return { reasoningText: cleanReasoningPrefix(trimmed) };
   }
 
@@ -138,9 +148,15 @@ export function stripReasoningTags(text: string): string {
     '',
   );
   // Strip unclosed tag at end (streaming)
-  result = result.replace(/<\s*(?:think(?:ing)?|thought|antthinking)\s*>[\s\S]*$/gi, '');
+  result = result.replace(
+    /<\s*(?:think(?:ing)?|thought|antthinking)\s*>[\s\S]*$/gi,
+    '',
+  );
   // Strip orphaned closing tags
-  result = result.replace(/<\s*\/\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi, '');
+  result = result.replace(
+    /<\s*\/\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi,
+    '',
+  );
   return result.trim();
 }
 
@@ -161,7 +177,10 @@ function cleanReasoningPrefix(text: string): string {
  * Format reasoning duration into a human-readable i18n pair.
  * e.g. { zh: "思考了 3.2s", en: "Thought for 3.2s" }
  */
-export function formatReasoningDuration(ms: number): { zh: string; en: string } {
+export function formatReasoningDuration(ms: number): {
+  zh: string;
+  en: string;
+} {
   const d = formatElapsed(ms);
   return { zh: `思考了 ${d}`, en: `Thought for ${d}` };
 }
@@ -179,14 +198,20 @@ export function formatToolUseDuration(ms: number): { zh: string; en: string } {
  */
 export function formatElapsed(ms: number): string {
   const seconds = ms / 1000;
-  return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+  return seconds < 60
+    ? `${seconds.toFixed(1)}s`
+    : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
 /**
  * Build footer meta-info: notation-sized text with i18n support.
  * Error text is rendered in red; normal text uses default grey (notation).
  */
-function buildFooter(zhText: string, enText: string, isError?: boolean): CardElement[] {
+function buildFooter(
+  zhText: string,
+  enText: string,
+  isError?: boolean,
+): CardElement[] {
   const zhContent = isError ? `<font color='red'>${zhText}</font>` : zhText;
   const enContent = isError ? `<font color='red'>${enText}</font>` : enText;
   return [
@@ -225,7 +250,12 @@ export function formatFooterRuntimeSegments(params: {
   elapsedMs?: number;
   isError?: boolean;
   isAborted?: boolean;
-}): { primaryZh: string[]; primaryEn: string[]; detailZh: string[]; detailEn: string[] } {
+}): {
+  primaryZh: string[];
+  primaryEn: string[];
+  detailZh: string[];
+  detailEn: string[];
+} {
   const { footer, metrics, elapsedMs, isError, isAborted } = params;
   const primaryZh: string[] = [];
   const primaryEn: string[] = [];
@@ -264,8 +294,14 @@ export function formatFooterRuntimeSegments(params: {
   // --- Detail line: tokens, cache, context ---
 
   if (footer?.tokens && metrics) {
-    const inTokens = typeof metrics.inputTokens === 'number' ? Math.max(0, metrics.inputTokens) : undefined;
-    const outTokens = typeof metrics.outputTokens === 'number' ? Math.max(0, metrics.outputTokens) : undefined;
+    const inTokens =
+      typeof metrics.inputTokens === 'number'
+        ? Math.max(0, metrics.inputTokens)
+        : undefined;
+    const outTokens =
+      typeof metrics.outputTokens === 'number'
+        ? Math.max(0, metrics.outputTokens)
+        : undefined;
     if (inTokens != null && outTokens != null) {
       const inLabel = compactNumber(inTokens);
       const outLabel = compactNumber(outTokens);
@@ -275,9 +311,18 @@ export function formatFooterRuntimeSegments(params: {
   }
 
   if (footer?.cache && metrics) {
-    const read = typeof metrics.cacheRead === 'number' ? Math.max(0, metrics.cacheRead) : undefined;
-    const write = typeof metrics.cacheWrite === 'number' ? Math.max(0, metrics.cacheWrite) : undefined;
-    const inputVal = typeof metrics.inputTokens === 'number' ? Math.max(0, metrics.inputTokens) : undefined;
+    const read =
+      typeof metrics.cacheRead === 'number'
+        ? Math.max(0, metrics.cacheRead)
+        : undefined;
+    const write =
+      typeof metrics.cacheWrite === 'number'
+        ? Math.max(0, metrics.cacheWrite)
+        : undefined;
+    const inputVal =
+      typeof metrics.inputTokens === 'number'
+        ? Math.max(0, metrics.inputTokens)
+        : undefined;
     if (read != null && write != null && inputVal != null) {
       const total = read + write + inputVal;
       const hit = total > 0 ? Math.round((read / total) * 100) : 0;
@@ -289,9 +334,14 @@ export function formatFooterRuntimeSegments(params: {
   }
 
   if (footer?.context && metrics) {
-    const freshTotal = metrics.totalTokensFresh === false ? undefined : metrics.totalTokens;
-    const total = typeof freshTotal === 'number' ? Math.max(0, freshTotal) : undefined;
-    const ctx = typeof metrics.contextTokens === 'number' ? Math.max(0, metrics.contextTokens) : undefined;
+    const freshTotal =
+      metrics.totalTokensFresh === false ? undefined : metrics.totalTokens;
+    const total =
+      typeof freshTotal === 'number' ? Math.max(0, freshTotal) : undefined;
+    const ctx =
+      typeof metrics.contextTokens === 'number'
+        ? Math.max(0, metrics.contextTokens)
+        : undefined;
     if (total != null && ctx != null) {
       const totalLabel = compactNumber(total);
       const ctxLabel = compactNumber(ctx);
@@ -376,7 +426,11 @@ export function buildCardContent(
 
 function buildThinkingCard(): FeishuCard {
   return {
-    config: { wide_screen_mode: true, update_multi: true, locales: ['zh_cn', 'en_us'] },
+    config: {
+      wide_screen_mode: true,
+      update_multi: true,
+      locales: ['zh_cn', 'en_us'],
+    },
     elements: [
       {
         tag: 'markdown',
@@ -396,7 +450,12 @@ function buildStreamingCard(
     reasoningText?: string;
   } = {},
 ): FeishuCard {
-  const { showToolUse = true, toolUseSteps, toolUseTitleSuffix, reasoningText } = params;
+  const {
+    showToolUse = true,
+    toolUseSteps,
+    toolUseTitleSuffix,
+    reasoningText,
+  } = params;
   const elements: CardElement[] = [];
   const hasToolUse = Boolean(toolUseSteps?.length);
 
@@ -431,7 +490,11 @@ function buildStreamingCard(
   }
 
   return {
-    config: { wide_screen_mode: true, update_multi: true, locales: ['zh_cn', 'en_us'] },
+    config: {
+      wide_screen_mode: true,
+      update_multi: true,
+      locales: ['zh_cn', 'en_us'],
+    },
     elements,
   };
 }
@@ -485,7 +548,9 @@ function buildCompleteCard(params: {
 
   // Collapsible reasoning panel (before main content)
   if (reasoningText) {
-    const dur = reasoningElapsedMs ? formatReasoningDuration(reasoningElapsedMs) : null;
+    const dur = reasoningElapsedMs
+      ? formatReasoningDuration(reasoningElapsedMs)
+      : null;
     const zhLabel = dur ? dur.zh : '思考';
     const enLabel = dur ? dur.en : 'Thought';
     elements.push({
@@ -550,16 +615,29 @@ function buildCompleteCard(params: {
     footerEnLines.push(fp.detailEn.join(' · '));
   }
   if (footerZhLines.length > 0) {
-    elements.push(...buildFooter(footerZhLines.join('\n'), footerEnLines.join('\n'), isError));
+    elements.push(
+      ...buildFooter(
+        footerZhLines.join('\n'),
+        footerEnLines.join('\n'),
+        isError,
+      ),
+    );
   }
 
   // Use the answer text as the feed preview summary.
   // Strip markdown syntax so the preview reads as plain text.
   const summaryText = text.replace(/[*_`#>[\]()~]/g, '').trim();
-  const summary = summaryText ? { content: summaryText.slice(0, 120) } : undefined;
+  const summary = summaryText
+    ? { content: summaryText.slice(0, 120) }
+    : undefined;
 
   return {
-    config: { wide_screen_mode: true, update_multi: true, locales: ['zh_cn', 'en_us'], summary },
+    config: {
+      wide_screen_mode: true,
+      update_multi: true,
+      locales: ['zh_cn', 'en_us'],
+      summary,
+    },
     elements,
   };
 }
@@ -655,7 +733,9 @@ function buildConfirmCard(confirmData: ConfirmData): FeishuCard {
  * Build the initial CardKit 2.0 streaming card with a loading icon.
  * Optionally includes a tool-use pending panel above the streaming area.
  */
-export function buildStreamingThinkingCard(showToolUse = true): Record<string, unknown> {
+export function buildStreamingThinkingCard(
+  showToolUse = true,
+): Record<string, unknown> {
   return buildStreamingPreAnswerCard({ showToolUse });
 }
 
@@ -674,7 +754,9 @@ export function buildStreamingPreAnswerCard(params: {
 
   if (showToolUse) {
     elements.push(
-      hasSteps ? buildStreamingToolUseActivePanel({ steps: steps!, elapsedMs }) : buildStreamingToolUsePendingPanel(),
+      hasSteps
+        ? buildStreamingToolUseActivePanel({ steps: steps!, elapsedMs })
+        : buildStreamingToolUsePendingPanel(),
     );
   }
 
@@ -716,7 +798,10 @@ export function buildStreamingPreAnswerCard(params: {
  * Build the collapsible panel for the active pre-answer phase.
  * Used by buildStreamingPreAnswerCard when at least one step exists.
  */
-function buildStreamingToolUseActivePanel(params: { steps: ToolUseDisplayStep[]; elapsedMs?: number }): CardElement {
+function buildStreamingToolUseActivePanel(params: {
+  steps: ToolUseDisplayStep[];
+  elapsedMs?: number;
+}): CardElement {
   const { steps, elapsedMs } = params;
   const enParts = ['Tool use'];
   const zhParts = ['工具执行'];
@@ -811,7 +896,9 @@ function buildToolUsePanel(params: {
   titleSuffix?: { zh: string; en: string };
 }): CardElement {
   const { toolUseSteps = [], toolUseElapsedMs, titleSuffix } = params;
-  const duration = toolUseElapsedMs ? formatToolUseDuration(toolUseElapsedMs) : null;
+  const duration = toolUseElapsedMs
+    ? formatToolUseDuration(toolUseElapsedMs)
+    : null;
   const zhTitleParts = [duration?.zh ?? '工具执行'];
   const enTitleParts = [duration?.en ?? 'Tool use'];
   if (titleSuffix) {
@@ -868,7 +955,10 @@ function buildToolUseStepElements(step: ToolUseDisplayStep): CardElement[] {
   return elements;
 }
 
-function buildToolUsePlaceholder(labels?: { zh: string; en: string }): CardElement {
+function buildToolUsePlaceholder(labels?: {
+  zh: string;
+  en: string;
+}): CardElement {
   const zh = labels?.zh ?? '暂无工具步骤';
   const en = labels?.en ?? EMPTY_TOOL_USE_PLACEHOLDER;
   return {
@@ -910,7 +1000,9 @@ function buildToolUseStepTitleMarkdown(step: ToolUseDisplayStep): string {
   );
 }
 
-function buildToolUseStepDetailElement(step: ToolUseDisplayStep): CardElement | undefined {
+function buildToolUseStepDetailElement(
+  step: ToolUseDisplayStep,
+): CardElement | undefined {
   const detail = step.detail?.trim();
   if (!detail) return undefined;
   return {
@@ -925,7 +1017,9 @@ function buildToolUseStepDetailElement(step: ToolUseDisplayStep): CardElement | 
   };
 }
 
-function buildToolUseStepOutputElement(step: ToolUseDisplayStep): CardElement | undefined {
+function buildToolUseStepOutputElement(
+  step: ToolUseDisplayStep,
+): CardElement | undefined {
   const content = buildToolUseStepOutputMarkdown(step);
   if (!content) return undefined;
   return {
@@ -939,22 +1033,34 @@ function buildToolUseStepOutputElement(step: ToolUseDisplayStep): CardElement | 
   };
 }
 
-function buildToolUseStepOutputMarkdown(step: ToolUseDisplayStep): string | undefined {
+function buildToolUseStepOutputMarkdown(
+  step: ToolUseDisplayStep,
+): string | undefined {
   const lines: string[] = [];
 
   if (step.errorBlock) {
     lines.push('**Error**');
-    lines.push(formatToolUseCodeBlock(step.errorBlock.content, step.errorBlock.language));
+    lines.push(
+      formatToolUseCodeBlock(step.errorBlock.content, step.errorBlock.language),
+    );
   } else if (step.resultBlock) {
     lines.push('**Result**');
-    lines.push(formatToolUseCodeBlock(step.resultBlock.content, step.resultBlock.language));
+    lines.push(
+      formatToolUseCodeBlock(
+        step.resultBlock.content,
+        step.resultBlock.language,
+      ),
+    );
   }
 
   if (lines.length === 0) return undefined;
   return optimizeMarkdownStyle(lines.join('\n'), 1);
 }
 
-function formatToolUseStepStatus(status: ToolUseDisplayStep['status']): { label: string; color: string } {
+function formatToolUseStepStatus(status: ToolUseDisplayStep['status']): {
+  label: string;
+  color: string;
+} {
   switch (status) {
     case 'running':
       return { label: 'Running', color: 'turquoise' };
@@ -966,7 +1072,10 @@ function formatToolUseStepStatus(status: ToolUseDisplayStep['status']): { label:
   }
 }
 
-function formatToolUseCodeBlock(content: string, language: 'json' | 'text'): string {
+function formatToolUseCodeBlock(
+  content: string,
+  language: 'json' | 'text',
+): string {
   const normalized = content.replace(/\r\n/g, '\n').trim();
   const fence = '`'.repeat(Math.max(3, longestBacktickRun(normalized) + 1));
   return `${fence}${language}\n${normalized}\n${fence}`;

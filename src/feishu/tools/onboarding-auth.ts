@@ -126,7 +126,9 @@ export async function triggerOnboarding(params: {
       chatType: 'p2p' as const,
     };
 
-    log.info(`starting batch ${batchIndex + 1}/${batches.length}, scopes=${batch.length}`);
+    log.info(
+      `starting batch ${batchIndex + 1}/${batches.length}, scopes=${batch.length}`,
+    );
 
     try {
       await executeAuthorize({

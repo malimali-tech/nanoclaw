@@ -179,7 +179,9 @@ export function registerFeishuWikiSpaceTool(api: OpenClawPluginApi): boolean {
             // CREATE SPACE
             // -----------------------------------------------------------------
             case 'create': {
-              log.info(`create: name=${p.name ?? '(empty)'}, description=${p.description ?? '(empty)'}`);
+              log.info(
+                `create: name=${p.name ?? '(empty)'}, description=${p.description ?? '(empty)'}`,
+              );
 
               const res = await client.invoke(
                 'feishu_wiki_space.create',
@@ -198,7 +200,9 @@ export function registerFeishuWikiSpaceTool(api: OpenClawPluginApi): boolean {
               assertLarkOk(res);
 
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              log.info(`create: created space_id=${(res.data?.space as any)?.space_id}`);
+              log.info(
+                `create: created space_id=${(res.data?.space as any)?.space_id}`,
+              );
 
               return json({
                 space: res.data?.space,

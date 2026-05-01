@@ -22,7 +22,9 @@ export function registerFeishuSheetsTools(api: OpenClawPluginApi): void {
 
   const accounts = getEnabledLarkAccounts(api.config);
   if (accounts.length === 0) {
-    api.logger.debug?.('feishu_sheets: No Feishu accounts configured, skipping');
+    api.logger.debug?.(
+      'feishu_sheets: No Feishu accounts configured, skipping',
+    );
     return;
   }
 

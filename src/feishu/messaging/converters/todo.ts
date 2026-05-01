@@ -38,7 +38,9 @@ export const convertTodo: ContentConverterFn = (raw) => {
 
   // Build title from summary.title and summary.content
   const title = parsed?.summary?.title ?? '';
-  const body = parsed?.summary?.content ? extractPlainText(parsed.summary.content) : '';
+  const body = parsed?.summary?.content
+    ? extractPlainText(parsed.summary.content)
+    : '';
 
   const fullTitle = [title, body].filter(Boolean).join('\n');
   if (fullTitle) {

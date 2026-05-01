@@ -16,8 +16,17 @@ import type { ConvertContext, ConvertResult } from './types';
 import { converters } from './index';
 
 // Re-export types for convenience
-export type { ApiMessageItem, ConvertContext, ConvertResult, ContentConverterFn } from './types';
-export { buildConvertContextFromItem, extractMentionOpenId, resolveMentions } from './content-converter-helpers';
+export type {
+  ApiMessageItem,
+  ConvertContext,
+  ConvertResult,
+  ContentConverterFn,
+} from './types';
+export {
+  buildConvertContextFromItem,
+  extractMentionOpenId,
+  resolveMentions,
+} from './content-converter-helpers';
 
 // ---------------------------------------------------------------------------
 // Convert
@@ -39,6 +48,8 @@ export async function convertMessageContent(
   if (!fn) {
     return { content: raw, resources: [] };
   }
-  const nextCtx = ctx.convertMessageContent ? ctx : { ...ctx, convertMessageContent };
+  const nextCtx = ctx.convertMessageContent
+    ? ctx
+    : { ...ctx, convertMessageContent };
   return fn(raw, nextCtx);
 }

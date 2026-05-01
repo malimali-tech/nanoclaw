@@ -19,7 +19,10 @@ import { Readable } from 'node:stream';
 
 import type { OpenClawConfig } from 'openclaw/plugin-sdk';
 import { LarkClient } from '../../core/lark-client';
-import { normalizeFeishuTarget, resolveReceiveIdType } from '../../core/targets';
+import {
+  normalizeFeishuTarget,
+  resolveReceiveIdType,
+} from '../../core/targets';
 import { larkLogger } from '../../core/lark-logger';
 import {
   isLocalMediaPath,
@@ -102,7 +105,9 @@ export interface SendMediaResult {
  *
  * This helper normalises all of those into a single Buffer.
  */
-async function extractBufferFromResponse(response: unknown): Promise<{ buffer: Buffer; contentType?: string }> {
+async function extractBufferFromResponse(
+  response: unknown,
+): Promise<{ buffer: Buffer; contentType?: string }> {
   // Direct Buffer
   if (Buffer.isBuffer(response)) {
     return { buffer: response };
@@ -119,7 +124,8 @@ async function extractBufferFromResponse(response: unknown): Promise<{ buffer: B
   }
 
   const resp = response as Record<string, any>;
-  const contentType: string | undefined = resp.headers?.['content-type'] ?? resp.contentType ?? undefined;
+  const contentType: string | undefined =
+    resp.headers?.['content-type'] ?? resp.contentType ?? undefined;
 
   // Response with .data as Buffer or ArrayBuffer
   if (resp.data != null) {
@@ -162,7 +168,10 @@ async function extractBufferFromResponse(response: unknown): Promise<{ buffer: B
   }
 
   // Async iterable / iterator (e.g. response body chunks)
-  if (typeof (resp as any)[Symbol.asyncIterator] === 'function' || typeof (resp as any).next === 'function') {
+  if (
+    typeof (resp as any)[Symbol.asyncIterator] === 'function' ||
+    typeof (resp as any).next === 'function'
+  ) {
     const chunks: Buffer[] = [];
     const iterable =
       typeof (resp as any)[Symbol.asyncIterator] === 'function'
@@ -181,7 +190,9 @@ async function extractBufferFromResponse(response: unknown): Promise<{ buffer: B
     return { buffer: buf, contentType };
   }
 
-  throw new Error('[feishu-media] Unable to extract binary data from response: unrecognised format');
+  throw new Error(
+    '[feishu-media] Unable to extract binary data from response: unrecognised format',
+  );
 }
 
 /**
@@ -201,7 +212,9 @@ function streamToBuffer(stream: Readable): Promise<Buffer> {
 /**
  * Wrap an AsyncIterator into an AsyncIterable.
  */
-async function* asyncIteratorToIterable<T>(iterator: AsyncIterator<T>): AsyncIterable<T> {
+async function* asyncIteratorToIterable<T>(
+  iterator: AsyncIterator<T>,
+): AsyncIterable<T> {
   while (true) {
     const { value, done } = await iterator.next();
     if (done) break;
@@ -250,9 +263,13 @@ export async function downloadMessageResourceFeishu(params: {
   let fileName: string | undefined;
   if (response && typeof response === 'object') {
     const resp = response as Record<string, any>;
-    const disposition = resp.headers?.['content-disposition'] ?? resp.headers?.['Content-Disposition'];
+    const disposition =
+      resp.headers?.['content-disposition'] ??
+      resp.headers?.['Content-Disposition'];
     if (typeof disposition === 'string') {
-      const match = disposition.match(/filename[*]?=(?:UTF-8'')?["']?([^"';\n]+)/i);
+      const match = disposition.match(
+        /filename[*]?=(?:UTF-8'')?["']?([^"';\n]+)/i,
+      );
       if (match) {
         fileName = decodeURIComponent(match[1].trim());
       }
@@ -287,13 +304,16 @@ export async function uploadImageLark(params: {
   const { cfg, image, imageType = 'message', accountId } = params;
 
   const client = LarkClient.fromCfg(cfg, accountId).sdk;
-  const imageStream = Buffer.isBuffer(image) ? Readable.from(image) : fs.createReadStream(image);
+  const imageStream = Buffer.isBuffer(image)
+    ? Readable.from(image)
+    : fs.createReadStream(image);
 
   const response = await client.im.image.create({
     data: { image_type: imageType, image: imageStream as any },
   });
 
-  const imageKey = (response as any)?.data?.image_key ?? (response as any)?.image_key;
+  const imageKey =
+    (response as any)?.data?.image_key ?? (response as any)?.image_key;
   if (!imageKey) {
     throw new Error(
       '[feishu-media] Image upload failed: no image_key in response. ' +
@@ -331,7 +351,9 @@ export async function uploadFileLark(params: {
   const { cfg, file, fileName, fileType, duration, accountId } = params;
 
   const client = LarkClient.fromCfg(cfg, accountId).sdk;
-  const fileStream = Buffer.isBuffer(file) ? Readable.from(file) : fs.createReadStream(file);
+  const fileStream = Buffer.isBuffer(file)
+    ? Readable.from(file)
+    : fs.createReadStream(file);
 
   const response = await client.im.file.create({
     data: {
@@ -342,7 +364,8 @@ export async function uploadFileLark(params: {
     } as any,
   });
 
-  const fileKey = (response as any)?.data?.file_key ?? (response as any)?.file_key;
+  const fileKey =
+    (response as any)?.data?.file_key ?? (response as any)?.file_key;
   if (!fileKey) {
     throw new Error(
       `[feishu-media] File upload failed: no file_key in response for "${fileName}" (type=${fileType}). ` +
@@ -372,7 +395,8 @@ async function sendMediaMessage(params: {
   replyToMessageId?: string;
   replyInThread?: boolean;
 }): Promise<SendMediaResult> {
-  const { client, to, content, msgType, replyToMessageId, replyInThread } = params;
+  const { client, to, content, msgType, replyToMessageId, replyInThread } =
+    params;
 
   if (replyToMessageId) {
     const response = await client.im.message.reply({
@@ -428,12 +452,20 @@ export async function sendImageLark(params: {
   replyInThread?: boolean;
   accountId?: string;
 }): Promise<SendMediaResult> {
-  const { cfg, to, imageKey, replyToMessageId, replyInThread, accountId } = params;
+  const { cfg, to, imageKey, replyToMessageId, replyInThread, accountId } =
+    params;
   log.info(`sendImageLark: target=${to}, imageKey=${imageKey}`);
 
   const client = LarkClient.fromCfg(cfg, accountId).sdk;
   const content = JSON.stringify({ image_key: imageKey });
-  return sendMediaMessage({ client, to, content, msgType: 'image', replyToMessageId, replyInThread });
+  return sendMediaMessage({
+    client,
+    to,
+    content,
+    msgType: 'image',
+    replyToMessageId,
+    replyInThread,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -459,12 +491,20 @@ export async function sendFileLark(params: {
   replyInThread?: boolean;
   accountId?: string;
 }): Promise<SendMediaResult> {
-  const { cfg, to, fileKey, replyToMessageId, replyInThread, accountId } = params;
+  const { cfg, to, fileKey, replyToMessageId, replyInThread, accountId } =
+    params;
   log.info(`sendFileLark: target=${to}, fileKey=${fileKey}`);
 
   const client = LarkClient.fromCfg(cfg, accountId).sdk;
   const content = JSON.stringify({ file_key: fileKey });
-  return sendMediaMessage({ client, to, content, msgType: 'file', replyToMessageId, replyInThread });
+  return sendMediaMessage({
+    client,
+    to,
+    content,
+    msgType: 'file',
+    replyToMessageId,
+    replyInThread,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -493,12 +533,20 @@ export async function sendVideoLark(params: {
   replyInThread?: boolean;
   accountId?: string;
 }): Promise<SendMediaResult> {
-  const { cfg, to, fileKey, replyToMessageId, replyInThread, accountId } = params;
+  const { cfg, to, fileKey, replyToMessageId, replyInThread, accountId } =
+    params;
   log.info(`sendVideoLark: target=${to}, fileKey=${fileKey}`);
 
   const client = LarkClient.fromCfg(cfg, accountId).sdk;
   const content = JSON.stringify({ file_key: fileKey });
-  return sendMediaMessage({ client, to, content, msgType: 'media', replyToMessageId, replyInThread });
+  return sendMediaMessage({
+    client,
+    to,
+    content,
+    msgType: 'media',
+    replyToMessageId,
+    replyInThread,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -527,12 +575,20 @@ export async function sendAudioLark(params: {
   replyInThread?: boolean;
   accountId?: string;
 }): Promise<SendMediaResult> {
-  const { cfg, to, fileKey, replyToMessageId, replyInThread, accountId } = params;
+  const { cfg, to, fileKey, replyToMessageId, replyInThread, accountId } =
+    params;
   log.info(`sendAudioLark: target=${to}, fileKey=${fileKey}`);
 
   const client = LarkClient.fromCfg(cfg, accountId).sdk;
   const content = JSON.stringify({ file_key: fileKey });
-  return sendMediaMessage({ client, to, content, msgType: 'audio', replyToMessageId, replyInThread });
+  return sendMediaMessage({
+    client,
+    to,
+    content,
+    msgType: 'audio',
+    replyToMessageId,
+    replyInThread,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -540,10 +596,24 @@ export async function sendAudioLark(params: {
 // ---------------------------------------------------------------------------
 
 /** Known image extensions. */
-const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.ico', '.tiff', '.tif', '.heic']);
+const IMAGE_EXTENSIONS = new Set([
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.bmp',
+  '.webp',
+  '.ico',
+  '.tiff',
+  '.tif',
+  '.heic',
+]);
 
 /** Extension-to-Feishu-file-type mapping. */
-const EXTENSION_TYPE_MAP: Record<string, 'opus' | 'mp4' | 'pdf' | 'doc' | 'xls' | 'ppt' | 'stream'> = {
+const EXTENSION_TYPE_MAP: Record<
+  string,
+  'opus' | 'mp4' | 'pdf' | 'doc' | 'xls' | 'ppt' | 'stream'
+> = {
   '.opus': 'opus',
   '.ogg': 'opus',
   '.mp4': 'mp4',
@@ -570,7 +640,9 @@ const EXTENSION_TYPE_MAP: Record<string, 'opus' | 'mp4' | 'pdf' | 'doc' | 'xls' 
  * @param fileName - The file name (with extension).
  * @returns The detected file type.
  */
-export function detectFileType(fileName: string): 'opus' | 'mp4' | 'pdf' | 'doc' | 'xls' | 'ppt' | 'stream' {
+export function detectFileType(
+  fileName: string,
+): 'opus' | 'mp4' | 'pdf' | 'doc' | 'xls' | 'ppt' | 'stream' {
   const ext = path.extname(fileName).toLowerCase();
   return EXTENSION_TYPE_MAP[ext] ?? 'stream';
 }
@@ -635,7 +707,12 @@ export function parseMp4Duration(buffer: Buffer): number | undefined {
   if (!moovData) return undefined;
 
   // Locate `mvhd` inside `moov`.
-  const mvhdData = findBox(buffer, moovData.dataStart, moovData.dataEnd, 'mvhd');
+  const mvhdData = findBox(
+    buffer,
+    moovData.dataStart,
+    moovData.dataEnd,
+    'mvhd',
+  );
   if (!mvhdData) return undefined;
 
   const off = mvhdData.dataStart;
@@ -749,8 +826,17 @@ export async function uploadAndSendMediaLark(params: {
   /** Allowed root directories for local file access (SSRF prevention). */
   mediaLocalRoots?: readonly string[];
 }): Promise<SendMediaResult> {
-  const { cfg, to, mediaUrl, mediaBuffer, fileName, replyToMessageId, replyInThread, accountId, mediaLocalRoots } =
-    params;
+  const {
+    cfg,
+    to,
+    mediaUrl,
+    mediaBuffer,
+    fileName,
+    replyToMessageId,
+    replyInThread,
+    accountId,
+    mediaLocalRoots,
+  } = params;
 
   log.info(
     `uploadAndSendMediaLark: target=${to}, ` +
@@ -784,7 +870,10 @@ export async function uploadAndSendMediaLark(params: {
 
   // Decide whether to send as image or file based on the extension.
   const isImage = isImageFileName(resolvedFileName);
-  log.info(`resolved: fileName="${resolvedFileName}", ` + `type=${isImage ? 'image' : 'file'}, size=${buffer.length}`);
+  log.info(
+    `resolved: fileName="${resolvedFileName}", ` +
+      `type=${isImage ? 'image' : 'file'}, size=${buffer.length}`,
+  );
 
   if (isImage) {
     // Upload as image, then send image message.
@@ -810,7 +899,11 @@ export async function uploadAndSendMediaLark(params: {
   const fileType = detectFileType(resolvedFileName);
   const isAudio = fileType === 'opus';
   const isVideo = fileType === 'mp4';
-  const duration = isAudio ? parseOggOpusDuration(buffer) : isVideo ? parseMp4Duration(buffer) : undefined;
+  const duration = isAudio
+    ? parseOggOpusDuration(buffer)
+    : isVideo
+      ? parseMp4Duration(buffer)
+      : undefined;
 
   const { fileKey } = await uploadFileLark({
     cfg,
@@ -826,11 +919,25 @@ export async function uploadAndSendMediaLark(params: {
   );
 
   if (isAudio) {
-    return sendAudioLark({ cfg, to, fileKey, replyToMessageId, replyInThread, accountId });
+    return sendAudioLark({
+      cfg,
+      to,
+      fileKey,
+      replyToMessageId,
+      replyInThread,
+      accountId,
+    });
   }
 
   if (isVideo) {
-    return sendVideoLark({ cfg, to, fileKey, replyToMessageId, replyInThread, accountId });
+    return sendVideoLark({
+      cfg,
+      to,
+      fileKey,
+      replyToMessageId,
+      replyInThread,
+      accountId,
+    });
   }
 
   return sendFileLark({
@@ -925,7 +1032,9 @@ async function validateRemoteUrl(raw: string): Promise<void> {
       }
       // DNS failure is logged but not blocking — the subsequent fetch will
       // produce a clear network error if the host is truly unreachable.
-      log.warn(`[feishu-media] DNS resolution failed for "${hostname}": ${err}`);
+      log.warn(
+        `[feishu-media] DNS resolution failed for "${hostname}": ${err}`,
+      );
     }
   }
 }
@@ -942,7 +1051,10 @@ async function validateRemoteUrl(raw: string): Promise<void> {
  * - `file://` URLs and bare file system paths (read from disk, gated
  *   by `localRoots` for path-traversal prevention)
  */
-async function fetchMediaBuffer(urlOrPath: string, localRoots?: readonly string[]): Promise<Buffer> {
+async function fetchMediaBuffer(
+  urlOrPath: string,
+  localRoots?: readonly string[],
+): Promise<Buffer> {
   const raw = normalizeMediaUrlInput(urlOrPath);
 
   // Local file path (absolute or relative, or file:// URL).
@@ -972,7 +1084,9 @@ async function fetchMediaBuffer(urlOrPath: string, localRoots?: readonly string[
 
   const FETCH_TIMEOUT_MS = 30_000;
   log.info(`fetching remote media: ${raw}`);
-  const response = await fetch(raw, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  const response = await fetch(raw, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error(
       `[feishu-media] Failed to fetch media from "${raw}": ` +

@@ -40,7 +40,10 @@ export interface ApiMessageItem {
  * Note: `larkClient.sdk` 的类型定义不暴露 raw `request` 方法，
  * 因此这里使用 `as any` 断言调用。
  */
-export async function fetchCardContent(messageId: string, larkClient: LarkClientType): Promise<string | undefined> {
+export async function fetchCardContent(
+  messageId: string,
+  larkClient: LarkClientType,
+): Promise<string | undefined> {
   try {
     // SDK 类型不暴露 raw request 方法，需要 as any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,7 +57,9 @@ export async function fetchCardContent(messageId: string, larkClient: LarkClient
     });
     return response?.data?.items?.[0]?.body?.content ?? undefined;
   } catch (err) {
-    log.warn(`fetchCardContent failed for ${messageId}: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(
+      `fetchCardContent failed for ${messageId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return undefined;
   }
 }
@@ -72,14 +77,19 @@ export async function fetchCardContent(messageId: string, larkClient: LarkClient
  * Note: `larkClient.sdk` 的类型定义不暴露 raw `request` 方法，
  * 因此这里使用 `as any` 断言调用。
  */
-export function createFetchSubMessages(larkClient: LarkClientType): (msgId: string) => Promise<ApiMessageItem[]> {
+export function createFetchSubMessages(
+  larkClient: LarkClientType,
+): (msgId: string) => Promise<ApiMessageItem[]> {
   return async (msgId) => {
     // SDK 类型不暴露 raw request 方法，需要 as any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await (larkClient.sdk as any).request({
       method: 'GET',
       url: `/open-apis/im/v1/messages/${msgId}`,
-      params: { user_id_type: 'open_id', card_msg_content_type: 'raw_card_content' },
+      params: {
+        user_id_type: 'open_id',
+        card_msg_content_type: 'raw_card_content',
+      },
     });
     if (response?.code !== 0) {
       throw new Error(`API error: code=${response?.code} msg=${response?.msg}`);
@@ -98,6 +108,10 @@ export function createFetchSubMessages(larkClient: LarkClientType): (msgId: stri
  * Wraps `createBatchResolveNames` from user-name-cache.ts, providing
  * the account and log function.
  */
-export function createParseResolveNames(account: LarkAccount): (openIds: string[]) => Promise<void> {
-  return createBatchResolveNames(account, (...args: unknown[]) => log.info(args.map(String).join(' ')));
+export function createParseResolveNames(
+  account: LarkAccount,
+): (openIds: string[]) => Promise<void> {
+  return createBatchResolveNames(account, (...args: unknown[]) =>
+    log.info(args.map(String).join(' ')),
+  );
 }

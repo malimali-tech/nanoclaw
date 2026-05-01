@@ -14,7 +14,15 @@
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
 import type { ToolClient } from '../helpers';
-import { StringEnum, assertLarkOk, createToolContext, getFirstAccount, handleInvokeErrorWithAutoAuth, json, registerTool } from '../helpers';
+import {
+  StringEnum,
+  assertLarkOk,
+  createToolContext,
+  getFirstAccount,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 import { dateTimeToSecondsString, parseTimeRangeToSeconds } from './time-utils';
 import { type FormattedMessage, formatMessageList } from './format-messages';
 import { batchResolveUserNamesAsUser, getUATUserName } from './user-name-uat';
@@ -23,7 +31,9 @@ import { batchResolveUserNamesAsUser, getUATUserName } from './user-name-uat';
 // Shared helpers
 // ===========================================================================
 
-function sortRuleToSortType(rule?: 'create_time_asc' | 'create_time_desc'): 'ByCreateTimeAsc' | 'ByCreateTimeDesc' {
+function sortRuleToSortType(
+  rule?: 'create_time_asc' | 'create_time_desc',
+): 'ByCreateTimeAsc' | 'ByCreateTimeDesc' {
   return rule === 'create_time_asc' ? 'ByCreateTimeAsc' : 'ByCreateTimeDesc';
 }
 
@@ -37,17 +47,23 @@ async function resolveP2PChatId(
     code?: number;
     msg?: string;
     data?: { p2p_chats?: Array<{ chat_id: string }> };
-  }>('feishu_im_user_get_messages.default', '/open-apis/im/v1/chat_p2p/batch_query', {
-    method: 'POST',
-    body: { chatter_ids: [openId] },
-    query: { user_id_type: 'open_id' },
-    as: 'user',
-  });
+  }>(
+    'feishu_im_user_get_messages.default',
+    '/open-apis/im/v1/chat_p2p/batch_query',
+    {
+      method: 'POST',
+      body: { chatter_ids: [openId] },
+      query: { user_id_type: 'open_id' },
+      as: 'user',
+    },
+  );
 
   const chats = res.data?.p2p_chats;
   if (!chats?.length) {
     log.info(`batch_query: no p2p chat found for open_id=${openId}`);
-    throw new Error(`no 1-on-1 chat found with open_id=${openId}. You may not have chat history with this user.`);
+    throw new Error(
+      `no 1-on-1 chat found with open_id=${openId}. You may not have chat history with this user.`,
+    );
   }
 
   log.info(`batch_query: resolved chat_id=${chats[0].chat_id}`);
@@ -61,7 +77,9 @@ function resolveTimeRange(
 ): { start?: string; end?: string } {
   if (p.relative_time) {
     const range = parseTimeRangeToSeconds(p.relative_time);
-    logInfo(`relative_time="${p.relative_time}" → start=${range.start}, end=${range.end}`);
+    logInfo(
+      `relative_time="${p.relative_time}" → start=${range.start}, end=${range.end}`,
+    );
     return range;
   }
   return {
@@ -71,7 +89,12 @@ function resolveTimeRange(
 }
 
 /** 格式化 message.list 结果并返回 */
-async function formatAndReturn(res: any, config: any, log: { info: (msg: string) => void }, client: ToolClient) {
+async function formatAndReturn(
+  res: any,
+  config: any,
+  log: { info: (msg: string) => void },
+  client: ToolClient,
+) {
   const items = res.data?.items ?? [];
   const account = getFirstAccount(config);
   const messages = await formatMessageList(
@@ -95,7 +118,8 @@ async function formatAndReturn(res: any, config: any, log: { info: (msg: string)
 const GetMessagesSchema = Type.Object({
   open_id: Type.Optional(
     Type.String({
-      description: '用户 open_id（ou_xxx），获取与该用户的单聊消息。与 chat_id 互斥',
+      description:
+        '用户 open_id（ou_xxx），获取与该用户的单聊消息。与 chat_id 互斥',
     }),
   ),
   chat_id: Type.Optional(
@@ -108,8 +132,16 @@ const GetMessagesSchema = Type.Object({
       description: '排序方式，默认 create_time_desc（最新消息在前）',
     }),
   ),
-  page_size: Type.Optional(Type.Number({ description: '每页消息数（1-50），默认 50', minimum: 1, maximum: 50 })),
-  page_token: Type.Optional(Type.String({ description: '分页标记，用于获取下一页' })),
+  page_size: Type.Optional(
+    Type.Number({
+      description: '每页消息数（1-50），默认 50',
+      minimum: 1,
+      maximum: 50,
+    }),
+  ),
+  page_token: Type.Optional(
+    Type.String({ description: '分页标记，用于获取下一页' }),
+  ),
   relative_time: Type.Optional(
     Type.String({
       description:
@@ -118,12 +150,14 @@ const GetMessagesSchema = Type.Object({
   ),
   start_time: Type.Optional(
     Type.String({
-      description: '起始时间（ISO 8601 格式，如 2026-02-27T00:00:00+08:00）。与 relative_time 互斥',
+      description:
+        '起始时间（ISO 8601 格式，如 2026-02-27T00:00:00+08:00）。与 relative_time 互斥',
     }),
   ),
   end_time: Type.Optional(
     Type.String({
-      description: '结束时间（ISO 8601 格式，如 2026-02-27T23:59:59+08:00）。与 relative_time 互斥',
+      description:
+        '结束时间（ISO 8601 格式，如 2026-02-27T23:59:59+08:00）。与 relative_time 互斥',
     }),
   ),
 });
@@ -142,7 +176,10 @@ interface GetMessagesParams {
 function registerGetMessages(api: OpenClawPluginApi): boolean {
   if (!api.config) return false;
   const config = api.config;
-  const { toolClient, log } = createToolContext(api, 'feishu_im_user_get_messages');
+  const { toolClient, log } = createToolContext(
+    api,
+    'feishu_im_user_get_messages',
+  );
 
   return registerTool(
     api,
@@ -166,13 +203,18 @@ function registerGetMessages(api: OpenClawPluginApi): boolean {
         const p = params as GetMessagesParams;
         try {
           if (p.open_id && p.chat_id) {
-            return json({ error: 'cannot provide both open_id and chat_id, please provide only one' });
+            return json({
+              error:
+                'cannot provide both open_id and chat_id, please provide only one',
+            });
           }
           if (!p.open_id && !p.chat_id) {
             return json({ error: 'either open_id or chat_id is required' });
           }
           if (p.relative_time && (p.start_time || p.end_time)) {
-            return json({ error: 'cannot use both relative_time and start_time/end_time' });
+            return json({
+              error: 'cannot use both relative_time and start_time/end_time',
+            });
           }
 
           const client = toolClient();
@@ -233,8 +275,16 @@ const GetThreadMessagesSchema = Type.Object({
       description: '排序方式，默认 create_time_desc（最新消息在前）',
     }),
   ),
-  page_size: Type.Optional(Type.Number({ description: '每页消息数（1-50），默认 50', minimum: 1, maximum: 50 })),
-  page_token: Type.Optional(Type.String({ description: '分页标记，用于获取下一页' })),
+  page_size: Type.Optional(
+    Type.Number({
+      description: '每页消息数（1-50），默认 50',
+      minimum: 1,
+      maximum: 50,
+    }),
+  ),
+  page_token: Type.Optional(
+    Type.String({ description: '分页标记，用于获取下一页' }),
+  ),
 });
 
 interface GetThreadMessagesParams {
@@ -247,7 +297,10 @@ interface GetThreadMessagesParams {
 function registerGetThreadMessages(api: OpenClawPluginApi): boolean {
   if (!api.config) return false;
   const config = api.config;
-  const { toolClient, log } = createToolContext(api, 'feishu_im_user_get_thread_messages');
+  const { toolClient, log } = createToolContext(
+    api,
+    'feishu_im_user_get_thread_messages',
+  );
 
   return registerTool(
     api,
@@ -307,15 +360,24 @@ function registerGetThreadMessages(api: OpenClawPluginApi): boolean {
 // ===========================================================================
 
 const SearchMessagesSchema = Type.Object({
-  query: Type.Optional(Type.String({ description: '搜索关键词，匹配消息内容。可为空字符串表示不按内容过滤' })),
-  sender_ids: Type.Optional(
-    Type.Array(Type.String({ description: '发送者的 open_id（ou_xxx）' }), {
-      description: '发送者 open_id 列表。如需根据用户名查找 open_id，请先使用 search_user 工具',
+  query: Type.Optional(
+    Type.String({
+      description: '搜索关键词，匹配消息内容。可为空字符串表示不按内容过滤',
     }),
   ),
-  chat_id: Type.Optional(Type.String({ description: '限定搜索范围的会话 ID（oc_xxx）' })),
+  sender_ids: Type.Optional(
+    Type.Array(Type.String({ description: '发送者的 open_id（ou_xxx）' }), {
+      description:
+        '发送者 open_id 列表。如需根据用户名查找 open_id，请先使用 search_user 工具',
+    }),
+  ),
+  chat_id: Type.Optional(
+    Type.String({ description: '限定搜索范围的会话 ID（oc_xxx）' }),
+  ),
   mention_ids: Type.Optional(
-    Type.Array(Type.String({ description: '被@用户的 open_id（ou_xxx）' }), { description: '被@用户的 open_id 列表' }),
+    Type.Array(Type.String({ description: '被@用户的 open_id（ou_xxx）' }), {
+      description: '被@用户的 open_id 列表',
+    }),
   ),
   message_type: Type.Optional(
     StringEnum(['file', 'image', 'media'], {
@@ -340,16 +402,26 @@ const SearchMessagesSchema = Type.Object({
   ),
   start_time: Type.Optional(
     Type.String({
-      description: '起始时间（ISO 8601 格式，如 2026-02-27T00:00:00+08:00）。与 relative_time 互斥',
+      description:
+        '起始时间（ISO 8601 格式，如 2026-02-27T00:00:00+08:00）。与 relative_time 互斥',
     }),
   ),
   end_time: Type.Optional(
     Type.String({
-      description: '结束时间（ISO 8601 格式，如 2026-02-27T23:59:59+08:00）。与 relative_time 互斥',
+      description:
+        '结束时间（ISO 8601 格式，如 2026-02-27T23:59:59+08:00）。与 relative_time 互斥',
     }),
   ),
-  page_size: Type.Optional(Type.Number({ description: '每页消息数（1-50），默认 50', minimum: 1, maximum: 50 })),
-  page_token: Type.Optional(Type.String({ description: '分页标记，用于获取下一页' })),
+  page_size: Type.Optional(
+    Type.Number({
+      description: '每页消息数（1-50），默认 50',
+      minimum: 1,
+      maximum: 50,
+    }),
+  ),
+  page_token: Type.Optional(
+    Type.String({ description: '分页标记，用于获取下一页' }),
+  ),
 });
 
 interface SearchMessagesParams {
@@ -375,7 +447,10 @@ interface ChatContext {
   p2p_target_id?: string;
 }
 
-function buildSearchData(p: SearchMessagesParams, time: { start: string; end: string }): Record<string, unknown> {
+function buildSearchData(
+  p: SearchMessagesParams,
+  time: { start: string; end: string },
+): Record<string, unknown> {
   const data: Record<string, unknown> = {
     query: p.query ?? '',
     start_time: time.start,
@@ -386,7 +461,8 @@ function buildSearchData(p: SearchMessagesParams, time: { start: string; end: st
   if (p.mention_ids?.length) data.at_chatter_ids = p.mention_ids;
   if (p.message_type) data.message_type = p.message_type;
   if (p.sender_type && p.sender_type !== 'all') data.from_type = p.sender_type;
-  if (p.chat_type) data.chat_type = p.chat_type === 'group' ? 'group_chat' : 'p2p_chat';
+  if (p.chat_type)
+    data.chat_type = p.chat_type === 'group' ? 'group_chat' : 'p2p_chat';
   return data;
 }
 
@@ -400,7 +476,9 @@ async function fetchChatContexts(
   if (chatIds.length === 0) return map;
 
   try {
-    logInfo(`batch_query: requesting ${chatIds.length} chat_ids: ${chatIds.join(', ')}`);
+    logInfo(
+      `batch_query: requesting ${chatIds.length} chat_ids: ${chatIds.join(', ')}`,
+    );
     const res = await client.invokeByPath<{
       code?: number;
       msg?: string;
@@ -412,15 +490,23 @@ async function fetchChatContexts(
           p2p_target_id?: string;
         }>;
       };
-    }>('feishu_im_user_search_messages.default', '/open-apis/im/v1/chats/batch_query', {
-      method: 'POST',
-      body: { chat_ids: chatIds },
-      query: { user_id_type: 'open_id' },
-      as: 'user',
-    });
-    logInfo(`batch_query: response code=${res.code}, msg=${res.msg}, items=${res.data?.items?.length ?? 0}`);
+    }>(
+      'feishu_im_user_search_messages.default',
+      '/open-apis/im/v1/chats/batch_query',
+      {
+        method: 'POST',
+        body: { chat_ids: chatIds },
+        query: { user_id_type: 'open_id' },
+        as: 'user',
+      },
+    );
+    logInfo(
+      `batch_query: response code=${res.code}, msg=${res.msg}, items=${res.data?.items?.length ?? 0}`,
+    );
     if (res.code !== 0) {
-      logWarn(`batch_query: API returned error code=${res.code}, msg=${res.msg}`);
+      logWarn(
+        `batch_query: API returned error code=${res.code}, msg=${res.msg}`,
+      );
     }
     for (const c of res.data?.items ?? []) {
       if (c.chat_id) {
@@ -442,7 +528,13 @@ async function resolveP2PTargetNames(
   client: ToolClient,
   logFn: (...args: unknown[]) => void,
 ): Promise<void> {
-  const ids = [...new Set([...chatMap.values()].map((c) => c.p2p_target_id).filter((id): id is string => !!id))];
+  const ids = [
+    ...new Set(
+      [...chatMap.values()]
+        .map((c) => c.p2p_target_id)
+        .filter((id): id is string => !!id),
+    ),
+  ];
   if (ids.length > 0) {
     await batchResolveUserNamesAsUser({ client, openIds: ids, log: logFn });
   }
@@ -482,7 +574,10 @@ function enrichMessages(
 function registerSearchMessages(api: OpenClawPluginApi): boolean {
   if (!api.config) return false;
   const config = api.config;
-  const { toolClient, log } = createToolContext(api, 'feishu_im_user_search_messages');
+  const { toolClient, log } = createToolContext(
+    api,
+    'feishu_im_user_search_messages',
+  );
 
   return registerTool(
     api,
@@ -511,12 +606,15 @@ function registerSearchMessages(api: OpenClawPluginApi): boolean {
         const p = params as SearchMessagesParams;
         try {
           if (p.relative_time && (p.start_time || p.end_time)) {
-            return json({ error: 'cannot use both relative_time and start_time/end_time' });
+            return json({
+              error: 'cannot use both relative_time and start_time/end_time',
+            });
           }
 
           const client = toolClient();
           const account = getFirstAccount(config);
-          const logFn = (...args: unknown[]) => log.info(args.map(String).join(' '));
+          const logFn = (...args: unknown[]) =>
+            log.info(args.map(String).join(' '));
 
           // 1. 搜索消息 ID
           const time = resolveTimeRange(p, log.info);
@@ -524,7 +622,9 @@ function registerSearchMessages(api: OpenClawPluginApi): boolean {
             start: time.start ?? '978307200',
             end: time.end ?? Math.floor(Date.now() / 1000).toString(),
           });
-          log.info(`search: query="${p.query ?? ''}", page_size=${p.page_size ?? 50}`);
+          log.info(
+            `search: query="${p.query ?? ''}", page_size=${p.page_size ?? 50}`,
+          );
 
           const searchRes = await client.invoke(
             'feishu_im_user_search_messages.default',
@@ -548,47 +648,91 @@ function registerSearchMessages(api: OpenClawPluginApi): boolean {
 
           const messageIds: string[] = (searchRes as any).data?.items ?? [];
           const hasMore: boolean = (searchRes as any).data?.has_more ?? false;
-          const pageToken: string | undefined = (searchRes as any).data?.page_token;
-          log.info(`search: found ${messageIds.length} IDs, has_more=${hasMore}`);
+          const pageToken: string | undefined = (searchRes as any).data
+            ?.page_token;
+          log.info(
+            `search: found ${messageIds.length} IDs, has_more=${hasMore}`,
+          );
 
           if (messageIds.length === 0) {
-            return json({ messages: [], has_more: hasMore, page_token: pageToken });
+            return json({
+              messages: [],
+              has_more: hasMore,
+              page_token: pageToken,
+            });
           }
 
           // 2. 批量获取消息详情
-          const queryStr = messageIds.map((id) => `message_ids=${encodeURIComponent(id)}`).join('&');
+          const queryStr = messageIds
+            .map((id) => `message_ids=${encodeURIComponent(id)}`)
+            .join('&');
           const mgetRes = await client.invokeByPath<{
             code?: number;
             msg?: string;
             data?: { items?: any[] };
-          }>('feishu_im_user_search_messages.default', `/open-apis/im/v1/messages/mget?${queryStr}`, {
-            method: 'GET',
-            query: { user_id_type: 'open_id', card_msg_content_type: 'raw_card_content' },
-            as: 'user',
-          });
+          }>(
+            'feishu_im_user_search_messages.default',
+            `/open-apis/im/v1/messages/mget?${queryStr}`,
+            {
+              method: 'GET',
+              query: {
+                user_id_type: 'open_id',
+                card_msg_content_type: 'raw_card_content',
+              },
+              as: 'user',
+            },
+          );
           const items = mgetRes.data?.items ?? [];
           log.info(`mget: ${items.length} details`);
 
           // 3. 批量获取会话信息
           const chatIds = [
-            ...new Set(items.map((i: any) => i.chat_id as string | undefined).filter(Boolean)),
+            ...new Set(
+              items
+                .map((i: any) => i.chat_id as string | undefined)
+                .filter(Boolean),
+            ),
           ] as string[];
-          const chatMap = await fetchChatContexts(client, chatIds, log.info, log.warn);
-          const p2pChats = [...chatMap.entries()].filter(([, v]) => v.chat_mode === 'p2p');
-          log.info(`chats: ${chatMap.size}/${chatIds.length} resolved, p2p=${p2pChats.length}`);
+          const chatMap = await fetchChatContexts(
+            client,
+            chatIds,
+            log.info,
+            log.warn,
+          );
+          const p2pChats = [...chatMap.entries()].filter(
+            ([, v]) => v.chat_mode === 'p2p',
+          );
+          log.info(
+            `chats: ${chatMap.size}/${chatIds.length} resolved, p2p=${p2pChats.length}`,
+          );
 
           // 4. 格式化消息（填充 sender 名字缓存，使用 UAT）
-          const messages = await formatMessageList(items, account, logFn, client);
+          const messages = await formatMessageList(
+            items,
+            account,
+            logFn,
+            client,
+          );
 
           // 5. 解析 p2p 对方用户名（使用 UAT）
           await resolveP2PTargetNames(chatMap, client, logFn);
 
           // 6. 拼装返回
-          const uatNameResolver = (id: string) => getUATUserName(account.accountId, id);
-          const result = enrichMessages(messages, items, chatMap, uatNameResolver);
+          const uatNameResolver = (id: string) =>
+            getUATUserName(account.accountId, id);
+          const result = enrichMessages(
+            messages,
+            items,
+            chatMap,
+            uatNameResolver,
+          );
           log.info(`result: ${result.length} messages, has_more=${hasMore}`);
 
-          return json({ messages: result, has_more: hasMore, page_token: pageToken });
+          return json({
+            messages: result,
+            has_more: hasMore,
+            page_token: pageToken,
+          });
         } catch (err) {
           return await handleInvokeErrorWithAutoAuth(err, config);
         }
@@ -605,7 +749,9 @@ function registerSearchMessages(api: OpenClawPluginApi): boolean {
 export function registerMessageReadTools(api: OpenClawPluginApi): string[] {
   const registered: string[] = [];
   if (registerGetMessages(api)) registered.push('feishu_im_user_get_messages');
-  if (registerGetThreadMessages(api)) registered.push('feishu_im_user_get_thread_messages');
-  if (registerSearchMessages(api)) registered.push('feishu_im_user_search_messages');
+  if (registerGetThreadMessages(api))
+    registered.push('feishu_im_user_get_thread_messages');
+  if (registerSearchMessages(api))
+    registered.push('feishu_im_user_search_messages');
   return registered;
 }

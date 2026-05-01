@@ -88,7 +88,11 @@ export const convertPost: ContentConverterFn = (raw, ctx) => {
   return { content, resources };
 };
 
-function renderElement(el: PostElement, ctx: ConvertContext, resources: ResourceDescriptor[]): string {
+function renderElement(
+  el: PostElement,
+  ctx: ConvertContext,
+  resources: ResourceDescriptor[],
+): string {
   switch (el.tag) {
     case 'text': {
       let text = el.text ?? '';

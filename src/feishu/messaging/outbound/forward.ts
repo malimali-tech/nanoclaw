@@ -11,7 +11,10 @@
 import type { OpenClawConfig } from 'openclaw/plugin-sdk';
 import type { FeishuSendResult } from '../types';
 import { LarkClient } from '../../core/lark-client';
-import { normalizeFeishuTarget, resolveReceiveIdType } from '../../core/targets';
+import {
+  normalizeFeishuTarget,
+  resolveReceiveIdType,
+} from '../../core/targets';
 
 // ---------------------------------------------------------------------------
 // forwardMessageFeishu

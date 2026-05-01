@@ -14,7 +14,9 @@ import { MESSAGE_TERMINAL_CODES } from './auth-errors';
 import { extractLarkApiCode } from './api-error';
 import { normalizeMessageId } from './targets';
 
-export type TerminalMessageApiCode = typeof LARK_ERROR.MESSAGE_RECALLED | typeof LARK_ERROR.MESSAGE_DELETED;
+export type TerminalMessageApiCode =
+  | typeof LARK_ERROR.MESSAGE_RECALLED
+  | typeof LARK_ERROR.MESSAGE_DELETED;
 
 export interface MessageUnavailableState {
   apiCode: TerminalMessageApiCode;
@@ -35,7 +37,9 @@ function pruneExpired(nowMs = Date.now()): void {
   }
 }
 
-export function isTerminalMessageApiCode(code: unknown): code is TerminalMessageApiCode {
+export function isTerminalMessageApiCode(
+  code: unknown,
+): code is TerminalMessageApiCode {
   return typeof code === 'number' && MESSAGE_TERMINAL_CODES.has(code);
 }
 
@@ -58,7 +62,9 @@ export function markMessageUnavailable(params: {
   });
 }
 
-export function getMessageUnavailableState(messageId: string | undefined): MessageUnavailableState | undefined {
+export function getMessageUnavailableState(
+  messageId: string | undefined,
+): MessageUnavailableState | undefined {
   const normalizedId = normalizeMessageId(messageId);
   if (!normalizedId) return undefined;
 
@@ -101,7 +107,11 @@ export class MessageUnavailableError extends Error {
   readonly apiCode: TerminalMessageApiCode;
   readonly operation?: string;
 
-  constructor(params: { messageId: string; apiCode: TerminalMessageApiCode; operation?: string }) {
+  constructor(params: {
+    messageId: string;
+    apiCode: TerminalMessageApiCode;
+    operation?: string;
+  }) {
     const operationText = params.operation ? `, op=${params.operation}` : '';
     super(
       `[feishu-message-unavailable] message ${params.messageId} unavailable (code=${params.apiCode}${operationText})`,
@@ -113,14 +123,21 @@ export class MessageUnavailableError extends Error {
   }
 }
 
-export function isMessageUnavailableError(error: unknown): error is MessageUnavailableError {
+export function isMessageUnavailableError(
+  error: unknown,
+): error is MessageUnavailableError {
   return (
     error instanceof MessageUnavailableError ||
-    (typeof error === 'object' && error != null && (error as { name?: string }).name === 'MessageUnavailableError')
+    (typeof error === 'object' &&
+      error != null &&
+      (error as { name?: string }).name === 'MessageUnavailableError')
   );
 }
 
-export function assertMessageAvailable(messageId: string | undefined, operation?: string): void {
+export function assertMessageAvailable(
+  messageId: string | undefined,
+  operation?: string,
+): void {
   const normalizedId = normalizeMessageId(messageId);
   if (!normalizedId) return;
 

@@ -10,7 +10,14 @@
 
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
-import { StringEnum, assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json, registerTool } from '../helpers';
+import {
+  StringEnum,
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 import type { ChatMemberListData } from '../sdk-types';
 
 // ---------------------------------------------------------------------------
@@ -19,11 +26,10 @@ import type { ChatMemberListData } from '../sdk-types';
 
 const ChatMembersSchema = Type.Object({
   chat_id: Type.String({
-    description: '群 ID（格式如 oc_xxx）。' + '可以通过 feishu_chat_search 工具搜索获取',
+    description:
+      '群 ID（格式如 oc_xxx）。' + '可以通过 feishu_chat_search 工具搜索获取',
   }),
-  member_id_type: Type.Optional(
-    StringEnum(['open_id', 'union_id', 'user_id']),
-  ),
+  member_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
   page_size: Type.Optional(
     Type.Integer({
       description: '分页大小（默认20）',
@@ -73,7 +79,9 @@ export function registerChatMembersTool(api: OpenClawPluginApi): boolean {
         try {
           const client = toolClient();
 
-          log.info(`chat_members: chat_id="${p.chat_id}", page_size=${p.page_size ?? 20}`);
+          log.info(
+            `chat_members: chat_id="${p.chat_id}", page_size=${p.page_size ?? 20}`,
+          );
 
           const res = await client.invoke(
             'feishu_chat_members.default',
@@ -104,7 +112,9 @@ export function registerChatMembersTool(api: OpenClawPluginApi): boolean {
           const data = res.data as ChatMemberListData | undefined;
           const memberCount = data?.items?.length ?? 0;
           const memberTotal = data?.member_total ?? 0;
-          log.info(`chat_members: found ${memberCount} members (total: ${memberTotal})`);
+          log.info(
+            `chat_members: found ${memberCount} members (total: ${memberTotal})`,
+          );
 
           return json({
             items: data?.items,

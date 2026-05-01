@@ -27,8 +27,15 @@ import type { FeishuMediaInfo, MessageContext } from '../types';
 import type { LarkAccount } from '../../core/types';
 import { getMessageFeishu } from '../outbound/fetch';
 import type { PermissionError } from './permission';
-import { PERMISSION_ERROR_COOLDOWN_MS, permissionErrorNotifiedAt } from './permission';
-import { batchResolveUserNames, getUserNameCache, resolveUserName  } from './user-name-cache';
+import {
+  PERMISSION_ERROR_COOLDOWN_MS,
+  permissionErrorNotifiedAt,
+} from './permission';
+import {
+  batchResolveUserNames,
+  getUserNameCache,
+  resolveUserName,
+} from './user-name-cache';
 import { buildFeishuMediaPayload, downloadResources } from './media-resolver';
 
 // ---------------------------------------------------------------------------
@@ -52,7 +59,9 @@ export async function resolveSenderInfo(params: {
   // Only resolve display name for real users — the contact API
   // does not return results for app/bot accounts.
   if (ctx.rawSender?.sender_type !== 'user') {
-    log(`sender_type is "${ctx.rawSender?.sender_type}", skipping name resolution`);
+    log(
+      `sender_type is "${ctx.rawSender?.sender_type}", skipping name resolution`,
+    );
     return { ctx };
   }
 
@@ -66,7 +75,9 @@ export async function resolveSenderInfo(params: {
     ctx = { ...ctx, senderName: senderResult.name };
     log(`sender resolved: ${senderResult.name}`);
   } else if (senderResult.permissionError) {
-    log(`sender resolve failed: permission error code=${senderResult.permissionError.code}`);
+    log(
+      `sender resolve failed: permission error code=${senderResult.permissionError.code}`,
+    );
   }
 
   // Track permission errors (with cooldown)
@@ -192,7 +203,10 @@ export async function resolveMedia(params: {
  *   what was received (the SDK reads these via `MediaPath` directly,
  *   but the text body should still reflect the actual attachments).
  */
-export function substituteMediaPaths(content: string, mediaList: FeishuMediaInfo[]): string {
+export function substituteMediaPaths(
+  content: string,
+  mediaList: FeishuMediaInfo[],
+): string {
   let result = content;
   for (const media of mediaList) {
     const { fileKey, path, resourceType } = media;
@@ -207,19 +221,25 @@ export function substituteMediaPaths(content: string, mediaList: FeishuMediaInfo
         break;
       case 'audio': {
         // <audio key="xxx" .../> → [Audio: /path/to/audio.opus ...]
-        const audioRe = new RegExp(`<audio key="${escapeRegExp(fileKey)}"[^/]*/>`);
+        const audioRe = new RegExp(
+          `<audio key="${escapeRegExp(fileKey)}"[^/]*/>`,
+        );
         result = result.replace(audioRe, `[Audio: ${path}]`);
         break;
       }
       case 'file': {
         // <file key="xxx" .../> → [File: /path/to/doc.pdf]
-        const fileRe = new RegExp(`<file key="${escapeRegExp(fileKey)}"[^/]*/>`);
+        const fileRe = new RegExp(
+          `<file key="${escapeRegExp(fileKey)}"[^/]*/>`,
+        );
         result = result.replace(fileRe, `[File: ${path}]`);
         break;
       }
       case 'video': {
         // <video key="xxx" .../> → [Video: /path/to/video.mp4]
-        const videoRe = new RegExp(`<video key="${escapeRegExp(fileKey)}"[^/]*/>`);
+        const videoRe = new RegExp(
+          `<video key="${escapeRegExp(fileKey)}"[^/]*/>`,
+        );
         result = result.replace(videoRe, `[Video: ${path}]`);
         break;
       }
@@ -265,7 +285,9 @@ export async function resolveQuotedContent(params: {
     });
     if (!quotedMsg) return undefined;
 
-    log(`feishu[${account.accountId}]: fetched quoted message: ${quotedMsg.content?.slice(0, 100)}`);
+    log(
+      `feishu[${account.accountId}]: fetched quoted message: ${quotedMsg.content?.slice(0, 100)}`,
+    );
 
     // Build quoted text with message_id prefix so AI can correlate
     // file_key / image_key with the source message for resource download.
@@ -275,7 +297,9 @@ export async function resolveQuotedContent(params: {
     }
     return `${prefix} ${quotedMsg.content}`;
   } catch (err) {
-    log(`feishu[${account.accountId}]: failed to fetch quoted message: ${String(err)}`);
+    log(
+      `feishu[${account.accountId}]: failed to fetch quoted message: ${String(err)}`,
+    );
     return undefined;
   }
 }

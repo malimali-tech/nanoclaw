@@ -16,7 +16,11 @@ import type { ClawdbotConfig } from 'openclaw/plugin-sdk';
 // NOTE: This is the SDK-standard interactive pipeline.
 import { dispatchPluginInteractiveHandler } from 'openclaw/plugin-sdk/plugin-runtime';
 import { larkLogger } from '../core/lark-logger';
-import { sendCardFeishu, sendMessageFeishu, updateCardFeishu } from '../messaging/outbound/send';
+import {
+  sendCardFeishu,
+  sendMessageFeishu,
+  updateCardFeishu,
+} from '../messaging/outbound/send';
 
 const log = larkLogger('channel/interactive-dispatch');
 
@@ -134,18 +138,29 @@ export async function dispatchFeishuPluginInteractiveHandler(params: {
     },
     editMessage: async (args: { text?: string; blocks?: unknown[] }) => {
       if (!basics.openMessageId) {
-        if (Array.isArray(args?.blocks) && args.blocks.length && basics.openChatId) {
+        if (
+          Array.isArray(args?.blocks) &&
+          args.blocks.length &&
+          basics.openChatId
+        ) {
           await sendCardFeishu({
             cfg: params.cfg,
             to: basics.openChatId,
-            card: { schema: '2.0', body: { elements: args.blocks as Record<string, unknown>[] } },
+            card: {
+              schema: '2.0',
+              body: { elements: args.blocks as Record<string, unknown>[] },
+            },
             replyToMessageId: basics.openMessageId,
             accountId: params.accountId,
             replyInThread: false,
           });
           return;
         }
-        if (typeof args?.text === 'string' && args.text.trim() && basics.openChatId) {
+        if (
+          typeof args?.text === 'string' &&
+          args.text.trim() &&
+          basics.openChatId
+        ) {
           await sendMessageFeishu({
             cfg: params.cfg,
             to: basics.openChatId,
@@ -161,7 +176,10 @@ export async function dispatchFeishuPluginInteractiveHandler(params: {
         await updateCardFeishu({
           cfg: params.cfg,
           messageId: basics.openMessageId,
-          card: { schema: '2.0', body: { elements: args.blocks as Record<string, unknown>[] } },
+          card: {
+            schema: '2.0',
+            body: { elements: args.blocks as Record<string, unknown>[] },
+          },
           accountId: params.accountId,
         });
         return;
@@ -201,7 +219,11 @@ export async function dispatchFeishuPluginInteractiveHandler(params: {
       data: basics.action,
       dedupeId,
       invoke: async (match: {
-        registration: { handler: (ctx: FeishuInteractiveHandlerContext) => Promise<unknown> | unknown };
+        registration: {
+          handler: (
+            ctx: FeishuInteractiveHandlerContext,
+          ) => Promise<unknown> | unknown;
+        };
         namespace: string;
         payload: string;
       }) => {

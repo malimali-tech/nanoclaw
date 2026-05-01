@@ -4,11 +4,26 @@
  */
 
 import { safeParse } from '../utils';
-import type { ConvertCardResult, Obj, RawCardContent, TextStyle } from './types';
+import type {
+  ConvertCardResult,
+  Obj,
+  RawCardContent,
+  TextStyle,
+} from './types';
 import { CHART_TYPE_NAMES, EMOJI_MAP } from './types';
-import { escapeAttr, formatMillisecondsToISO8601, normalizeTimeFormat } from './card-utils';
+import {
+  escapeAttr,
+  formatMillisecondsToISO8601,
+  normalizeTimeFormat,
+} from './card-utils';
 
-type ElementConverterFn = (c: CardConverter, elem: Obj, prop: Obj, id: string, depth: number) => string;
+type ElementConverterFn = (
+  c: CardConverter,
+  elem: Obj,
+  prop: Obj,
+  id: string,
+  depth: number,
+) => string;
 
 export const MODE = { Concise: 0, Detailed: 1 } as const;
 type Mode = (typeof MODE)[keyof typeof MODE];
@@ -22,7 +37,10 @@ const elementConverters = new Map<string, ElementConverterFn>([
   ['note', (c, _elem, prop) => c.convertNote(prop)],
   ['hr', () => '---'],
   ['br', () => '\n'],
-  ['column_set', (c, _elem, prop, _id, depth) => c.convertColumnSet(prop, depth)],
+  [
+    'column_set',
+    (c, _elem, prop, _id, depth) => c.convertColumnSet(prop, depth),
+  ],
   ['column', (c, _elem, prop, _id, depth) => c.convertColumn(prop, depth)],
   ['person', (c, _elem, prop, id) => c.convertPerson(prop, id)],
   ['person_v1', (c, _elem, prop, id) => c.convertPersonV1(prop, id)],
@@ -35,14 +53,29 @@ const elementConverters = new Map<string, ElementConverterFn>([
   ['action', (c, _elem, prop) => c.convertActions(prop)],
   ['overflow', (c, _elem, prop) => c.convertOverflow(prop)],
   ['select_static', (c, _elem, prop, id) => c.convertSelect(prop, id, false)],
-  ['multi_select_static', (c, _elem, prop, id) => c.convertSelect(prop, id, true)],
+  [
+    'multi_select_static',
+    (c, _elem, prop, id) => c.convertSelect(prop, id, true),
+  ],
   ['select_person', (c, _elem, prop, id) => c.convertSelect(prop, id, false)],
-  ['multi_select_person', (c, _elem, prop, id) => c.convertSelect(prop, id, true)],
+  [
+    'multi_select_person',
+    (c, _elem, prop, id) => c.convertSelect(prop, id, true),
+  ],
   ['select_img', (c, _elem, prop, id) => c.convertSelectImg(prop, id)],
   ['input', (c, _elem, prop, id) => c.convertInput(prop, id)],
-  ['date_picker', (c, _elem, prop, id) => c.convertDatePicker(prop, id, 'date')],
-  ['picker_time', (c, _elem, prop, id) => c.convertDatePicker(prop, id, 'time')],
-  ['picker_datetime', (c, _elem, prop, id) => c.convertDatePicker(prop, id, 'datetime')],
+  [
+    'date_picker',
+    (c, _elem, prop, id) => c.convertDatePicker(prop, id, 'date'),
+  ],
+  [
+    'picker_time',
+    (c, _elem, prop, id) => c.convertDatePicker(prop, id, 'time'),
+  ],
+  [
+    'picker_datetime',
+    (c, _elem, prop, id) => c.convertDatePicker(prop, id, 'datetime'),
+  ],
   ['checker', (c, _elem, prop, id) => c.convertChecker(prop, id)],
   ['img', (c, _elem, prop, id) => c.convertImage(prop, id)],
   ['image', (c, _elem, prop, id) => c.convertImage(prop, id)],
@@ -51,9 +84,15 @@ const elementConverters = new Map<string, ElementConverterFn>([
   ['chart', (c, _elem, prop, id) => c.convertChart(prop, id)],
   ['audio', (c, _elem, prop, id) => c.convertAudio(prop, id)],
   ['video', (c, _elem, prop, id) => c.convertVideo(prop, id)],
-  ['collapsible_panel', (c, _elem, prop, id) => c.convertCollapsiblePanel(prop, id)],
+  [
+    'collapsible_panel',
+    (c, _elem, prop, id) => c.convertCollapsiblePanel(prop, id),
+  ],
   ['form', (c, _elem, prop, id) => c.convertForm(prop, id)],
-  ['interactive_container', (c, _elem, prop, id) => c.convertInteractiveContainer(prop, id)],
+  [
+    'interactive_container',
+    (c, _elem, prop, id) => c.convertInteractiveContainer(prop, id),
+  ],
   ['text_tag', (c, _elem, prop) => c.convertTextTag(prop)],
   ['number_tag', (c, _elem, prop) => c.convertNumberTag(prop)],
   ['link', (c, _elem, prop) => c.convertLink(prop)],
@@ -634,7 +673,11 @@ export class CardConverter {
       const initialOption = prop.initialOption as string | undefined;
       if (typeof initialOption === 'string') selectedValues.add(initialOption);
       const initialIndex = prop.initialIndex as number | undefined;
-      if (typeof initialIndex === 'number' && initialIndex >= 0 && initialIndex < options.length) {
+      if (
+        typeof initialIndex === 'number' &&
+        initialIndex >= 0 &&
+        initialIndex < options.length
+      ) {
         const opt = options[initialIndex] as Obj | undefined;
         if (opt && typeof opt === 'object') {
           const val = opt.value as string | undefined;
@@ -681,7 +724,8 @@ export class CardConverter {
     if (this.mode === MODE.Detailed) {
       const attrs: string[] = [];
       if (isMulti) attrs.push('multi');
-      if (_id.includes('person') || prop.type === 'person') attrs.push('type:person');
+      if (_id.includes('person') || prop.type === 'person')
+        attrs.push('type:person');
       if (attrs.length > 0) result += `(${attrs.join(' ')})`;
     }
 
@@ -842,7 +886,8 @@ export class CardConverter {
     }
 
     if (personName) {
-      if (this.mode === MODE.Detailed) return `@${personName}(open_id:${userID})`;
+      if (this.mode === MODE.Detailed)
+        return `@${personName}(open_id:${userID})`;
       return `@${personName}`;
     }
 
@@ -867,7 +912,8 @@ export class CardConverter {
     }
 
     if (personName) {
-      if (this.mode === MODE.Detailed) return `@${personName}(open_id:${userID})`;
+      if (this.mode === MODE.Detailed)
+        return `@${personName}(open_id:${userID})`;
       return `@${personName}`;
     }
 
@@ -1048,7 +1094,9 @@ export class CardConverter {
       const vm = v as Obj;
       parts.push(`${vm[xField]}:${vm[yField]}`);
     }
-    return parts.length > 0 ? parts.join(', ') : this.extractGenericSummary(values);
+    return parts.length > 0
+      ? parts.join(', ')
+      : this.extractGenericSummary(values);
   }
 
   private extractPieSummary(chartSpec: Obj, values: unknown[]): string {
@@ -1065,7 +1113,9 @@ export class CardConverter {
       const vm = v as Obj;
       parts.push(`${vm[categoryField]}:${vm[valueField]}`);
     }
-    return parts.length > 0 ? parts.join(', ') : this.extractGenericSummary(values);
+    return parts.length > 0
+      ? parts.join(', ')
+      : this.extractGenericSummary(values);
   }
 
   private extractGenericSummary(values: unknown[]): string {

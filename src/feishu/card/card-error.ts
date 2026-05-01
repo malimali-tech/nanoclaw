@@ -47,7 +47,12 @@ export class CardKitApiError extends Error {
   readonly code: number;
   readonly msg: string;
 
-  constructor(params: { api: string; code: number; msg: string; context: string }) {
+  constructor(params: {
+    api: string;
+    code: number;
+    msg: string;
+    context: string;
+  }) {
     const { api, code, msg, context } = params;
     super(`cardkit ${api} FAILED: code=${code}, msg=${msg}, ${context}`);
     this.name = 'CardKitApiError';
@@ -82,7 +87,9 @@ export function extractSubCode(msg: string): number | null {
  *
  * 返回 { code, subCode, errMsg }，如果无法提取 code 则返回 null。
  */
-export function parseCardApiError(err: unknown): { code: number; subCode: number | null; errMsg: string } | null {
+export function parseCardApiError(
+  err: unknown,
+): { code: number; subCode: number | null; errMsg: string } | null {
   const code = extractLarkApiCode(err);
   if (code === undefined) return null;
 
@@ -150,7 +157,9 @@ export function isCardRateLimitError(err: unknown): boolean {
  * 代码块里的示例表格不会被飞书解析成卡片表格元素，因此这里要先排除，
  * 让 shouldUseCard() 预检和 sanitizeTextForCard() 降级逻辑使用同一份结果。
  */
-export function findMarkdownTablesOutsideCodeBlocks(text: string): MarkdownTableMatch[] {
+export function findMarkdownTablesOutsideCodeBlocks(
+  text: string,
+): MarkdownTableMatch[] {
   const codeBlockRanges: Array<{ start: number; end: number }> = [];
   const codeBlockRegex = /```[\s\S]*?```/g;
   let codeBlockMatch = codeBlockRegex.exec(text);
@@ -201,7 +210,11 @@ export function sanitizeTextSegmentsForCard(
       return text;
     }
 
-    const sanitizedText = wrapTablesBeyondLimit(text, matches, Math.max(remainingTableBudget, 0));
+    const sanitizedText = wrapTablesBeyondLimit(
+      text,
+      matches,
+      Math.max(remainingTableBudget, 0),
+    );
     remainingTableBudget = 0;
     return sanitizedText;
   });
@@ -214,11 +227,18 @@ export function sanitizeTextSegmentsForCard(
  * 前 tableLimit 张表格保持原样（可正常卡片渲染）；
  * 超出部分用反引号包裹，阻止飞书将其解析为卡片表格元素。
  */
-export function sanitizeTextForCard(text: string, tableLimit: number = FEISHU_CARD_TABLE_LIMIT): string {
+export function sanitizeTextForCard(
+  text: string,
+  tableLimit: number = FEISHU_CARD_TABLE_LIMIT,
+): string {
   return sanitizeTextSegmentsForCard([text], tableLimit)[0];
 }
 
-function wrapTablesBeyondLimit(text: string, matches: readonly MarkdownTableMatch[], keepCount: number): string {
+function wrapTablesBeyondLimit(
+  text: string,
+  matches: readonly MarkdownTableMatch[],
+  keepCount: number,
+): string {
   if (matches.length <= keepCount) return text;
 
   // Back-to-front replacement keeps the original indices stable.
@@ -226,7 +246,8 @@ function wrapTablesBeyondLimit(text: string, matches: readonly MarkdownTableMatc
   for (let i = matches.length - 1; i >= keepCount; i--) {
     const { index, length, raw } = matches[i];
     const replacement = `\`\`\`\n${raw}\n\`\`\``;
-    result = result.slice(0, index) + replacement + result.slice(index + length);
+    result =
+      result.slice(0, index) + replacement + result.slice(index + length);
   }
 
   return result;

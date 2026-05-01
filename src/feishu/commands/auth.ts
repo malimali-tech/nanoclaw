@@ -16,7 +16,10 @@ import { LarkClient } from '../core/lark-client';
 import { getAppGrantedScopes, getAppInfo } from '../core/app-scope-checker';
 import { getStoredToken, tokenStatus } from '../core/token-store';
 import { filterSensitiveScopes } from '../core/tool-scopes';
-import { OwnerAccessDeniedError, assertOwnerAccessStrict } from '../core/owner-policy';
+import {
+  OwnerAccessDeniedError,
+  assertOwnerAccessStrict,
+} from '../core/owner-policy';
 import { openPlatformDomain } from '../core/domains';
 
 import type { FeishuLocale } from './locale';
@@ -47,18 +50,23 @@ const T: Record<
     missingOfflineAccess: (link) =>
       `❌ 应用缺少核心权限 offline_access，无法查询可授权 scope 列表。\n\n请管理员在飞书开放平台开通此权限后重试：[申请权限](${link})`,
     noUserScopes: '当前应用未开通任何用户级权限，无需授权。',
-    allAuthorized: (count) => `✅ 您已授权所有可用权限（共 ${count} 个），无需重复授权。`,
+    allAuthorized: (count) =>
+      `✅ 您已授权所有可用权限（共 ${count} 个），无需重复授权。`,
     authSent: '✅ 已发送授权请求',
   },
   en_us: {
-    noIdentity: '❌ Unable to identify user. Please use this command in a Feishu conversation.',
-    accountIncomplete: (accountId) => `❌ Account ${accountId} configuration is incomplete`,
+    noIdentity:
+      '❌ Unable to identify user. Please use this command in a Feishu conversation.',
+    accountIncomplete: (accountId) =>
+      `❌ Account ${accountId} configuration is incomplete`,
     missingSelfManage: (link) =>
       `❌ App is missing the core permission application:application:self_manage and cannot query available scopes.\n\nPlease ask an admin to grant this permission on the Feishu Open Platform: [Apply](${link})`,
-    ownerOnly: '❌ This command is restricted to the app owner.\n\nPlease contact the app admin for authorization.',
+    ownerOnly:
+      '❌ This command is restricted to the app owner.\n\nPlease contact the app admin for authorization.',
     missingOfflineAccess: (link) =>
       `❌ App is missing the core permission offline_access and cannot query available scopes.\n\nPlease ask an admin to grant this permission on the Feishu Open Platform: [Apply](${link})`,
-    noUserScopes: 'No user-level permissions are enabled for this app. Authorization is not needed.',
+    noUserScopes:
+      'No user-level permissions are enabled for this app. Authorization is not needed.',
     allAuthorized: (count) =>
       `✅ You have authorized all available permissions (${count} total). No re-authorization needed.`,
     authSent: '✅ Authorization request sent',
@@ -172,7 +180,9 @@ async function executeFeishuAuth(config: OpenClawConfig): Promise<AuthResult> {
 
   const existing = await getStoredToken(appId, senderOpenId);
   const tokenValid = existing && tokenStatus(existing) !== 'expired';
-  const grantedScopes = new Set(tokenValid ? (existing.scope?.split(/\s+/).filter(Boolean) ?? []) : []);
+  const grantedScopes = new Set(
+    tokenValid ? (existing.scope?.split(/\s+/).filter(Boolean) ?? []) : [],
+  );
   const missingScopes = appScopes.filter((s) => !grantedScopes.has(s));
 
   if (missingScopes.length === 0) {
@@ -197,7 +207,10 @@ async function executeFeishuAuth(config: OpenClawConfig): Promise<AuthResult> {
  * 执行飞书用户权限批量授权命令
  * 直接调用 triggerOnboarding()，包含 owner 检查
  */
-export async function runFeishuAuth(config: OpenClawConfig, locale: FeishuLocale = 'zh_cn'): Promise<string> {
+export async function runFeishuAuth(
+  config: OpenClawConfig,
+  locale: FeishuLocale = 'zh_cn',
+): Promise<string> {
   const result = await executeFeishuAuth(config);
   return formatAuthResult(result, locale);
 }
@@ -206,7 +219,9 @@ export async function runFeishuAuth(config: OpenClawConfig, locale: FeishuLocale
  * 运行飞书授权命令，同时生成中英双语结果。
  * 副作用（triggerOnboarding）只执行一次，结果格式化为双语文本。
  */
-export async function runFeishuAuthI18n(config: OpenClawConfig): Promise<Record<FeishuLocale, string>> {
+export async function runFeishuAuthI18n(
+  config: OpenClawConfig,
+): Promise<Record<FeishuLocale, string>> {
   const result = await executeFeishuAuth(config);
   return {
     zh_cn: formatAuthResult(result, 'zh_cn'),

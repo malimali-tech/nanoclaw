@@ -15,13 +15,20 @@
 
 import type { ClawdbotConfig } from 'openclaw/plugin-sdk';
 import type { FeishuMessageEvent, MentionInfo, MessageContext } from '../types';
-import { type ConvertContext, convertMessageContent } from '../converters/content-converter';
+import {
+  type ConvertContext,
+  convertMessageContent,
+} from '../converters/content-converter';
 import { getLarkAccount } from '../../core/accounts';
 import { LarkClient } from '../../core/lark-client';
 import { larkLogger } from '../../core/lark-logger';
 import { isMentionAll } from './mention';
 import { getUserNameCache } from './user-name-cache';
-import { createFetchSubMessages, createParseResolveNames, fetchCardContent } from './parse-io';
+import {
+  createFetchSubMessages,
+  createParseResolveNames,
+  fetchCardContent,
+} from './parse-io';
 
 const log = larkLogger('inbound/parse');
 
@@ -87,7 +94,9 @@ export async function parseMessageEvent(
   const acctId = expandCtx?.accountId;
 
   // Create larkClient once when expandCtx is available (used for merge_forward & card fetch)
-  const larkClient = expandCtx ? LarkClient.fromCfg(expandCtx.cfg, acctId) : undefined;
+  const larkClient = expandCtx
+    ? LarkClient.fromCfg(expandCtx.cfg, acctId)
+    : undefined;
 
   // Build merge_forward callbacks when expandCtx is provided
   let fetchSubMessages: ConvertContext['fetchSubMessages'];
@@ -101,7 +110,10 @@ export async function parseMessageEvent(
   // For interactive messages, fetch full v2 card content via API
   let effectiveContent = event.message.content;
   if (event.message.message_type === 'interactive' && expandCtx) {
-    const fullContent = await fetchCardContent(event.message.message_id, larkClient!);
+    const fullContent = await fetchCardContent(
+      event.message.message_id,
+      larkClient!,
+    );
     if (fullContent) {
       effectiveContent = fullContent;
       log.info('replaced interactive content with full v2 card data');
@@ -115,12 +127,18 @@ export async function parseMessageEvent(
     botOpenId,
     cfg: expandCtx?.cfg,
     accountId: acctId,
-    resolveUserName: acctId ? (openId) => getUserNameCache(acctId).get(openId) : undefined,
+    resolveUserName: acctId
+      ? (openId) => getUserNameCache(acctId).get(openId)
+      : undefined,
     fetchSubMessages,
     batchResolveNames,
     stripBotMentions: true,
   };
-  const { content, resources } = await convertMessageContent(effectiveContent, event.message.message_type, convertCtx);
+  const { content, resources } = await convertMessageContent(
+    effectiveContent,
+    event.message.message_type,
+    convertCtx,
+  );
 
   const createTimeStr = event.message.create_time;
   const createTime = createTimeStr ? parseInt(createTimeStr, 10) : undefined;
@@ -140,7 +158,9 @@ export async function parseMessageEvent(
     mentionAll,
     createTime: Number.isNaN(createTime) ? undefined : createTime,
     rawMessage:
-      effectiveContent !== event.message.content ? { ...event.message, content: effectiveContent } : event.message,
+      effectiveContent !== event.message.content
+        ? { ...event.message, content: effectiveContent }
+        : event.message,
     rawSender: event.sender,
   };
 }

@@ -56,7 +56,8 @@ export function registerFeishuOAuthBatchAuthTool(api: OpenClawPluginApi): void {
           const senderOpenId = ticket?.senderOpenId;
           if (!senderOpenId) {
             return json({
-              error: '无法获取当前用户身份（senderOpenId），请在飞书对话中使用此工具。',
+              error:
+                '无法获取当前用户身份（senderOpenId），请在飞书对话中使用此工具。',
             });
           }
 
@@ -106,7 +107,9 @@ export function registerFeishuOAuthBatchAuthTool(api: OpenClawPluginApi): void {
 
           // 4. 查询用户已授权的 scope
           const existing = await getStoredToken(appId, senderOpenId);
-          const grantedScopes = new Set(existing?.scope?.split(/\s+/).filter(Boolean) ?? []);
+          const grantedScopes = new Set(
+            existing?.scope?.split(/\s+/).filter(Boolean) ?? [],
+          );
 
           // 5. 计算差集（应用已开通但用户未授权）
           const missingScopes = appScopes.filter((s) => !grantedScopes.has(s));
@@ -137,7 +140,9 @@ export function registerFeishuOAuthBatchAuthTool(api: OpenClawPluginApi): void {
           }
 
           // 8. 调用共享的 executeAuthorize() 函数（复用 oauth.ts 逻辑）
-          const alreadyGrantedScopes = appScopes.filter((s) => grantedScopes.has(s));
+          const alreadyGrantedScopes = appScopes.filter((s) =>
+            grantedScopes.has(s),
+          );
           log.info(
             `scope check: total=${appScopes.length}, granted=${alreadyGrantedScopes.length}, missing=${missingScopes.length}`,
           );
@@ -173,5 +178,7 @@ export function registerFeishuOAuthBatchAuthTool(api: OpenClawPluginApi): void {
     { name: 'feishu_oauth_batch_auth' },
   );
 
-  api.logger.debug?.('feishu_oauth_batch_auth: Registered feishu_oauth_batch_auth tool');
+  api.logger.debug?.(
+    'feishu_oauth_batch_auth: Registered feishu_oauth_batch_auth tool',
+  );
 }

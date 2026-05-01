@@ -44,7 +44,11 @@ export type DeviceFlowResult =
   | { ok: true; token: DeviceFlowTokenData }
   | { ok: false; error: DeviceFlowError; message: string };
 
-export type DeviceFlowError = 'authorization_pending' | 'slow_down' | 'access_denied' | 'expired_token';
+export type DeviceFlowError =
+  | 'authorization_pending'
+  | 'slow_down'
+  | 'access_denied'
+  | 'expired_token';
 
 // ---------------------------------------------------------------------------
 // Endpoint resolution
@@ -59,13 +63,15 @@ export function resolveOAuthEndpoints(brand: LarkBrand): {
 } {
   if (!brand || brand === 'feishu') {
     return {
-      deviceAuthorization: 'https://accounts.feishu.cn/oauth/v1/device_authorization',
+      deviceAuthorization:
+        'https://accounts.feishu.cn/oauth/v1/device_authorization',
       token: 'https://open.feishu.cn/open-apis/authen/v2/oauth/token',
     };
   }
   if (brand === 'lark') {
     return {
-      deviceAuthorization: 'https://accounts.larksuite.com/oauth/v1/device_authorization',
+      deviceAuthorization:
+        'https://accounts.larksuite.com/oauth/v1/device_authorization',
       token: 'https://open.larksuite.com/open-apis/authen/v2/oauth/token',
     };
   }
@@ -140,23 +146,32 @@ export async function requestDeviceAuthorization(params: {
   try {
     data = JSON.parse(text) as Record<string, unknown>;
   } catch {
-    throw new Error(`Device authorization failed: HTTP ${resp.status} – ${text.slice(0, 200)}`);
+    throw new Error(
+      `Device authorization failed: HTTP ${resp.status} – ${text.slice(0, 200)}`,
+    );
   }
 
   if (!resp.ok || data.error) {
-    const msg = (data.error_description as string) ?? (data.error as string) ?? 'Unknown error';
+    const msg =
+      (data.error_description as string) ??
+      (data.error as string) ??
+      'Unknown error';
     throw new Error(`Device authorization failed: ${msg}`);
   }
 
   const expiresIn = (data.expires_in as number) ?? 240;
   const interval = (data.interval as number) ?? 5;
-  log.info(`device_code obtained, expires_in=${expiresIn}s (${Math.round(expiresIn / 60)}min), interval=${interval}s`);
+  log.info(
+    `device_code obtained, expires_in=${expiresIn}s (${Math.round(expiresIn / 60)}min), interval=${interval}s`,
+  );
 
   return {
     deviceCode: data.device_code as string,
     userCode: data.user_code as string,
     verificationUri: data.verification_uri as string,
-    verificationUriComplete: (data.verification_uri_complete as string) ?? (data.verification_uri as string),
+    verificationUriComplete:
+      (data.verification_uri_complete as string) ??
+      (data.verification_uri as string),
     expiresIn,
     interval,
   };
@@ -210,7 +225,11 @@ export async function pollDeviceToken(params: {
   while (Date.now() < deadline && attempts < MAX_POLL_ATTEMPTS) {
     attempts++;
     if (signal?.aborted) {
-      return { ok: false, error: 'expired_token', message: 'Polling was cancelled' };
+      return {
+        ok: false,
+        error: 'expired_token',
+        message: 'Polling was cancelled',
+      };
     }
 
     await sleep(interval * 1000, signal);
@@ -240,7 +259,8 @@ export async function pollDeviceToken(params: {
       log.info('token obtained successfully');
       const refreshToken = (data.refresh_token as string) ?? '';
       const expiresIn = (data.expires_in as number) ?? 7200;
-      let refreshExpiresIn = (data.refresh_token_expires_in as number) ?? 604800;
+      let refreshExpiresIn =
+        (data.refresh_token_expires_in as number) ?? 604800;
       if (!refreshToken) {
         log.warn('no refresh_token in response, token will not be refreshable');
         refreshExpiresIn = expiresIn;
@@ -275,7 +295,11 @@ export async function pollDeviceToken(params: {
 
     if (error === 'expired_token' || error === 'invalid_grant') {
       log.info(`device code expired/invalid (error=${error})`);
-      return { ok: false, error: 'expired_token', message: '授权码已过期，请重新发起' };
+      return {
+        ok: false,
+        error: 'expired_token',
+        message: '授权码已过期，请重新发起',
+      };
     }
 
     // Unknown error – treat as terminal.

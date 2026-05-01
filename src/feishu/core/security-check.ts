@@ -25,7 +25,11 @@ export type IsolationStatus =
   /** All accounts have bindings but share the same agent (explicit choice) */
   | { mode: 'shared-explicit'; accounts: LarkAccount[]; sharedAgentId: string }
   /** Some or all accounts have no bindings — implicit sharing, risky */
-  | { mode: 'shared-implicit'; accounts: LarkAccount[]; unboundAccounts: LarkAccount[] };
+  | {
+      mode: 'shared-implicit';
+      accounts: LarkAccount[];
+      unboundAccounts: LarkAccount[];
+    };
 
 // ---------------------------------------------------------------------------
 // Check logic
@@ -35,21 +39,33 @@ export type IsolationStatus =
  * Diagnose whether multiple enabled accounts from different tenants
  * are properly isolated via agent bindings.
  */
-export function checkMultiAccountIsolation(cfg: ClawdbotConfig): IsolationStatus {
+export function checkMultiAccountIsolation(
+  cfg: ClawdbotConfig,
+): IsolationStatus {
   const accounts = getEnabledLarkAccounts(cfg);
   if (accounts.length <= 1) return { mode: 'not-applicable' };
 
-  const appIds = new Set(accounts.map((a) => (a.configured ? a.appId : undefined)).filter((id): id is string => !!id));
+  const appIds = new Set(
+    accounts
+      .map((a) => (a.configured ? a.appId : undefined))
+      .filter((id): id is string => !!id),
+  );
   if (appIds.size <= 1) return { mode: 'not-applicable' };
 
-  const feishuBindings = cfg.bindings?.filter((b) => b.match?.channel === 'feishu' && b.match?.accountId);
+  const feishuBindings = cfg.bindings?.filter(
+    (b) => b.match?.channel === 'feishu' && b.match?.accountId,
+  );
 
   if (!feishuBindings || feishuBindings.length === 0) {
     return { mode: 'shared-implicit', accounts, unboundAccounts: accounts };
   }
 
-  const boundAccountIds = new Set(feishuBindings.map((b) => b.match!.accountId!));
-  const unboundAccounts = accounts.filter((a) => !boundAccountIds.has(a.accountId));
+  const boundAccountIds = new Set(
+    feishuBindings.map((b) => b.match!.accountId!),
+  );
+  const unboundAccounts = accounts.filter(
+    (a) => !boundAccountIds.has(a.accountId),
+  );
 
   if (unboundAccounts.length > 0) {
     return { mode: 'shared-implicit', accounts, unboundAccounts };
@@ -78,7 +94,11 @@ function accountNames(accounts: LarkAccount[]): string {
 function isMultiTenant(cfg: ClawdbotConfig): boolean {
   const accounts = getEnabledLarkAccounts(cfg);
   if (accounts.length <= 1) return false;
-  const appIds = new Set(accounts.map((a) => (a.configured ? a.appId : undefined)).filter((id): id is string => !!id));
+  const appIds = new Set(
+    accounts
+      .map((a) => (a.configured ? a.appId : undefined))
+      .filter((id): id is string => !!id),
+  );
   return appIds.size > 1;
 }
 
@@ -123,7 +143,10 @@ function formatDmScopeWarning(): string {
  * Generate a combined warning block for doctor / start.
  * Returns null when everything is fine.
  */
-export function formatIsolationWarning(status: IsolationStatus, cfg?: ClawdbotConfig): string | null {
+export function formatIsolationWarning(
+  status: IsolationStatus,
+  cfg?: ClawdbotConfig,
+): string | null {
   const sections: string[] = [];
 
   // Agent sharing warning
@@ -140,7 +163,11 @@ export function formatIsolationWarning(status: IsolationStatus, cfg?: ClawdbotCo
 
   // dmScope warning
   if (cfg && needsDmScopeFix(cfg)) {
-    sections.push(formatDmScopeWarning() + '\n\n' + '👉 发送 **/feishu isolate** 一键查看修复方案');
+    sections.push(
+      formatDmScopeWarning() +
+        '\n\n' +
+        '👉 发送 **/feishu isolate** 一键查看修复方案',
+    );
   }
 
   if (sections.length === 0) return null;
@@ -154,7 +181,9 @@ export function formatIsolationWarning(status: IsolationStatus, cfg?: ClawdbotCo
 /**
  * Generate `openclaw config set` commands for per-account isolation.
  */
-export function generateIsolationFixCommands(cfg: ClawdbotConfig): { commands: string[]; preview: string } | null {
+export function generateIsolationFixCommands(
+  cfg: ClawdbotConfig,
+): { commands: string[]; preview: string } | null {
   const status = checkMultiAccountIsolation(cfg);
   if (status.mode !== 'shared-implicit') return null;
 
@@ -165,20 +194,26 @@ export function generateIsolationFixCommands(cfg: ClawdbotConfig): { commands: s
     id: `feishu-${a.accountId}`,
     name: `飞书 ${a.name ?? a.accountId}`,
   }));
-  commands.push(`openclaw config set agents.list '${JSON.stringify(agentsList)}' --json`);
+  commands.push(
+    `openclaw config set agents.list '${JSON.stringify(agentsList)}' --json`,
+  );
 
   const bindings = accounts.map((a) => ({
     match: { channel: 'feishu', accountId: a.accountId },
     agentId: `feishu-${a.accountId}`,
   }));
-  commands.push(`openclaw config set bindings '${JSON.stringify(bindings)}' --json`);
+  commands.push(
+    `openclaw config set bindings '${JSON.stringify(bindings)}' --json`,
+  );
 
   const dmScopeCmd = getDmScopeFixCommand(cfg);
   if (dmScopeCmd) commands.push(dmScopeCmd);
 
   commands.push('openclaw gateway restart');
 
-  const previewLines = accounts.map((a) => `  ${a.name ?? a.accountId}  →  独立记忆（feishu-${a.accountId}）`);
+  const previewLines = accounts.map(
+    (a) => `  ${a.name ?? a.accountId}  →  独立记忆（feishu-${a.accountId}）`,
+  );
 
   return { commands, preview: previewLines.join('\n') };
 }
@@ -186,7 +221,9 @@ export function generateIsolationFixCommands(cfg: ClawdbotConfig): { commands: s
 /**
  * Generate commands for explicitly sharing the same agent across accounts.
  */
-export function generateSharedAgentCommands(cfg: ClawdbotConfig): { commands: string[]; preview: string } | null {
+export function generateSharedAgentCommands(
+  cfg: ClawdbotConfig,
+): { commands: string[]; preview: string } | null {
   const status = checkMultiAccountIsolation(cfg);
   if (status.mode !== 'shared-implicit') return null;
 
@@ -197,14 +234,18 @@ export function generateSharedAgentCommands(cfg: ClawdbotConfig): { commands: st
     match: { channel: 'feishu', accountId: a.accountId },
     agentId: 'default',
   }));
-  commands.push(`openclaw config set bindings '${JSON.stringify(bindings)}' --json`);
+  commands.push(
+    `openclaw config set bindings '${JSON.stringify(bindings)}' --json`,
+  );
 
   const dmScopeCmd = getDmScopeFixCommand(cfg);
   if (dmScopeCmd) commands.push(dmScopeCmd);
 
   commands.push('openclaw gateway restart');
 
-  const previewLines = accounts.map((a) => `  ${a.name ?? a.accountId}  →  共用记忆（default）`);
+  const previewLines = accounts.map(
+    (a) => `  ${a.name ?? a.accountId}  →  共用记忆（default）`,
+  );
 
   return { commands, preview: previewLines.join('\n') };
 }

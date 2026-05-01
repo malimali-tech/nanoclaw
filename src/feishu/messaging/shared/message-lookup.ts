@@ -10,12 +10,18 @@
  */
 
 import type { ClawdbotConfig } from 'openclaw/plugin-sdk';
-import { buildConvertContextFromItem, convertMessageContent } from '../converters/content-converter';
+import {
+  buildConvertContextFromItem,
+  convertMessageContent,
+} from '../converters/content-converter';
 import { LarkClient } from '../../core/lark-client';
 import { larkLogger } from '../../core/lark-logger';
 
 const log = larkLogger('shared/message-lookup');
-import { createBatchResolveNames, getUserNameCache } from '../inbound/user-name-cache';
+import {
+  createBatchResolveNames,
+  getUserNameCache,
+} from '../inbound/user-name-cache';
 import { getLarkAccount } from '../../core/accounts';
 
 // ---------------------------------------------------------------------------
@@ -103,21 +109,27 @@ export async function getMessageFeishu(params: {
             const res = await (larkClient.sdk as any).request({
               method: 'GET',
               url: `/open-apis/im/v1/messages/${msgId}`,
-              params: { user_id_type: 'open_id', card_msg_content_type: 'raw_card_content' },
+              params: {
+                user_id_type: 'open_id',
+                card_msg_content_type: 'raw_card_content',
+              },
             });
             if (res?.code !== 0) {
               throw new Error(`API error: code=${res?.code} msg=${res?.msg}`);
             }
             return res?.data?.items ?? [];
           },
-          batchResolveNames: createBatchResolveNames(getLarkAccount(cfg, accountId), (...args: unknown[]) =>
-            log.info(args.map(String).join(' ')),
+          batchResolveNames: createBatchResolveNames(
+            getLarkAccount(cfg, accountId),
+            (...args: unknown[]) => log.info(args.map(String).join(' ')),
           ),
         }
       : undefined;
     return await parseMessageItem(items[0], messageId, expandCtx);
   } catch (error) {
-    log.error(`get message failed (${messageId}): ${error instanceof Error ? error.message : String(error)}`);
+    log.error(
+      `get message failed (${messageId}): ${error instanceof Error ? error.message : String(error)}`,
+    );
     return null;
   }
 }
@@ -161,7 +173,8 @@ async function parseMessageItem(
 
   const senderId: string | undefined = msg.sender?.id ?? undefined;
   const senderType: string | undefined = msg.sender?.sender_type ?? undefined;
-  const senderName = senderId && acctId ? getUserNameCache(acctId).get(senderId) : undefined;
+  const senderName =
+    senderId && acctId ? getUserNameCache(acctId).get(senderId) : undefined;
 
   return {
     messageId,
@@ -172,7 +185,9 @@ async function parseMessageItem(
     senderType,
     content,
     contentType: msgType,
-    createTime: msg.create_time ? parseInt(String(msg.create_time), 10) : undefined,
+    createTime: msg.create_time
+      ? parseInt(String(msg.create_time), 10)
+      : undefined,
     threadId: msg.thread_id || undefined,
   };
 }

@@ -65,7 +65,16 @@ const FeishuWikiSpaceNodeSchema = Type.Union([
     }),
     obj_type: Type.Optional(
       StringEnum(
-        ['doc', 'sheet', 'mindnote', 'bitable', 'file', 'docx', 'slides', 'wiki'],
+        [
+          'doc',
+          'sheet',
+          'mindnote',
+          'bitable',
+          'file',
+          'docx',
+          'slides',
+          'wiki',
+        ],
         { description: 'obj_type' },
       ),
     ),
@@ -189,7 +198,9 @@ type FeishuWikiSpaceNodeParams =
 // Registration
 // ---------------------------------------------------------------------------
 
-export function registerFeishuWikiSpaceNodeTool(api: OpenClawPluginApi): boolean {
+export function registerFeishuWikiSpaceNodeTool(
+  api: OpenClawPluginApi,
+): boolean {
   if (!api.config) return false;
   const cfg = api.config;
 
@@ -251,7 +262,9 @@ export function registerFeishuWikiSpaceNodeTool(api: OpenClawPluginApi): boolean
             // GET NODE
             // -----------------------------------------------------------------
             case 'get': {
-              log.info(`get: token=${p.token}, obj_type=${p.obj_type ?? 'wiki'}`);
+              log.info(
+                `get: token=${p.token}, obj_type=${p.obj_type ?? 'wiki'}`,
+              );
 
               const res = await client.invoke(
                 'feishu_wiki_space_node.get',
@@ -304,7 +317,9 @@ export function registerFeishuWikiSpaceNodeTool(api: OpenClawPluginApi): boolean
               );
               assertLarkOk(res);
 
-              log.info(`create: created node_token=${(res.data?.node as any)?.node_token}`);
+              log.info(
+                `create: created node_token=${(res.data?.node as any)?.node_token}`,
+              );
 
               return json({
                 node: res.data?.node,
@@ -374,7 +389,9 @@ export function registerFeishuWikiSpaceNodeTool(api: OpenClawPluginApi): boolean
               );
               assertLarkOk(res);
 
-              log.info(`copy: copied to node_token=${(res.data?.node as any)?.node_token}`);
+              log.info(
+                `copy: copied to node_token=${(res.data?.node as any)?.node_token}`,
+              );
 
               return json({
                 node: res.data?.node,

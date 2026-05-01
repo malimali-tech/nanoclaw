@@ -32,7 +32,13 @@ const ReplyModeSchema = z
   .optional();
 const ChunkModeEnum = z.enum(['newline', 'paragraph', 'none']);
 
-const DomainSchema = z.union([z.literal('feishu'), z.literal('lark'), z.string().regex(/^https:\/\//)]).optional();
+const DomainSchema = z
+  .union([
+    z.literal('feishu'),
+    z.literal('lark'),
+    z.string().regex(/^https:\/\//),
+  ])
+  .optional();
 
 const AllowFromSchema = z
   .union([z.string(), z.array(z.string())])
@@ -212,7 +218,8 @@ export const FeishuConfigSchema = FeishuAccountConfigSchema.extend({
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['allowFrom'],
-        message: 'When dmPolicy is "open", allowFrom must include "*" to permit all senders.',
+        message:
+          'When dmPolicy is "open", allowFrom must include "*" to permit all senders.',
       });
     }
   }
@@ -229,8 +236,11 @@ export const FeishuConfigSchema = FeishuAccountConfigSchema.extend({
  * - `unrepresentable: "any"` degrades `.superRefine()` constraints to `{}`.
  * - `target: "draft-07"` matches the plugin system's expected JSON Schema version.
  */
-export const FEISHU_CONFIG_JSON_SCHEMA: Record<string, unknown> = toJSONSchema(FeishuConfigSchema, {
-  target: 'draft-07',
-  io: 'input',
-  unrepresentable: 'any',
-});
+export const FEISHU_CONFIG_JSON_SCHEMA: Record<string, unknown> = toJSONSchema(
+  FeishuConfigSchema,
+  {
+    target: 'draft-07',
+    io: 'input',
+    unrepresentable: 'any',
+  },
+);

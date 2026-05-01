@@ -50,8 +50,12 @@ export async function handleFeishuCommentEvent(params: {
   accountId?: string;
 }): Promise<void> {
   const { cfg, event, botOpenId, runtime, chatHistories, accountId } = params;
-  const log = runtime?.log ?? ((...args: unknown[]) => logger.info(args.map(String).join(' ')));
-  const error = runtime?.error ?? ((...args: unknown[]) => logger.error(args.map(String).join(' ')));
+  const log =
+    runtime?.log ??
+    ((...args: unknown[]) => logger.info(args.map(String).join(' ')));
+  const error =
+    runtime?.error ??
+    ((...args: unknown[]) => logger.error(args.map(String).join(' ')));
 
   // The parser has already normalized all fields from notice_meta into
   // canonical top-level fields, so we just read the canonical shape.
@@ -63,7 +67,9 @@ export async function handleFeishuCommentEvent(params: {
   const commentId = event.comment_id ?? '';
 
   if (!senderOpenId || !fileToken || !commentId) {
-    log(`feishu[${accountId}]: comment event missing required fields, skipping`);
+    log(
+      `feishu[${accountId}]: comment event missing required fields, skipping`,
+    );
     return;
   }
 
@@ -96,7 +102,9 @@ export async function handleFeishuCommentEvent(params: {
   if (dmPolicy !== 'open') {
     // Read both config allowlist and pairing store (matches gate.ts behavior)
     const configAllowFrom = accountFeishuCfg?.allowFrom ?? [];
-    const storeAllowFrom = await readFeishuAllowFromStore(account.accountId).catch(() => [] as string[]);
+    const storeAllowFrom = await readFeishuAllowFromStore(
+      account.accountId,
+    ).catch(() => [] as string[]);
     const combinedAllowFrom = [...configAllowFrom, ...storeAllowFrom];
 
     const match = resolveFeishuAllowlistMatch({
@@ -117,7 +125,9 @@ export async function handleFeishuCommentEvent(params: {
         // Create pairing request and send challenge (mirrors gate.ts:334).
         // Prefer replying in the comment thread so the user sees the
         // challenge in context; fall back to DM if comment reply fails.
-        log(`feishu[${accountId}]: comment sender not paired, creating pairing request`);
+        log(
+          `feishu[${accountId}]: comment sender not paired, creating pairing request`,
+        );
         try {
           const core = LarkClient.runtime;
           const { code } = await core.channel.pairing.upsertPairingRequest({
@@ -141,7 +151,9 @@ export async function handleFeishuCommentEvent(params: {
               params: { file_type: fileType, user_id_type: 'open_id' },
               data: {
                 content: {
-                  elements: [{ type: 'text_run', text_run: { text: pairingText } }],
+                  elements: [
+                    { type: 'text_run', text_run: { text: pairingText } },
+                  ],
                 },
               },
             });
@@ -160,10 +172,14 @@ export async function handleFeishuCommentEvent(params: {
             });
           }
         } catch (pairingErr) {
-          log(`feishu[${accountId}]: pairing request failed: ${String(pairingErr)}`);
+          log(
+            `feishu[${accountId}]: pairing request failed: ${String(pairingErr)}`,
+          );
         }
       } else {
-        log(`feishu[${accountId}]: comment event rejected (dmPolicy=${dmPolicy}, not in allowlist)`);
+        log(
+          `feishu[${accountId}]: comment event rejected (dmPolicy=${dmPolicy}, not in allowlist)`,
+        );
       }
       return;
     }
@@ -234,7 +250,11 @@ export async function handleFeishuCommentEvent(params: {
   };
 
   // ---- Sender name resolution ----
-  const senderResult = await resolveUserName({ account, openId: senderOpenId, log });
+  const senderResult = await resolveUserName({
+    account,
+    openId: senderOpenId,
+    log,
+  });
   if (senderResult.name) {
     ctx = { ...ctx, senderName: senderResult.name };
   }
@@ -250,7 +270,9 @@ export async function handleFeishuCommentEvent(params: {
 
   const historyLimit = Math.max(
     0,
-    accountFeishuCfg?.historyLimit ?? accountScopedCfg.messages?.groupChat?.historyLimit ?? DEFAULT_GROUP_HISTORY_LIMIT,
+    accountFeishuCfg?.historyLimit ??
+      accountScopedCfg.messages?.groupChat?.historyLimit ??
+      DEFAULT_GROUP_HISTORY_LIMIT,
   );
 
   // ---- Dispatch to agent ----
@@ -270,6 +292,8 @@ export async function handleFeishuCommentEvent(params: {
       skipTyping: true, // No IM typing indicator for comment events
     });
   } catch (err) {
-    error(`feishu[${accountId}]: error dispatching comment event: ${String(err)}`);
+    error(
+      `feishu[${accountId}]: error dispatching comment event: ${String(err)}`,
+    );
   }
 }

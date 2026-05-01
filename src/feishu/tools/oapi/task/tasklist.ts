@@ -20,7 +20,14 @@
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
 
-import { StringEnum, assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json, registerTool } from '../helpers';
+import {
+  StringEnum,
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 import type { PaginatedData } from '../sdk-types';
 
 // ---------------------------------------------------------------------------
@@ -29,86 +36,93 @@ import type { PaginatedData } from '../sdk-types';
 
 const FeishuTaskTasklistAuthType = Type.Optional(
   StringEnum(['tenant', 'user'], {
-    description: '调用 API 时使用的 Token 类型。可选值："tenant"（应用身份） 或 "user"（用户身份）。默认使用 "user"。',
+    description:
+      '调用 API 时使用的 Token 类型。可选值："tenant"（应用身份） 或 "user"（用户身份）。默认使用 "user"。',
   }),
 );
 
 const FeishuTaskTasklistSchema = Type.Union([
-    // CREATE (P0)
-    Type.Object({
-      action: Type.Literal('create'),
-      auth_type: FeishuTaskTasklistAuthType,
-      name: Type.String({
-        description: '清单名称',
-      }),
-      members: Type.Optional(
-        Type.Array(
-          Type.Object({
-            id: Type.String({ description: '成员 ID（通常为 open_id）' }),
-            type: Type.Optional(StringEnum(['user', 'app'])),
-            role: Type.Optional(StringEnum(['editor', 'viewer'])),
-          }),
-          {
-            description:
-              '清单成员列表（editor=可编辑，viewer=可查看）。注意：创建人自动成为 owner，如在 members 中也指定创建人，该用户最终成为 owner 并从 members 中移除（同一用户只能有一个角色）。成员类型支持 user 和 app，默认为 user。',
-          },
-        ),
-      ),
-      user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
+  // CREATE (P0)
+  Type.Object({
+    action: Type.Literal('create'),
+    auth_type: FeishuTaskTasklistAuthType,
+    name: Type.String({
+      description: '清单名称',
     }),
-
-    // GET (P0)
-    Type.Object({
-      action: Type.Literal('get'),
-      auth_type: FeishuTaskTasklistAuthType,
-      tasklist_guid: Type.String({ description: '清单 GUID' }),
-      user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
-    }),
-
-    // LIST (P0)
-    Type.Object({
-      action: Type.Literal('list'),
-      auth_type: FeishuTaskTasklistAuthType,
-      page_size: Type.Optional(Type.Number({ description: '每页数量，默认 50，最大 100' })),
-      page_token: Type.Optional(Type.String({ description: '分页标记' })),
-      user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
-    }),
-
-    // TASKS (P0) - 列出清单内的任务
-    Type.Object({
-      action: Type.Literal('tasks'),
-      auth_type: FeishuTaskTasklistAuthType,
-      tasklist_guid: Type.String({ description: '清单 GUID' }),
-      page_size: Type.Optional(Type.Number({ description: '每页数量，默认 50，最大 100' })),
-      page_token: Type.Optional(Type.String({ description: '分页标记' })),
-      completed: Type.Optional(Type.Boolean({ description: '是否只返回已完成的任务（默认返回所有）' })),
-      user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
-    }),
-
-    // PATCH (P1)
-    Type.Object({
-      action: Type.Literal('patch'),
-      auth_type: FeishuTaskTasklistAuthType,
-      tasklist_guid: Type.String({ description: '清单 GUID' }),
-      name: Type.Optional(Type.String({ description: '新的清单名称' })),
-      user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
-    }),
-
-    // ADD_MEMBERS (P1)
-    Type.Object({
-      action: Type.Literal('add_members'),
-      auth_type: FeishuTaskTasklistAuthType,
-      tasklist_guid: Type.String({ description: '清单 GUID' }),
-      members: Type.Array(
+    members: Type.Optional(
+      Type.Array(
         Type.Object({
           id: Type.String({ description: '成员 ID（通常为 open_id）' }),
           type: Type.Optional(StringEnum(['user', 'app'])),
           role: Type.Optional(StringEnum(['editor', 'viewer'])),
         }),
-        { description: '要添加的成员列表' },
+        {
+          description:
+            '清单成员列表（editor=可编辑，viewer=可查看）。注意：创建人自动成为 owner，如在 members 中也指定创建人，该用户最终成为 owner 并从 members 中移除（同一用户只能有一个角色）。成员类型支持 user 和 app，默认为 user。',
+        },
       ),
-      user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
-    }),
+    ),
+    user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
+  }),
+
+  // GET (P0)
+  Type.Object({
+    action: Type.Literal('get'),
+    auth_type: FeishuTaskTasklistAuthType,
+    tasklist_guid: Type.String({ description: '清单 GUID' }),
+    user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
+  }),
+
+  // LIST (P0)
+  Type.Object({
+    action: Type.Literal('list'),
+    auth_type: FeishuTaskTasklistAuthType,
+    page_size: Type.Optional(
+      Type.Number({ description: '每页数量，默认 50，最大 100' }),
+    ),
+    page_token: Type.Optional(Type.String({ description: '分页标记' })),
+    user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
+  }),
+
+  // TASKS (P0) - 列出清单内的任务
+  Type.Object({
+    action: Type.Literal('tasks'),
+    auth_type: FeishuTaskTasklistAuthType,
+    tasklist_guid: Type.String({ description: '清单 GUID' }),
+    page_size: Type.Optional(
+      Type.Number({ description: '每页数量，默认 50，最大 100' }),
+    ),
+    page_token: Type.Optional(Type.String({ description: '分页标记' })),
+    completed: Type.Optional(
+      Type.Boolean({ description: '是否只返回已完成的任务（默认返回所有）' }),
+    ),
+    user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
+  }),
+
+  // PATCH (P1)
+  Type.Object({
+    action: Type.Literal('patch'),
+    auth_type: FeishuTaskTasklistAuthType,
+    tasklist_guid: Type.String({ description: '清单 GUID' }),
+    name: Type.Optional(Type.String({ description: '新的清单名称' })),
+    user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
+  }),
+
+  // ADD_MEMBERS (P1)
+  Type.Object({
+    action: Type.Literal('add_members'),
+    auth_type: FeishuTaskTasklistAuthType,
+    tasklist_guid: Type.String({ description: '清单 GUID' }),
+    members: Type.Array(
+      Type.Object({
+        id: Type.String({ description: '成员 ID（通常为 open_id）' }),
+        type: Type.Optional(StringEnum(['user', 'app'])),
+        role: Type.Optional(StringEnum(['editor', 'viewer'])),
+      }),
+      { description: '要添加的成员列表' },
+    ),
+    user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
+  }),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -119,9 +133,7 @@ type FeishuTaskTasklistParams = { auth_type?: 'tenant' | 'user' } & (
   | {
       action: 'create';
       name: string;
-      members?: Array<{ id: string;
-        type?: 'user' | 'app';
-        role?: string }>;
+      members?: Array<{ id: string; type?: 'user' | 'app'; role?: string }>;
     }
   | {
       action: 'get';
@@ -147,10 +159,8 @@ type FeishuTaskTasklistParams = { auth_type?: 'tenant' | 'user' } & (
   | {
       action: 'add_members';
       tasklist_guid: string;
-      members: Array<{ id: string;
-        type?: 'user' | 'app';
-        role?: string }>;
-      }
+      members: Array<{ id: string; type?: 'user' | 'app'; role?: string }>;
+    }
 );
 
 // ---------------------------------------------------------------------------
@@ -182,7 +192,9 @@ export function registerFeishuTaskTasklistTool(api: OpenClawPluginApi): void {
             // CREATE
             // -----------------------------------------------------------------
             case 'create': {
-              log.info(`create: name=${p.name}, members_count=${p.members?.length ?? 0}`);
+              log.info(
+                `create: name=${p.name}, members_count=${p.members?.length ?? 0}`,
+              );
 
               const data: any = { name: p.name };
 
@@ -286,7 +298,9 @@ export function registerFeishuTaskTasklistTool(api: OpenClawPluginApi): void {
             // TASKS - 列出清单内的任务
             // -----------------------------------------------------------------
             case 'tasks': {
-              log.info(`tasks: tasklist_guid=${p.tasklist_guid}, completed=${p.completed ?? 'all'}`);
+              log.info(
+                `tasks: tasklist_guid=${p.tasklist_guid}, completed=${p.completed ?? 'all'}`,
+              );
 
               const res = await client.invoke(
                 'feishu_task_tasklist.tasks',
@@ -323,7 +337,9 @@ export function registerFeishuTaskTasklistTool(api: OpenClawPluginApi): void {
             // PATCH
             // -----------------------------------------------------------------
             case 'patch': {
-              log.info(`patch: tasklist_guid=${p.tasklist_guid}, name=${p.name}`);
+              log.info(
+                `patch: tasklist_guid=${p.tasklist_guid}, name=${p.name}`,
+              );
 
               // 飞书 Task API 要求特殊的更新格式
               const tasklistData: any = {};
@@ -379,7 +395,9 @@ export function registerFeishuTaskTasklistTool(api: OpenClawPluginApi): void {
                 });
               }
 
-              log.info(`add_members: tasklist_guid=${p.tasklist_guid}, members_count=${p.members.length}`);
+              log.info(
+                `add_members: tasklist_guid=${p.tasklist_guid}, members_count=${p.members.length}`,
+              );
 
               const memberData = p.members.map((m) => ({
                 id: m.id,
@@ -408,13 +426,14 @@ export function registerFeishuTaskTasklistTool(api: OpenClawPluginApi): void {
               );
               assertLarkOk(res);
 
-              log.info(`add_members: added ${p.members.length} members to tasklist ${p.tasklist_guid}`);
+              log.info(
+                `add_members: added ${p.members.length} members to tasklist ${p.tasklist_guid}`,
+              );
 
               return json({
                 tasklist: res.data?.tasklist,
               });
             }
-
           }
         } catch (err) {
           return await handleInvokeErrorWithAutoAuth(err, cfg);
@@ -423,5 +442,4 @@ export function registerFeishuTaskTasklistTool(api: OpenClawPluginApi): void {
     },
     { name: 'feishu_task_tasklist' },
   );
-
 }

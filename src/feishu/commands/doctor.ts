@@ -30,7 +30,11 @@ import { getAppGrantedScopes, missingScopes } from '../core/app-scope-checker';
 import { getAppOwnerFallback } from '../core/app-owner-fallback';
 import { getStoredToken, tokenStatus } from '../core/token-store';
 
-import { REQUIRED_APP_SCOPES, TOOL_SCOPES, filterSensitiveScopes } from '../core/tool-scopes';
+import {
+  REQUIRED_APP_SCOPES,
+  TOOL_SCOPES,
+  filterSensitiveScopes,
+} from '../core/tool-scopes';
 import { probeFeishu } from '../channel/probe';
 import { AppScopeCheckFailedError } from '../core/tool-client';
 import { getPluginVersion } from '../core/version';
@@ -99,7 +103,11 @@ const T: Record<
     userCountLabel: string;
     noAuthLabel: string;
     appMissingUserPerms: (count: number) => string;
-    permCompareSummary: (appCount: number, total: number, userPart: string) => string;
+    permCompareSummary: (
+      appCount: number,
+      total: number,
+      userPart: string,
+    ) => string;
     userReauth: string;
     userNeedsOAuth: string;
     userPermFailed: string;
@@ -145,7 +153,8 @@ const T: Record<
     allPermsGranted: (count: number) => `全部 ${count} 个必需权限已开通`,
     missingPermsPrefix: '缺少',
     missingPermsSuffix: '个必需权限。需应用管理员申请开通',
-    cannotQueryPerms: '无法查询应用权限状态。原因：未开通 application:application:self_manage 权限',
+    cannotQueryPerms:
+      '无法查询应用权限状态。原因：未开通 application:application:self_manage 权限',
     cannotQueryPermsGeneric: '无法查询应用权限状态。',
     suggestCheckPerm: '建议检查 application:application:self_manage 权限',
     adminApply: '需应用管理员申请开通',
@@ -160,23 +169,28 @@ const T: Record<
     tokenRefreshOn: '✓ 已开启自动刷新 (1/1 个用户)',
     tokenRefreshOff: '✗ 未开启自动刷新，Token 将在 2 小时后过期',
     noUserAuth: '⚠️ **暂无用户授权**',
-    noUserAuthDesc: '尚未有用户通过 OAuth 授权。用户首次使用需以用户身份的功能时，会自动触发授权流程。',
+    noUserAuthDesc:
+      '尚未有用户通过 OAuth 授权。用户首次使用需以用户身份的功能时，会自动触发授权流程。',
     permCompareLabel: '**权限对照**',
     permInsufficient: '**用户身份权限不足**',
     userCountLabel: '已授权',
     noAuthLabel: '暂无授权',
-    appMissingUserPerms: (count: number) => `💡 应用缺少 ${count} 个用户身份权限。需应用管理员申请开通`,
+    appMissingUserPerms: (count: number) =>
+      `💡 应用缺少 ${count} 个用户身份权限。需应用管理员申请开通`,
     permCompareSummary: (appCount: number, total: number, userPart: string) =>
       `应用 **${appCount}/${total}** 已开通，用户 **${userPart}**`,
-    userReauth: '💡 用户需要重新授权以获得完整权限，可以向机器人发送消息 "**/feishu auth**"',
-    userNeedsOAuth: '💡 用户需要进行 OAuth 授权，可以向机器人发送消息 "**/feishu auth**"',
+    userReauth:
+      '💡 用户需要重新授权以获得完整权限，可以向机器人发送消息 "**/feishu auth**"',
+    userNeedsOAuth:
+      '💡 用户需要进行 OAuth 授权，可以向机器人发送消息 "**/feishu auth**"',
     userPermFailed: '用户权限检查失败',
     userPermFailedNoSelfManage:
       '用户权限检查失败：无法查询应用权限。原因：未开通 application:application:self_manage 权限',
     reportTitle: '### 飞书插件诊断',
     pluginVersionLabel: '插件版本',
     diagTimeLabel: '诊断时间',
-    noAccounts: '❌ **错误**: 未找到已启用的飞书账户\n\n请在 OpenClaw 配置文件中配置飞书账户并启用。',
+    noAccounts:
+      '❌ **错误**: 未找到已启用的飞书账户\n\n请在 OpenClaw 配置文件中配置飞书账户并启用。',
     accountNotFoundPrefix: '❌ **错误**: 未找到账户',
     enabledAccountsLabel: '当前已启用的账户',
     toolsCheckPass: '#### ✅ 工具配置检查通过',
@@ -209,12 +223,15 @@ const T: Record<
     toolsWarnProfile: (profile: string) =>
       `⚠️ **Tool Allowlist**: Currently set to \`${profile}\`. Feishu tools may not load properly. Update configuration as needed:`,
     toolsDocRef: '📖 Documentation',
-    allPermsGranted: (count: number) => `All ${count} required permissions granted`,
+    allPermsGranted: (count: number) =>
+      `All ${count} required permissions granted`,
     missingPermsPrefix: 'Missing',
     missingPermsSuffix: 'required permissions. Admin needs to apply',
-    cannotQueryPerms: 'Unable to query app permissions. Reason: Missing application:application:self_manage permission',
+    cannotQueryPerms:
+      'Unable to query app permissions. Reason: Missing application:application:self_manage permission',
     cannotQueryPermsGeneric: 'Unable to query app permissions.',
-    suggestCheckPerm: 'Please check application:application:self_manage permission',
+    suggestCheckPerm:
+      'Please check application:application:self_manage permission',
     adminApply: 'Admin needs to apply',
     apply: 'Apply',
     permTableHeader: '| Permission | App Granted | User Authorized |',
@@ -237,8 +254,10 @@ const T: Record<
       `💡 App is missing ${count} user-identity permissions. Admin needs to apply`,
     permCompareSummary: (appCount: number, total: number, userPart: string) =>
       `App **${appCount}/${total}** granted, User **${userPart}**`,
-    userReauth: '💡 User needs to re-authorize for full permissions. Send message to bot: "**/feishu auth**"',
-    userNeedsOAuth: '💡 User needs OAuth authorization. Send message to bot: "**/feishu auth**"',
+    userReauth:
+      '💡 User needs to re-authorize for full permissions. Send message to bot: "**/feishu auth**"',
+    userNeedsOAuth:
+      '💡 User needs OAuth authorization. Send message to bot: "**/feishu auth**"',
     userPermFailed: 'User permission check failed',
     userPermFailedNoSelfManage:
       'User permission check failed: Unable to query app permissions. Reason: Missing application:application:self_manage permission',
@@ -269,7 +288,9 @@ const T: Record<
  * 格式化时间戳为 "YYYY-MM-DD HH:mm:ss"
  */
 function formatTimestamp(date: Date): string {
-  return date.toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' }).replace('T', ' ');
+  return date
+    .toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' })
+    .replace('T', ' ');
 }
 
 /**
@@ -320,7 +341,9 @@ async function checkBasicInfo(
     lines.push(t.legacyDisabled);
   }
 
-  lines.push(`${t.credentials}: appId: ${account.appId}, appSecret: ${maskSecret(account.appSecret, locale)}`);
+  lines.push(
+    `${t.credentials}: appId: ${account.appId}, appSecret: ${maskSecret(account.appSecret, locale)}`,
+  );
   lines.push(t.accountEnabled);
 
   // API 连通性
@@ -340,7 +363,9 @@ async function checkBasicInfo(
     }
   } catch (err) {
     status = 'fail';
-    lines.push(`${t.apiError} - ${err instanceof Error ? err.message : String(err)}`);
+    lines.push(
+      `${t.apiError} - ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   return {
@@ -355,7 +380,10 @@ async function checkBasicInfo(
 
 const INCOMPLETE_PROFILES = new Set(['minimal', 'coding', 'messaging']);
 
-function checkToolsProfile(config: OpenClawConfig, locale: DoctorLocale): { status: CheckStatus; markdown: string } {
+function checkToolsProfile(
+  config: OpenClawConfig,
+  locale: DoctorLocale,
+): { status: CheckStatus; markdown: string } {
   const t = T[locale];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools = (config as any).tools;
@@ -409,7 +437,10 @@ async function checkAppPermissions(
     const grantedScopes = await getAppGrantedScopes(sdk, appId, 'tenant');
 
     // 计算缺失的必需权限
-    const requiredMissing = missingScopes(grantedScopes, Array.from(REQUIRED_APP_SCOPES));
+    const requiredMissing = missingScopes(
+      grantedScopes,
+      Array.from(REQUIRED_APP_SCOPES),
+    );
 
     if (requiredMissing.length === 0) {
       // 全部权限已开通
@@ -426,7 +457,9 @@ async function checkAppPermissions(
     if (requiredMissing.length < 20) {
       applyUrl = `${openDomain}/app/${appId}/auth?q=${encodeURIComponent(requiredMissing.join(','))}&op_from=feishu-openclaw&token_type=tenant`;
     }
-    lines.push(`${t.missingPermsPrefix} ${requiredMissing.length} ${t.missingPermsSuffix} [${t.apply}](${applyUrl})`);
+    lines.push(
+      `${t.missingPermsPrefix} ${requiredMissing.length} ${t.missingPermsSuffix} [${t.apply}](${applyUrl})`,
+    );
     lines.push('');
     for (const scope of requiredMissing) {
       lines.push(`- ${scope}`);
@@ -530,7 +563,9 @@ async function checkUserPermissions(
     const appUserScopes = await getAppGrantedScopes(sdk, appId, 'user');
     let allScopes = getAllToolScopes();
     allScopes = filterSensitiveScopes(allScopes);
-    const appGrantedCount = appUserScopes.filter((s) => allScopes.includes(s)).length;
+    const appGrantedCount = appUserScopes.filter((s) =>
+      allScopes.includes(s),
+    ).length;
 
     if (hasUserAuth) {
       // 有用户授权 - 检查授权状态
@@ -541,7 +576,8 @@ async function checkUserPermissions(
       const needsRefreshCount = status === 'needs_refresh' ? 1 : 0;
       const expiredCount = status === 'expired' ? 1 : 0;
 
-      authStatus = expiredCount > 0 ? 'warn' : validCount === 1 ? 'pass' : 'warn';
+      authStatus =
+        expiredCount > 0 ? 'warn' : validCount === 1 ? 'pass' : 'warn';
       const authEmoji = authStatus === 'pass' ? '✅' : '⚠️';
 
       lines.push(
@@ -553,7 +589,9 @@ async function checkUserPermissions(
       refreshStatus = hasOfflineAccess ? 'pass' : 'warn';
       const refreshEmoji = refreshStatus === 'pass' ? '✅' : '⚠️';
 
-      lines.push(`${refreshEmoji} ${t.tokenRefreshLabel}: ${hasOfflineAccess ? t.tokenRefreshOn : t.tokenRefreshOff}`);
+      lines.push(
+        `${refreshEmoji} ${t.tokenRefreshLabel}: ${hasOfflineAccess ? t.tokenRefreshOn : t.tokenRefreshOff}`,
+      );
     } else {
       // 没有用户授权
       lines.push(t.noUserAuth);
@@ -563,7 +601,8 @@ async function checkUserPermissions(
     }
 
     // 计算用户已授权权限数
-    const userGrantedCount = validCount === 1 ? scopes.filter((s) => allScopes.includes(s)).length : 0;
+    const userGrantedCount =
+      validCount === 1 ? scopes.filter((s) => allScopes.includes(s)).length : 0;
 
     // 计算用户缺失的权限
     if (hasUserAuth && validCount === 1) {
@@ -578,10 +617,13 @@ async function checkUserPermissions(
           ? 'fail'
           : 'warn'
         : 'pass';
-    const tableEmoji = tableStatus === 'pass' ? '✅' : tableStatus === 'warn' ? '⚠️' : '❌';
+    const tableEmoji =
+      tableStatus === 'pass' ? '✅' : tableStatus === 'warn' ? '⚠️' : '❌';
 
     if (validCount === 0) {
-      lines.push(`${t.permCompareLabel}: ${t.permCompareSummary(appGrantedCount, allScopes.length, t.noAuthLabel)}`);
+      lines.push(
+        `${t.permCompareLabel}: ${t.permCompareSummary(appGrantedCount, allScopes.length, t.noAuthLabel)}`,
+      );
     } else if (userGrantedCount < allScopes.length) {
       lines.push(
         `${tableEmoji} ${t.permInsufficient}: ${t.permCompareSummary(appGrantedCount, allScopes.length, `${userGrantedCount}/${allScopes.length} ${t.userCountLabel}`)}`,
@@ -596,13 +638,17 @@ async function checkUserPermissions(
     // 添加指引信息
     if (appGrantedCount < allScopes.length) {
       // 计算缺失的应用权限
-      const appMissingScopes = allScopes.filter((s) => !appUserScopes.includes(s));
+      const appMissingScopes = allScopes.filter(
+        (s) => !appUserScopes.includes(s),
+      );
       let appApplyUrl = `${openDomain}/app/${appId}/auth?op_from=feishu-openclaw&token_type=user`;
       if (appMissingScopes.length < 20) {
         appApplyUrl = `${openDomain}/app/${appId}/auth?q=${encodeURIComponent(appMissingScopes.join(','))}&op_from=feishu-openclaw&token_type=user`;
       }
 
-      lines.push(`${t.appMissingUserPerms(appMissingScopes.length)} [${t.apply}](${appApplyUrl})`);
+      lines.push(
+        `${t.appMissingUserPerms(appMissingScopes.length)} [${t.apply}](${appApplyUrl})`,
+      );
     }
     if (userGrantedCount < allScopes.length && validCount > 0) {
       lines.push(t.userReauth);
@@ -613,14 +659,21 @@ async function checkUserPermissions(
     }
 
     // 生成详细权限对照表
-    const table = generatePermissionTable(appUserScopes, validCount === 1 ? scopes : [], validCount === 1, locale);
+    const table = generatePermissionTable(
+      appUserScopes,
+      validCount === 1 ? scopes : [],
+      validCount === 1,
+      locale,
+    );
     lines.push(table);
 
     // 计算总体状态
     const overallStatus: CheckStatus =
       tableStatus === 'fail'
         ? 'fail'
-        : authStatus === 'warn' || refreshStatus === 'warn' || tableStatus === 'warn'
+        : authStatus === 'warn' ||
+            refreshStatus === 'warn' ||
+            tableStatus === 'warn'
           ? 'warn'
           : 'pass';
 
@@ -683,7 +736,9 @@ export async function runFeishuDoctor(
   }
 
   // 若指定了 accountId，只诊断该账号
-  const accounts = currentAccountId ? allAccounts.filter((a) => a.accountId === currentAccountId) : allAccounts;
+  const accounts = currentAccountId
+    ? allAccounts.filter((a) => a.accountId === currentAccountId)
+    : allAccounts;
 
   if (accounts.length === 0) {
     return `${t.accountNotFoundPrefix} "${currentAccountId}"\n\n${t.enabledAccountsLabel}: ${allAccounts.map((a) => a.accountId).join(', ')}`;
@@ -692,14 +747,17 @@ export async function runFeishuDoctor(
   // 2. 生成报告头部
   lines.push(t.reportTitle);
   lines.push('');
-  lines.push(`${t.pluginVersionLabel}: ${getPluginVersion()}  |  ${t.diagTimeLabel}: ${formatTimestamp(new Date())}`);
+  lines.push(
+    `${t.pluginVersionLabel}: ${getPluginVersion()}  |  ${t.diagTimeLabel}: ${formatTimestamp(new Date())}`,
+  );
   lines.push('');
   lines.push('---');
   lines.push('');
 
   // 3. 工具配置（全局，不区分账户）
   const toolsResult = checkToolsProfile(config, locale);
-  const toolsTitle = toolsResult.status === 'pass' ? t.toolsCheckPass : t.toolsCheckWarn;
+  const toolsTitle =
+    toolsResult.status === 'pass' ? t.toolsCheckPass : t.toolsCheckWarn;
   lines.push(toolsTitle);
   lines.push('');
   lines.push(toolsResult.markdown);
@@ -731,7 +789,8 @@ export async function runFeishuDoctor(
 
     // 4a. 环境信息
     const basicInfoResult = await checkBasicInfo(account, config, locale);
-    const basicTitle = basicInfoResult.status === 'pass' ? t.envCheckPass : t.envCheckFail;
+    const basicTitle =
+      basicInfoResult.status === 'pass' ? t.envCheckPass : t.envCheckFail;
     lines.push(basicTitle);
     lines.push('');
     lines.push(basicInfoResult.markdown);
@@ -741,7 +800,8 @@ export async function runFeishuDoctor(
 
     // 4b. 应用权限
     const appResult = await checkAppPermissions(account, sdk, locale);
-    const appTitle = appResult.status === 'pass' ? t.appPermPass : t.appPermFail;
+    const appTitle =
+      appResult.status === 'pass' ? t.appPermPass : t.appPermFail;
     lines.push(appTitle);
     lines.push('');
     lines.push(appResult.markdown);
@@ -751,7 +811,8 @@ export async function runFeishuDoctor(
 
     // 4c. 用户权限
     const userResult = await checkUserPermissions(account, sdk, locale);
-    const userTitle = userResult.status === 'pass' ? t.userPermPass : t.userPermFail;
+    const userTitle =
+      userResult.status === 'pass' ? t.userPermPass : t.userPermFail;
     lines.push(userTitle);
     lines.push('');
     lines.push(userResult.markdown);

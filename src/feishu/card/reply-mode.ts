@@ -9,7 +9,10 @@
  */
 
 import type { FeishuConfig } from '../core/types';
-import { FEISHU_CARD_TABLE_LIMIT, findMarkdownTablesOutsideCodeBlocks } from './card-error';
+import {
+  FEISHU_CARD_TABLE_LIMIT,
+  findMarkdownTablesOutsideCodeBlocks,
+} from './card-error';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,7 +44,12 @@ export function resolveReplyMode(params: {
   if (typeof replyMode === 'string') return replyMode;
 
   // Object form: pick scene-specific value
-  const sceneMode = chatType === 'group' ? replyMode.group : chatType === 'p2p' ? replyMode.direct : undefined;
+  const sceneMode =
+    chatType === 'group'
+      ? replyMode.group
+      : chatType === 'p2p'
+        ? replyMode.direct
+        : undefined;
   return sceneMode ?? replyMode.default ?? 'auto';
 }
 
@@ -63,7 +71,11 @@ export function expandAutoMode(params: {
   const { mode, streaming, chatType } = params;
   if (mode !== 'auto') return mode;
 
-  return streaming === true ? (chatType === 'group' ? 'static' : 'streaming') : 'static';
+  return streaming === true
+    ? chatType === 'group'
+      ? 'static'
+      : 'streaming'
+    : 'static';
 }
 
 // ---------------------------------------------------------------------------

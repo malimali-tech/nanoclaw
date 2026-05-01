@@ -35,7 +35,9 @@ export function resolveFeishuAllowlistMatch(params: {
   senderId: string;
   senderName?: string | null;
 }): FeishuAllowlistMatch {
-  const allowFrom = params.allowFrom.map((entry) => String(entry).trim().toLowerCase()).filter(Boolean);
+  const allowFrom = params.allowFrom
+    .map((entry) => String(entry).trim().toLowerCase())
+    .filter(Boolean);
 
   if (allowFrom.length === 0) {
     return { allowed: false };
@@ -52,7 +54,7 @@ export function resolveFeishuAllowlistMatch(params: {
     return { allowed: true, matchKey: senderId, matchSource: 'id' };
   }
 
-/*  // Match by sender display name
+  /*  // Match by sender display name
   const senderName = params.senderName?.toLowerCase();
   if (senderName && allowFrom.includes(senderName)) {
     return { allowed: true, matchKey: senderName, matchSource: 'name' };
@@ -89,7 +91,9 @@ export function resolveFeishuGroupConfig(params: {
 
   // Case-insensitive fallback
   const lowered = groupId.toLowerCase();
-  const matchKey = Object.keys(groups).find((key) => key.toLowerCase() === lowered);
+  const matchKey = Object.keys(groups).find(
+    (key) => key.toLowerCase() === lowered,
+  );
   return matchKey ? groups[matchKey] : undefined;
 }
 
@@ -106,7 +110,9 @@ export function resolveFeishuGroupConfig(params: {
  *   这里通过 getLarkAccount() 获取当前 account 合并后的配置，
  *   确保每个账号的 groups / tool policy 配置独立生效。
  */
-export function resolveFeishuGroupToolPolicy(params: ChannelGroupContext): GroupToolPolicyConfig | undefined {
+export function resolveFeishuGroupToolPolicy(
+  params: ChannelGroupContext,
+): GroupToolPolicyConfig | undefined {
   // 使用 getLarkAccount 获取 per-account 合并后的飞书渠道配置，
   // 而非直接读取 cfg.channels.feishu（顶层全局配置）。
   const account = getLarkAccount(params.cfg, params.accountId ?? undefined);
@@ -164,7 +170,9 @@ export function isFeishuGroupAllowed(params: {
  * Telegram) is sender IDs.  This function separates the two concerns so
  * both layers can work independently.
  */
-export function splitLegacyGroupAllowFrom(rawGroupAllowFrom: Array<string | number>): {
+export function splitLegacyGroupAllowFrom(
+  rawGroupAllowFrom: Array<string | number>,
+): {
   legacyChatIds: string[];
   senderAllowFrom: string[];
 } {
@@ -205,15 +213,21 @@ export function resolveGroupSenderPolicyContext(params: {
   senderPolicy: 'open' | 'allowlist' | 'disabled';
   senderAllowFrom: Array<string | number>;
 } {
-  const { groupConfig, defaultConfig, accountFeishuCfg, senderGroupAllowFrom } = params;
+  const { groupConfig, defaultConfig, accountFeishuCfg, senderGroupAllowFrom } =
+    params;
 
   const senderPolicy: 'open' | 'allowlist' | 'disabled' =
-    groupConfig?.groupPolicy ?? defaultConfig?.groupPolicy ?? accountFeishuCfg?.groupPolicy ?? 'open';
+    groupConfig?.groupPolicy ??
+    defaultConfig?.groupPolicy ??
+    accountFeishuCfg?.groupPolicy ??
+    'open';
 
   const senderAllowFrom: Array<string | number> = [
     ...senderGroupAllowFrom,
     ...(groupConfig?.allowFrom ?? []),
-    ...(!groupConfig && defaultConfig?.allowFrom ? defaultConfig.allowFrom : []),
+    ...(!groupConfig && defaultConfig?.allowFrom
+      ? defaultConfig.allowFrom
+      : []),
   ];
 
   return { senderPolicy, senderAllowFrom };

@@ -34,7 +34,9 @@ function assertLarkOk(res: any, context: string): void {
   const code = res?.code;
   if (code !== undefined && code !== 0) {
     const msg = res?.msg ?? 'unknown error';
-    throw new Error(`[feishu-chat-manage] ${context}: code=${code}, msg=${msg}`);
+    throw new Error(
+      `[feishu-chat-manage] ${context}: code=${code}, msg=${msg}`,
+    );
   }
 }
 
@@ -131,7 +133,11 @@ export async function listChatMembersFeishu(params: {
   accountId?: string;
   /** Optional page token for pagination. */
   pageToken?: string;
-}): Promise<{ members: FeishuChatMember[]; pageToken?: string; hasMore: boolean }> {
+}): Promise<{
+  members: FeishuChatMember[];
+  pageToken?: string;
+  hasMore: boolean;
+}> {
   const { cfg, chatId, accountId, pageToken } = params;
   const client = LarkClient.fromCfg(cfg, accountId).sdk;
 
@@ -157,7 +163,8 @@ export async function listChatMembersFeishu(params: {
     }
   }
 
-  const nextPageToken: string | undefined = (response?.data as any)?.page_token ?? undefined;
+  const nextPageToken: string | undefined =
+    (response?.data as any)?.page_token ?? undefined;
   const hasMore = (response?.data as any)?.has_more === true && !!nextPageToken;
 
   return { members, pageToken: nextPageToken, hasMore };

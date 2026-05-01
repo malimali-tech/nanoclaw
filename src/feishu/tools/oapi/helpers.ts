@@ -82,7 +82,9 @@ import { createClientGetter, formatToolResult } from '../helpers';
  * }
  * ```
  */
-export function createFeishuClientFromConfig(config: ClawdbotConfig): LarkClient {
+export function createFeishuClientFromConfig(
+  config: ClawdbotConfig,
+): LarkClient {
   const getClient = createClientGetter(config);
   return getClient();
 }
@@ -90,7 +92,6 @@ export function createFeishuClientFromConfig(config: ClawdbotConfig): LarkClient
 // ---------------------------------------------------------------------------
 // OAPI 专用：返回值格式化（简化版）
 // ---------------------------------------------------------------------------
-
 
 /**
  * 格式化返回值为 JSON（OAPI 工具常用简化接口）
@@ -152,7 +153,9 @@ export function parseTimeToTimestamp(input: string): string | null {
     // 没有时区信息，当作北京时间处理
     // 支持格式：YYYY-MM-DD HH:mm 或 YYYY-MM-DD HH:mm:ss 或 YYYY-MM-DDTHH:mm:ss
     const normalized = trimmed.replace('T', ' ');
-    const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    const match = normalized.match(
+      /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/,
+    );
 
     if (!match) {
       // 尝试直接解析（可能是其他 ISO 8601 格式）
@@ -218,7 +221,9 @@ export function parseTimeToTimestampMs(input: string): string | null {
     // 没有时区信息，当作北京时间处理
     // 支持格式：YYYY-MM-DD HH:mm 或 YYYY-MM-DD HH:mm:ss 或 YYYY-MM-DDTHH:mm:ss
     const normalized = trimmed.replace('T', ' ');
-    const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    const match = normalized.match(
+      /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/,
+    );
 
     if (!match) {
       // 尝试直接解析（可能是其他 ISO 8601 格式）
@@ -283,7 +288,9 @@ export function parseTimeToRFC3339(input: string): string | null {
     // 没有时区信息，当作北京时间处理，转换为 RFC 3339 格式
     // 支持格式：YYYY-MM-DD HH:mm 或 YYYY-MM-DD HH:mm:ss 或 YYYY-MM-DDTHH:mm:ss
     const normalized = trimmed.replace('T', ' ');
-    const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    const match = normalized.match(
+      /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/,
+    );
 
     if (!match) {
       // 尝试直接解析（可能是其他 ISO 8601 格式）
@@ -373,7 +380,9 @@ export function pad2(value: number): string {
  *
  * @returns e.g. `"2026-02-25T14:30:00+08:00"`, or `null` on invalid input
  */
-export function unixTimestampToISO8601(raw: string | number | undefined): string | null {
+export function unixTimestampToISO8601(
+  raw: string | number | undefined,
+): string | null {
   if (raw === undefined || raw == null) return null;
 
   const text = typeof raw === 'number' ? String(raw) : String(raw).trim();
@@ -383,7 +392,9 @@ export function unixTimestampToISO8601(raw: string | number | undefined): string
   if (!Number.isFinite(num)) return null;
 
   const utcMs = Math.abs(num) >= 1e12 ? num : num * 1000;
-  const beijingDate = new Date(utcMs + SHANGHAI_UTC_OFFSET_HOURS * 60 * 60 * 1000);
+  const beijingDate = new Date(
+    utcMs + SHANGHAI_UTC_OFFSET_HOURS * 60 * 60 * 1000,
+  );
   if (Number.isNaN(beijingDate.getTime())) return null;
 
   const year = beijingDate.getUTCFullYear();
@@ -411,7 +422,11 @@ export { assertLarkOk, formatLarkError } from '../../core/api-error';
 // OAPI 专用：invoke() 错误判断
 // ---------------------------------------------------------------------------
 
-import { AppScopeMissingError, UserAuthRequiredError, UserScopeInsufficientError } from '../../core/tool-client';
+import {
+  AppScopeMissingError,
+  UserAuthRequiredError,
+  UserScopeInsufficientError,
+} from '../../core/tool-client';
 
 /**
  * Check whether an error is a structured invoke-level auth/permission error.
@@ -440,7 +455,6 @@ export { handleInvokeErrorWithAutoAuth } from '../auto-auth';
 // Schema 辅助：LLM 友好的字符串枚举
 // ---------------------------------------------------------------------------
 
-
 /**
  * 创建 LLM 友好的字符串枚举 schema。
  *
@@ -448,6 +462,9 @@ export { handleInvokeErrorWithAutoAuth } from '../auto-auth';
  * 本函数生成 `{ type: 'string', enum: ['a', 'b'] }` 格式，
  * 兼容性更好。
  */
-export function StringEnum<T extends string>(values: T[], options?: SchemaOptions): TUnsafe<T> {
+export function StringEnum<T extends string>(
+  values: T[],
+  options?: SchemaOptions,
+): TUnsafe<T> {
   return Type.Unsafe<T>({ type: 'string', enum: values, ...options });
 }

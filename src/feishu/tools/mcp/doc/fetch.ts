@@ -40,7 +40,8 @@ export function registerFetchDocTool(api: OpenClawPluginApi): boolean {
     mcpToolName: 'fetch-doc',
     toolActionKey: 'feishu_fetch_doc.default',
     label: 'Feishu MCP: fetch-doc',
-    description: '获取飞书云文档内容，返回文档标题和 Markdown 格式内容。支持分页获取大文档。',
+    description:
+      '获取飞书云文档内容，返回文档标题和 Markdown 格式内容。支持分页获取大文档。',
     schema: FetchDocSchema,
   });
 }

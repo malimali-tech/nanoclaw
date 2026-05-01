@@ -30,11 +30,18 @@ export function threadScopedKey(base: string, threadId?: string): string {
   return threadId ? `${base}:thread:${threadId}` : base;
 }
 
-export function buildQueueKey(accountId: string, chatId: string, threadId?: string): string {
+export function buildQueueKey(
+  accountId: string,
+  chatId: string,
+  threadId?: string,
+): string {
   return threadScopedKey(`${accountId}:${chatId}`, threadId);
 }
 
-export function registerActiveDispatcher(key: string, entry: ActiveDispatcherEntry): void {
+export function registerActiveDispatcher(
+  key: string,
+  entry: ActiveDispatcherEntry,
+): void {
   activeDispatchers.set(key, entry);
 }
 
@@ -42,7 +49,9 @@ export function unregisterActiveDispatcher(key: string): void {
   activeDispatchers.delete(key);
 }
 
-export function getActiveDispatcher(key: string): ActiveDispatcherEntry | undefined {
+export function getActiveDispatcher(
+  key: string,
+): ActiveDispatcherEntry | undefined {
   return activeDispatchers.get(key);
 }
 

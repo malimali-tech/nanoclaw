@@ -36,7 +36,11 @@ import {
   resolveSenderInfo,
   substituteMediaPaths,
 } from './enrich';
-import { type GateResult, checkMessageGate, readFeishuAllowFromStore } from './gate';
+import {
+  type GateResult,
+  checkMessageGate,
+  readFeishuAllowFromStore,
+} from './gate';
 import { injectInboundHandler } from './handler-registry';
 import { dispatchToAgent } from './dispatch';
 import { resolveFeishuGroupConfig, splitLegacyGroupAllowFrom } from './policy';
@@ -64,8 +68,17 @@ export async function handleFeishuMessage(params: {
   /** When true, skip the typing indicator for this dispatch (e.g. reactions). */
   skipTyping?: boolean;
 }): Promise<void> {
-  const { cfg, event, botOpenId, runtime, chatHistories, accountId, replyToMessageId, forceMention, skipTyping } =
-    params;
+  const {
+    cfg,
+    event,
+    botOpenId,
+    runtime,
+    chatHistories,
+    accountId,
+    replyToMessageId,
+    forceMention,
+    skipTyping,
+  } = params;
 
   // 1. Account resolution
   const account = getLarkAccount(cfg, accountId);
@@ -86,8 +99,12 @@ export async function handleFeishuMessage(params: {
     channels: { ...cfg.channels, feishu: accountFeishuCfg },
   };
 
-  const log = runtime?.log ?? ((...args: unknown[]) => logger.info(args.map(String).join(' ')));
-  const error = runtime?.error ?? ((...args: unknown[]) => logger.error(args.map(String).join(' ')));
+  const log =
+    runtime?.log ??
+    ((...args: unknown[]) => logger.info(args.map(String).join(' ')));
+  const error =
+    runtime?.error ??
+    ((...args: unknown[]) => logger.error(args.map(String).join(' ')));
 
   // 2. Parse event → MessageContext (merge_forward expanded in-place)
   let ctx = await parseMessageEvent(event, botOpenId, {
@@ -103,18 +120,30 @@ export async function handleFeishuMessage(params: {
   });
   ctx = enrichedCtx;
 
-  log(`feishu[${account.accountId}]: received message from ${ctx.senderId} in ${ctx.chatId} (${ctx.chatType})`);
-  logger.info(`received from ${ctx.senderId} in ${ctx.chatId} (${ctx.chatType})`);
+  log(
+    `feishu[${account.accountId}]: received message from ${ctx.senderId} in ${ctx.chatId} (${ctx.chatType})`,
+  );
+  logger.info(
+    `received from ${ctx.senderId} in ${ctx.chatId} (${ctx.chatType})`,
+  );
 
   const historyLimit = Math.max(
     0,
-    accountFeishuCfg?.historyLimit ?? accountScopedCfg.messages?.groupChat?.historyLimit ?? DEFAULT_GROUP_HISTORY_LIMIT,
+    accountFeishuCfg?.historyLimit ??
+      accountScopedCfg.messages?.groupChat?.historyLimit ??
+      DEFAULT_GROUP_HISTORY_LIMIT,
   );
 
   // 4. Gate: policy / access-control checks (skipped for synthetic messages)
   const gate = forceMention
     ? ({ allowed: true } as GateResult)
-    : await checkMessageGate({ ctx, accountFeishuCfg, account, accountScopedCfg, log });
+    : await checkMessageGate({
+        ctx,
+        accountFeishuCfg,
+        account,
+        accountScopedCfg,
+        log,
+      });
   if (!gate.allowed) {
     if (gate.reason === 'no_mention') {
       logger.info(`rejected: no bot mention in group ${ctx.chatId}`);
@@ -159,8 +188,12 @@ export async function handleFeishuMessage(params: {
 
   // Resolve per-group config early — shared by both command authorization
   // and dispatch (step 8).
-  const groupConfig = isGroup ? resolveFeishuGroupConfig({ cfg: accountFeishuCfg, groupId: ctx.chatId }) : undefined;
-  const defaultGroupConfig = isGroup ? accountFeishuCfg?.groups?.['*'] : undefined;
+  const groupConfig = isGroup
+    ? resolveFeishuGroupConfig({ cfg: accountFeishuCfg, groupId: ctx.chatId })
+    : undefined;
+  const defaultGroupConfig = isGroup
+    ? accountFeishuCfg?.groups?.['*']
+    : undefined;
 
   // Build the sender allowlist for command authorization in group context.
   // Excludes legacy oc_xxx chat-id entries (group admission, not sender identity).
@@ -173,17 +206,27 @@ export async function handleFeishuMessage(params: {
   const configuredGroupAllowFrom = (() => {
     if (!isGroup) return undefined;
     // Exclude legacy oc_xxx chat-id entries from groupAllowFrom (sender filter only).
-    const { senderAllowFrom } = splitLegacyGroupAllowFrom(accountFeishuCfg?.groupAllowFrom ?? []);
+    const { senderAllowFrom } = splitLegacyGroupAllowFrom(
+      accountFeishuCfg?.groupAllowFrom ?? [],
+    );
     const senderGroupAllowFrom = senderAllowFrom;
     const perGroupAllowFrom = (groupConfig?.allowFrom ?? []).map(String);
     const defaultSenderAllowFrom =
-      !groupConfig && defaultGroupConfig?.allowFrom ? defaultGroupConfig.allowFrom.map(String) : [];
-    const combined = [...senderGroupAllowFrom, ...perGroupAllowFrom, ...defaultSenderAllowFrom];
+      !groupConfig && defaultGroupConfig?.allowFrom
+        ? defaultGroupConfig.allowFrom.map(String)
+        : [];
+    const combined = [
+      ...senderGroupAllowFrom,
+      ...perGroupAllowFrom,
+      ...defaultSenderAllowFrom,
+    ];
     if (combined.length > 0) return combined;
     // No allowFrom list configured — check if sender policy is explicitly "open".
     // Do NOT fall back to "open" as a default: unset policy → allowlist behaviour.
     const explicitSenderPolicy =
-      groupConfig?.groupPolicy ?? defaultGroupConfig?.groupPolicy ?? accountFeishuCfg?.groupPolicy;
+      groupConfig?.groupPolicy ??
+      defaultGroupConfig?.groupPolicy ??
+      accountFeishuCfg?.groupPolicy;
     return explicitSenderPolicy === 'open' ? ['*'] : [];
   })();
 
@@ -195,10 +238,13 @@ export async function handleFeishuMessage(params: {
     configuredAllowFrom: (accountFeishuCfg?.allowFrom ?? []).map(String),
     configuredGroupAllowFrom,
     senderId: ctx.senderId,
-    isSenderAllowed: (senderId, allowFrom) => isNormalizedSenderAllowed({ senderId, allowFrom }),
+    isSenderAllowed: (senderId, allowFrom) =>
+      isNormalizedSenderAllowed({ senderId, allowFrom }),
     readAllowFromStore: () => readFeishuAllowFromStore(account.accountId),
-    shouldComputeCommandAuthorized: core.channel.commands.shouldComputeCommandAuthorized,
-    resolveCommandAuthorizedFromAuthorizers: core.channel.commands.resolveCommandAuthorizedFromAuthorizers,
+    shouldComputeCommandAuthorized:
+      core.channel.commands.shouldComputeCommandAuthorized,
+    resolveCommandAuthorizedFromAuthorizers:
+      core.channel.commands.resolveCommandAuthorizedFromAuthorizers,
   });
 
   // 8. Dispatch to agent
@@ -222,8 +268,12 @@ export async function handleFeishuMessage(params: {
       skipTyping,
     });
   } catch (err) {
-    error(`feishu[${account.accountId}]: failed to dispatch message: ${String(err)}`);
-    logger.error(`dispatch failed: ${String(err)} (elapsed=${ticketElapsed()}ms)`);
+    error(
+      `feishu[${account.accountId}]: failed to dispatch message: ${String(err)}`,
+    );
+    logger.error(
+      `dispatch failed: ${String(err)} (elapsed=${ticketElapsed()}ms)`,
+    );
   }
 }
 

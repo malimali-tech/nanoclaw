@@ -21,7 +21,14 @@
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
 
-import { StringEnum, assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json, registerTool } from '../helpers';
+import {
+  StringEnum,
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 import type { PaginatedData } from '../sdk-types';
 
 // ---------------------------------------------------------------------------
@@ -99,7 +106,9 @@ const FeishuBitableAppTableRecordSchema = Type.Union([
     action: Type.Literal('batch_delete'),
     app_token: Type.String({ description: '多维表格 token' }),
     table_id: Type.String({ description: '数据表 ID' }),
-    record_ids: Type.Array(Type.String(), { description: '要删除的记录 ID 列表（最多 500 条）' }),
+    record_ids: Type.Array(Type.String(), {
+      description: '要删除的记录 ID 列表（最多 500 条）',
+    }),
   }),
 
   // LIST (P0) - 使用 search API（旧 list API 已废弃）
@@ -107,7 +116,9 @@ const FeishuBitableAppTableRecordSchema = Type.Union([
     action: Type.Literal('list'),
     app_token: Type.String({ description: '多维表格 token' }),
     table_id: Type.String({ description: '数据表 ID' }),
-    view_id: Type.Optional(Type.String({ description: '视图 ID（可选，建议指定以获得更好的性能）' })),
+    view_id: Type.Optional(
+      Type.String({ description: '视图 ID（可选，建议指定以获得更好的性能）' }),
+    ),
     field_names: Type.Optional(
       Type.Array(Type.String(), {
         description: '要返回的字段名列表（可选，不指定则返回所有字段）',
@@ -123,7 +134,18 @@ const FeishuBitableAppTableRecordSchema = Type.Union([
             Type.Object({
               field_name: Type.String({ description: '字段名' }),
               operator: StringEnum(
-                ['is', 'isNot', 'contains', 'doesNotContain', 'isEmpty', 'isNotEmpty', 'isGreater', 'isGreaterEqual', 'isLess', 'isLessEqual'],
+                [
+                  'is',
+                  'isNot',
+                  'contains',
+                  'doesNotContain',
+                  'isEmpty',
+                  'isNotEmpty',
+                  'isGreater',
+                  'isGreaterEqual',
+                  'isLess',
+                  'isLessEqual',
+                ],
                 { description: '运算符' },
               ),
               value: Type.Optional(
@@ -152,10 +174,13 @@ const FeishuBitableAppTableRecordSchema = Type.Union([
     ),
     automatic_fields: Type.Optional(
       Type.Boolean({
-        description: '是否返回自动字段（created_time, last_modified_time, created_by, last_modified_by），默认 false',
+        description:
+          '是否返回自动字段（created_time, last_modified_time, created_by, last_modified_by），默认 false',
       }),
     ),
-    page_size: Type.Optional(Type.Number({ description: '每页数量，默认 50，最大 500' })),
+    page_size: Type.Optional(
+      Type.Number({ description: '每页数量，默认 50，最大 500' }),
+    ),
     page_token: Type.Optional(Type.String({ description: '分页标记' })),
   }),
 ]);
@@ -242,11 +267,16 @@ type FeishuBitableAppTableRecordParams =
 // Registration
 // ---------------------------------------------------------------------------
 
-export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi): void {
+export function registerFeishuBitableAppTableRecordTool(
+  api: OpenClawPluginApi,
+): void {
   if (!api.config) return;
   const cfg = api.config;
 
-  const { toolClient, log } = createToolContext(api, 'feishu_bitable_app_table_record');
+  const { toolClient, log } = createToolContext(
+    api,
+    'feishu_bitable_app_table_record',
+  );
 
   registerTool(
     api,
@@ -301,7 +331,9 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
                 });
               }
 
-              log.info(`create: app_token=${p.app_token}, table_id=${p.table_id}`);
+              log.info(
+                `create: app_token=${p.app_token}, table_id=${p.table_id}`,
+              );
 
               const res = await client.invoke(
                 'feishu_bitable_app_table_record.create',
@@ -348,12 +380,16 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
                   },
                   batch_update_format: {
                     action: 'batch_update',
-                    records: [{ record_id: 'recXXX', fields: { 字段名: '字段值' } }],
+                    records: [
+                      { record_id: 'recXXX', fields: { 字段名: '字段值' } },
+                    ],
                   },
                 });
               }
 
-              log.info(`update: app_token=${p.app_token}, table_id=${p.table_id}, record_id=${p.record_id}`);
+              log.info(
+                `update: app_token=${p.app_token}, table_id=${p.table_id}, record_id=${p.record_id}`,
+              );
 
               const res = await client.invoke(
                 'feishu_bitable_app_table_record.update',
@@ -389,7 +425,9 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
             // DELETE
             // -----------------------------------------------------------------
             case 'delete': {
-              log.info(`delete: app_token=${p.app_token}, table_id=${p.table_id}, record_id=${p.record_id}`);
+              log.info(
+                `delete: app_token=${p.app_token}, table_id=${p.table_id}, record_id=${p.record_id}`,
+              );
 
               const res = await client.invoke(
                 'feishu_bitable_app_table_record.delete',
@@ -422,7 +460,8 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
               // 参数验证：检查是否误用了 create 的参数格式
               if ((p as any).fields) {
                 return json({
-                  error: "batch_create action does not accept 'fields' parameter",
+                  error:
+                    "batch_create action does not accept 'fields' parameter",
                   hint: "Use 'records' array for batch creation. For single record, use action: 'create' with 'fields' parameter.",
                   correct_format: {
                     action: 'batch_create',
@@ -475,7 +514,9 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
               );
               assertLarkOk(res);
 
-              log.info(`batch_create: created ${p.records.length} records in table ${p.table_id}`);
+              log.info(
+                `batch_create: created ${p.records.length} records in table ${p.table_id}`,
+              );
 
               return json({
                 records: res.data?.records,
@@ -489,11 +530,14 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
               // 参数验证：检查是否误用了 update 的参数格式
               if ((p as any).record_id || (p as any).fields) {
                 return json({
-                  error: "batch_update action does not accept 'record_id' or 'fields' parameters",
+                  error:
+                    "batch_update action does not accept 'record_id' or 'fields' parameters",
                   hint: "Use 'records' array for batch update. For single record, use action: 'update' with 'record_id' + 'fields' parameters.",
                   correct_format: {
                     action: 'batch_update',
-                    records: [{ record_id: 'recXXX', fields: { 字段名: '字段值' } }],
+                    records: [
+                      { record_id: 'recXXX', fields: { 字段名: '字段值' } },
+                    ],
                   },
                   single_update_format: {
                     action: 'update',
@@ -542,7 +586,9 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
               );
               assertLarkOk(res);
 
-              log.info(`batch_update: updated ${p.records.length} records in table ${p.table_id}`);
+              log.info(
+                `batch_update: updated ${p.records.length} records in table ${p.table_id}`,
+              );
 
               return json({
                 records: res.data?.records,
@@ -588,7 +634,9 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
               );
               assertLarkOk(res);
 
-              log.info(`batch_delete: deleted ${p.record_ids.length} records from table ${p.table_id}`);
+              log.info(
+                `batch_delete: deleted ${p.record_ids.length} records from table ${p.table_id}`,
+              );
 
               return json({
                 success: true,
@@ -605,14 +653,19 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
 
               const searchData: any = {};
               if (p.view_id !== undefined) searchData.view_id = p.view_id;
-              if (p.field_names !== undefined) searchData.field_names = p.field_names;
+              if (p.field_names !== undefined)
+                searchData.field_names = p.field_names;
 
               // 特殊处理：isEmpty/isNotEmpty 必须带 value=[]（即使逻辑上不需要值）
               if (p.filter !== undefined) {
                 const filter = { ...p.filter };
                 if (filter.conditions) {
                   filter.conditions = filter.conditions.map((cond: any) => {
-                    if ((cond.operator === 'isEmpty' || cond.operator === 'isNotEmpty') && !cond.value) {
+                    if (
+                      (cond.operator === 'isEmpty' ||
+                        cond.operator === 'isNotEmpty') &&
+                      !cond.value
+                    ) {
                       log.warn(
                         `list: ${cond.operator} operator detected without value. Auto-adding value=[] to avoid API error.`,
                       );
@@ -625,7 +678,8 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
               }
 
               if (p.sort !== undefined) searchData.sort = p.sort;
-              if (p.automatic_fields !== undefined) searchData.automatic_fields = p.automatic_fields;
+              if (p.automatic_fields !== undefined)
+                searchData.automatic_fields = p.automatic_fields;
 
               const res = await client.invoke(
                 'feishu_bitable_app_table_record.list',
@@ -673,5 +727,4 @@ export function registerFeishuBitableAppTableRecordTool(api: OpenClawPluginApi):
     },
     { name: 'feishu_bitable_app_table_record' },
   );
-
 }

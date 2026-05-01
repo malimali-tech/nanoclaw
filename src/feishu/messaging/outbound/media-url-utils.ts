@@ -20,7 +20,9 @@ export function normalizeMediaUrlInput(value: string): string {
   const last = raw[raw.length - 1];
   if (
     raw.length >= 2 &&
-    ((first === '"' && last === '"') || (first === "'" && last === "'") || (first === '`' && last === '`'))
+    ((first === '"' && last === '"') ||
+      (first === "'" && last === "'") ||
+      (first === '`' && last === '`'))
   ) {
     raw = raw.slice(1, -1).trim();
   }
@@ -38,7 +40,11 @@ export function isWindowsAbsolutePath(value: string): boolean {
 
 export function isLocalMediaPath(value: string): boolean {
   const raw = normalizeMediaUrlInput(value);
-  return raw.startsWith('file://') || path.isAbsolute(raw) || isWindowsAbsolutePath(raw);
+  return (
+    raw.startsWith('file://') ||
+    path.isAbsolute(raw) ||
+    isWindowsAbsolutePath(raw)
+  );
 }
 
 export function safeFileUrlToPath(fileUrl: string): string {
@@ -68,7 +74,10 @@ export function safeFileUrlToPath(fileUrl: string): string {
  * @throws {Error} When the path is not under any allowed root, or
  *                 when `localRoots` is an empty array.
  */
-export function validateLocalMediaRoots(filePath: string, localRoots: readonly string[] | undefined): void {
+export function validateLocalMediaRoots(
+  filePath: string,
+  localRoots: readonly string[] | undefined,
+): void {
   // Not configured — skip validation (backwards-compatible).
   if (localRoots === undefined) return;
 
@@ -98,7 +107,9 @@ export function validateLocalMediaRoots(filePath: string, localRoots: readonly s
       resolvedRoot = path.resolve(root);
     }
     // Must be exactly the root or strictly inside it (with separator).
-    return resolved === resolvedRoot || resolved.startsWith(resolvedRoot + path.sep);
+    return (
+      resolved === resolvedRoot || resolved.startsWith(resolvedRoot + path.sep)
+    );
   });
 
   if (!isAllowed) {
@@ -113,14 +124,18 @@ export function validateLocalMediaRoots(filePath: string, localRoots: readonly s
 export function resolveBaseNameFromPath(value: string): string | undefined {
   const raw = normalizeMediaUrlInput(value);
   const cleanPath = stripQueryAndHash(raw);
-  const fileName = isWindowsAbsolutePath(cleanPath) ? path.win32.basename(cleanPath) : path.basename(cleanPath);
+  const fileName = isWindowsAbsolutePath(cleanPath)
+    ? path.win32.basename(cleanPath)
+    : path.basename(cleanPath);
   if (fileName && fileName !== '/' && fileName !== '.' && fileName !== '\\') {
     return fileName;
   }
   return undefined;
 }
 
-export function resolveFileNameFromMediaUrl(mediaUrl: string): string | undefined {
+export function resolveFileNameFromMediaUrl(
+  mediaUrl: string,
+): string | undefined {
   const raw = normalizeMediaUrlInput(mediaUrl);
   if (!raw) return undefined;
 

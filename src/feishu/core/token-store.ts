@@ -30,7 +30,9 @@ const log = larkLogger('core/token-store');
 
 // Dynamic require to avoid security scanner false positive (child-process).
 // CJS (tsc output) has __filename; ESM (tsdown output) has import.meta.url.
-const _require = createRequire(typeof __filename !== 'undefined' ? __filename : import.meta.url);
+const _require = createRequire(
+  typeof __filename !== 'undefined' ? __filename : import.meta.url,
+);
 const _cpMod = ['child', 'process'].join('_');
 const _cp = _require(`node:${_cpMod}`) as typeof import('node:child_process');
 const execFile = promisify(_cp.execFile);
@@ -90,7 +92,14 @@ interface KeychainBackend {
 const darwinBackend: KeychainBackend = {
   async get(service, account) {
     try {
-      const { stdout } = await execFile('security', ['find-generic-password', '-s', service, '-a', account, '-w']);
+      const { stdout } = await execFile('security', [
+        'find-generic-password',
+        '-s',
+        service,
+        '-a',
+        account,
+        '-w',
+      ]);
       return stdout.trim() || null;
     } catch {
       return null;
@@ -100,16 +109,36 @@ const darwinBackend: KeychainBackend = {
   async set(service, account, data) {
     // Delete first – `add-generic-password` fails if the item already exists.
     try {
-      await execFile('security', ['delete-generic-password', '-s', service, '-a', account]);
+      await execFile('security', [
+        'delete-generic-password',
+        '-s',
+        service,
+        '-a',
+        account,
+      ]);
     } catch {
       // Not found – fine.
     }
-    await execFile('security', ['add-generic-password', '-s', service, '-a', account, '-w', data]);
+    await execFile('security', [
+      'add-generic-password',
+      '-s',
+      service,
+      '-a',
+      account,
+      '-w',
+      data,
+    ]);
   },
 
   async remove(service, account) {
     try {
-      await execFile('security', ['delete-generic-password', '-s', service, '-a', account]);
+      await execFile('security', [
+        'delete-generic-password',
+        '-s',
+        service,
+        '-a',
+        account,
+      ]);
     } catch {
       // Already absent – fine.
     }
@@ -125,7 +154,10 @@ const darwinBackend: KeychainBackend = {
 // Storage path: ${XDG_DATA_HOME:-~/.local/share}/openclaw-feishu-uat/
 // ---------------------------------------------------------------------------
 
-const LINUX_UAT_DIR = join(process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'), 'openclaw-feishu-uat');
+const LINUX_UAT_DIR = join(
+  process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'),
+  'openclaw-feishu-uat',
+);
 const MASTER_KEY_PATH = join(LINUX_UAT_DIR, 'master.key');
 const MASTER_KEY_BYTES = 32; // AES-256
 const IV_BYTES = 12; // GCM recommended
@@ -153,8 +185,13 @@ async function getMasterKey(): Promise<Buffer> {
     if (key.length === MASTER_KEY_BYTES) return key;
     log.warn('master key has unexpected length, regenerating');
   } catch (err: unknown) {
-    if (!(err instanceof Error) || (err as NodeJS.ErrnoException).code !== 'ENOENT') {
-      log.warn(`failed to read master key: ${err instanceof Error ? err.message : err}`);
+    if (
+      !(err instanceof Error) ||
+      (err as NodeJS.ErrnoException).code !== 'ENOENT'
+    ) {
+      log.warn(
+        `failed to read master key: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 
@@ -183,7 +220,9 @@ function decryptData(data: Buffer, key: Buffer): string | null {
     const enc = data.subarray(IV_BYTES + TAG_BYTES);
     const decipher = createDecipheriv('aes-256-gcm', key, iv);
     decipher.setAuthTag(tag);
-    return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
+    return Buffer.concat([decipher.update(enc), decipher.final()]).toString(
+      'utf8',
+    );
   } catch {
     return null;
   }
@@ -193,7 +232,9 @@ const linuxBackend: KeychainBackend = {
   async get(_service, account) {
     try {
       const key = await getMasterKey();
-      const data = await readFile(join(LINUX_UAT_DIR, linuxSafeFileName(account)));
+      const data = await readFile(
+        join(LINUX_UAT_DIR, linuxSafeFileName(account)),
+      );
       return decryptData(data, key);
     } catch {
       return null;
@@ -232,7 +273,8 @@ const linuxBackend: KeychainBackend = {
 // ---------------------------------------------------------------------------
 
 const WIN32_UAT_DIR = join(
-  process.env.LOCALAPPDATA ?? join(process.env.USERPROFILE ?? homedir(), 'AppData', 'Local'),
+  process.env.LOCALAPPDATA ??
+    join(process.env.USERPROFILE ?? homedir(), 'AppData', 'Local'),
   KEYCHAIN_SERVICE,
 );
 const WIN32_MASTER_KEY_PATH = join(WIN32_UAT_DIR, 'master.key');
@@ -252,8 +294,13 @@ async function getWin32MasterKey(): Promise<Buffer> {
     if (key.length === MASTER_KEY_BYTES) return key;
     log.warn('win32 master key has unexpected length, regenerating');
   } catch (err: unknown) {
-    if (!(err instanceof Error) || (err as NodeJS.ErrnoException).code !== 'ENOENT') {
-      log.warn(`failed to read win32 master key: ${err instanceof Error ? err.message : err}`);
+    if (
+      !(err instanceof Error) ||
+      (err as NodeJS.ErrnoException).code !== 'ENOENT'
+    ) {
+      log.warn(
+        `failed to read win32 master key: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 
@@ -268,7 +315,9 @@ const win32Backend: KeychainBackend = {
   async get(_service, account) {
     try {
       const key = await getWin32MasterKey();
-      const data = await readFile(join(WIN32_UAT_DIR, win32SafeFileName(account)));
+      const data = await readFile(
+        join(WIN32_UAT_DIR, win32SafeFileName(account)),
+      );
       return decryptData(data, key);
     } catch {
       return null;
@@ -305,7 +354,9 @@ function createBackend(): KeychainBackend {
     case 'win32':
       return win32Backend;
     default:
-      log.warn(`unsupported platform "${process.platform}", falling back to macOS backend`);
+      log.warn(
+        `unsupported platform "${process.platform}", falling back to macOS backend`,
+      );
       return darwinBackend;
   }
 }
@@ -320,9 +371,15 @@ const backend = createBackend();
  * Read the stored UAT for a given (appId, userOpenId) pair.
  * Returns `null` when no entry exists or the payload is unparseable.
  */
-export async function getStoredToken(appId: string, userOpenId: string): Promise<StoredUAToken | null> {
+export async function getStoredToken(
+  appId: string,
+  userOpenId: string,
+): Promise<StoredUAToken | null> {
   try {
-    const json = await backend.get(KEYCHAIN_SERVICE, accountKey(appId, userOpenId));
+    const json = await backend.get(
+      KEYCHAIN_SERVICE,
+      accountKey(appId, userOpenId),
+    );
     if (!json) return null;
     return JSON.parse(json) as StoredUAToken;
   } catch {
@@ -339,13 +396,18 @@ export async function setStoredToken(token: StoredUAToken): Promise<void> {
   const key = accountKey(token.appId, token.userOpenId);
   const payload = JSON.stringify(token);
   await backend.set(KEYCHAIN_SERVICE, key, payload);
-  log.info(`saved UAT for ${token.userOpenId} (at:${maskToken(token.accessToken)})`);
+  log.info(
+    `saved UAT for ${token.userOpenId} (at:${maskToken(token.accessToken)})`,
+  );
 }
 
 /**
  * Remove a stored UAT from the credential store.
  */
-export async function removeStoredToken(appId: string, userOpenId: string): Promise<void> {
+export async function removeStoredToken(
+  appId: string,
+  userOpenId: string,
+): Promise<void> {
   await backend.remove(KEYCHAIN_SERVICE, accountKey(appId, userOpenId));
   log.info(`removed UAT for ${userOpenId}`);
 }
@@ -361,7 +423,9 @@ export async function removeStoredToken(appId: string, userOpenId: string): Prom
  * - `"needs_refresh"` – access_token expired/expiring but refresh_token is valid
  * - `"expired"`       – both tokens are expired; re-authorization required
  */
-export function tokenStatus(token: StoredUAToken): 'valid' | 'needs_refresh' | 'expired' {
+export function tokenStatus(
+  token: StoredUAToken,
+): 'valid' | 'needs_refresh' | 'expired' {
   const now = Date.now();
   if (now < token.expiresAt - REFRESH_AHEAD_MS) {
     return 'valid';

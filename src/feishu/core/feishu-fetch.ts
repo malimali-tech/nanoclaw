@@ -18,7 +18,10 @@ import { getUserAgent } from './version';
  * User-Agent is transparently applied without changing every
  * call-site's signature.
  */
-export function feishuFetch(url: string | URL | Request, init?: RequestInit): Promise<Response> {
+export function feishuFetch(
+  url: string | URL | Request,
+  init?: RequestInit,
+): Promise<Response> {
   const headers = {
     ...init?.headers,
     'User-Agent': getUserAgent(),

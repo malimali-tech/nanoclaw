@@ -32,7 +32,13 @@ export interface ToolUseDisplayResult {
 
 export const EMPTY_TOOL_USE_PLACEHOLDER = 'No tool steps available';
 
-type SanitizerKind = 'skill' | 'path' | 'search' | 'url' | 'command' | 'generic';
+type SanitizerKind =
+  | 'skill'
+  | 'path'
+  | 'search'
+  | 'url'
+  | 'command'
+  | 'generic';
 type SummarySource = 'matched' | 'code' | 'quoted' | 'url' | 'line';
 
 interface ToolDescriptor {
@@ -64,7 +70,13 @@ interface SummarySignals {
   url?: string;
 }
 
-const DEFAULT_SUMMARY_PREFERENCE: SummarySource[] = ['matched', 'code', 'quoted', 'url', 'line'];
+const DEFAULT_SUMMARY_PREFERENCE: SummarySource[] = [
+  'matched',
+  'code',
+  'quoted',
+  'url',
+  'line',
+];
 const TOOL_DESCRIPTORS: ToolDescriptor[] = [
   {
     aliases: ['skill'],
@@ -115,7 +127,8 @@ const TOOL_DESCRIPTORS: ToolDescriptor[] = [
     iconToken: 'doc-search_outlined',
     title: 'Search text',
     sanitizer: 'generic',
-    detailFromParams: (params) => buildPatternDetail(params, { includeTarget: true }),
+    detailFromParams: (params) =>
+      buildPatternDetail(params, { includeTarget: true }),
     summaryPatterns: [/^(?:search\s+text(?:\s+by\s+pattern)?|grep)\s+(.+)$/i],
   },
   {
@@ -178,17 +191,26 @@ export function normalizeToolUseDisplay(params: {
   const showResultDetails = params.showResultDetails === true;
   const sources = traceSteps.map(toTraceSource);
   const steps = sources
-    .map((source) => formatToolStep(source, { showFullPaths, showResultDetails }))
+    .map((source) =>
+      formatToolStep(source, { showFullPaths, showResultDetails }),
+    )
     .filter((step): step is ToolUseDisplayStep => !!step);
 
   return {
-    content: steps.map((step) => (step.detail ? `- ${step.title}: ${step.detail}` : `- ${step.title}`)).join('\n'),
+    content: steps
+      .map((step) =>
+        step.detail ? `- ${step.title}: ${step.detail}` : `- ${step.title}`,
+      )
+      .join('\n'),
     stepCount: steps.length,
     steps,
   };
 }
 
-export function buildToolUseTitleSuffix(params: { stepCount: number }): { zh: string; en: string } {
+export function buildToolUseTitleSuffix(params: { stepCount: number }): {
+  zh: string;
+  en: string;
+} {
   const { stepCount } = params;
   return {
     zh: `查看 ${stepCount} 个步骤`,
@@ -213,14 +235,25 @@ function formatToolStep(
 ): ToolUseDisplayStep | undefined {
   const descriptor = resolveToolDescriptor(source.toolName);
   const rawDetail =
-    (descriptor ? extractDetailFromParams(source.params, descriptor) : undefined) ??
-    (descriptor ? extractDetailFromSummary(source.summaryText, descriptor) : cleanupLine(source.summaryText ?? '')) ??
+    (descriptor
+      ? extractDetailFromParams(source.params, descriptor)
+      : undefined) ??
+    (descriptor
+      ? extractDetailFromSummary(source.summaryText, descriptor)
+      : cleanupLine(source.summaryText ?? '')) ??
     undefined;
-  const detail = rawDetail ? sanitizeToolDetail(descriptor?.sanitizer ?? 'generic', rawDetail, options) : undefined;
+  const detail = rawDetail
+    ? sanitizeToolDetail(descriptor?.sanitizer ?? 'generic', rawDetail, options)
+    : undefined;
   const title = buildToolTitle(source, descriptor, rawDetail);
   const status = resolveStepStatus(source);
-  const errorBlock = source.error ? buildErrorBlock(source.error, descriptor) : undefined;
-  const resultBlock = !errorBlock && options.showResultDetails ? buildResultBlock(source, descriptor) : undefined;
+  const errorBlock = source.error
+    ? buildErrorBlock(source.error, descriptor)
+    : undefined;
+  const resultBlock =
+    !errorBlock && options.showResultDetails
+      ? buildResultBlock(source, descriptor)
+      : undefined;
 
   return {
     title,
@@ -232,12 +265,19 @@ function formatToolStep(
   };
 }
 
-function buildToolTitle(source: ToolStepSource, descriptor: ToolDescriptor | undefined, rawDetail?: string): string {
+function buildToolTitle(
+  source: ToolStepSource,
+  descriptor: ToolDescriptor | undefined,
+  rawDetail?: string,
+): string {
   const baseTitle =
     descriptor?.title === 'Read' && rawDetail && isSkillPathValue(rawDetail)
       ? 'Skill Read'
       : (descriptor?.title ?? humanizeToolName(source.toolName ?? 'tool'));
-  const durationLabel = source.durationMs != null ? formatDurationLabel(source.durationMs) : undefined;
+  const durationLabel =
+    source.durationMs != null
+      ? formatDurationLabel(source.durationMs)
+      : undefined;
   return durationLabel ? `${baseTitle} (${durationLabel})` : baseTitle;
 }
 
@@ -246,7 +286,9 @@ function resolveToolDescriptor(toolName?: string): ToolDescriptor | undefined {
   return TOOL_DESCRIPTORS.find((descriptor) =>
     descriptor.aliases.some(
       (alias) =>
-        normalizedName === alias || normalizedName.startsWith(`${alias}_`) || normalizedName.startsWith(`${alias}-`),
+        normalizedName === alias ||
+        normalizedName.startsWith(`${alias}_`) ||
+        normalizedName.startsWith(`${alias}-`),
     ),
   );
 }
@@ -267,7 +309,10 @@ function extractDetailFromParams(
   return undefined;
 }
 
-function extractDetailFromSummary(summaryText: string | undefined, descriptor: ToolDescriptor): string | undefined {
+function extractDetailFromSummary(
+  summaryText: string | undefined,
+  descriptor: ToolDescriptor,
+): string | undefined {
   if (!summaryText) return undefined;
 
   const lines = summaryText
@@ -278,7 +323,10 @@ function extractDetailFromSummary(summaryText: string | undefined, descriptor: T
 
   for (const line of lines) {
     const signals = buildSummarySignals(line, descriptor.summaryPatterns ?? []);
-    const detail = pickSummaryDetail(signals, descriptor.summaryPreference ?? DEFAULT_SUMMARY_PREFERENCE);
+    const detail = pickSummaryDetail(
+      signals,
+      descriptor.summaryPreference ?? DEFAULT_SUMMARY_PREFERENCE,
+    );
     if (detail) return detail;
   }
 
@@ -299,7 +347,10 @@ function buildSummarySignals(line: string, patterns: RegExp[]): SummarySignals {
   };
 }
 
-function pickSummaryDetail(signals: SummarySignals, preference: SummarySource[]): string | undefined {
+function pickSummaryDetail(
+  signals: SummarySignals,
+  preference: SummarySource[],
+): string | undefined {
   for (const key of preference) {
     const value = signals[key];
     if (value) return value;
@@ -312,26 +363,45 @@ function buildResultBlock(
   descriptor: ToolDescriptor | undefined,
 ): ToolUseDisplayBlock | undefined {
   if (source.result == null) return undefined;
-  if (descriptor && ['Read', 'Edit', 'Fetch web page', 'Browser'].includes(descriptor.title)) {
+  if (
+    descriptor &&
+    ['Read', 'Edit', 'Fetch web page', 'Browser'].includes(descriptor.title)
+  ) {
     return undefined;
   }
-  return buildDisplayBlock(sanitizeDisplayBlockValue(source.result, descriptor));
+  return buildDisplayBlock(
+    sanitizeDisplayBlockValue(source.result, descriptor),
+  );
 }
 
-function buildErrorBlock(error: string, descriptor: ToolDescriptor | undefined): ToolUseDisplayBlock | undefined {
-  return buildDisplayBlock(sanitizeDisplayBlockValue(error, descriptor), 'text');
+function buildErrorBlock(
+  error: string,
+  descriptor: ToolDescriptor | undefined,
+): ToolUseDisplayBlock | undefined {
+  return buildDisplayBlock(
+    sanitizeDisplayBlockValue(error, descriptor),
+    'text',
+  );
 }
 
-function sanitizeDisplayBlockValue(value: unknown, descriptor: ToolDescriptor | undefined): unknown {
+function sanitizeDisplayBlockValue(
+  value: unknown,
+  descriptor: ToolDescriptor | undefined,
+): unknown {
   if (descriptor?.sanitizer === 'command' && typeof value === 'string') {
     return redactInlineSecrets(value);
   }
   return value;
 }
 
-function buildPatternDetail(params: Record<string, unknown>, options: { includeTarget: boolean }): string | undefined {
+function buildPatternDetail(
+  params: Record<string, unknown>,
+  options: { includeTarget: boolean },
+): string | undefined {
   const pattern = extractScalarText(params.pattern);
-  const target = extractScalarText(params.glob ?? params.path ?? params.file_path);
+  const target = extractScalarText(
+    params.glob ?? params.path ?? params.file_path,
+  );
   if (pattern && target && options.includeTarget) {
     return `${pattern} in ${target}`;
   }
@@ -340,7 +410,8 @@ function buildPatternDetail(params: Record<string, unknown>, options: { includeT
 
 function extractScalarText(value: unknown): string | undefined {
   if (typeof value === 'string') return value.trim() || undefined;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'number' || typeof value === 'boolean')
+    return String(value);
   return undefined;
 }
 
@@ -382,7 +453,10 @@ function normalizeInlineDisplayText(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-function sanitizePathLike(value: string, options: { showFullPaths: boolean }): string {
+function sanitizePathLike(
+  value: string,
+  options: { showFullPaths: boolean },
+): string {
   const cleaned = sanitizeGenericText(value)
     .replace(/^(?:from|file|path)\s+/i, '')
     .trim();
@@ -397,7 +471,10 @@ function sanitizePathLike(value: string, options: { showFullPaths: boolean }): s
   return segments.at(-1) ?? cleaned;
 }
 
-function sanitizeCommandLike(value: string, options: { showFullPaths: boolean }): string {
+function sanitizeCommandLike(
+  value: string,
+  options: { showFullPaths: boolean },
+): string {
   const cleaned = stripQuotes(value)
     .replace(/^(?:command|script|description)\s+/i, '')
     .replace(/^.*?\s+->\s+/i, '')
@@ -429,7 +506,10 @@ function buildDisplayBlock(
         return { language: 'json', content: prettyJson };
       }
     }
-    return { language: fallbackLanguage === 'json' ? 'text' : fallbackLanguage, content: normalized };
+    return {
+      language: fallbackLanguage === 'json' ? 'text' : fallbackLanguage,
+      content: normalized,
+    };
   }
 
   if (typeof value === 'object') {
@@ -559,7 +639,9 @@ function stripMarkdown(line: string): string {
 }
 
 function isNoiseLine(line: string): boolean {
-  return /^(?:completed|complete|done|success|succeeded|running|started|finished|ok)$/i.test(line);
+  return /^(?:completed|complete|done|success|succeeded|running|started|finished|ok)$/i.test(
+    line,
+  );
 }
 
 function humanizeToolName(name: string): string {
@@ -569,7 +651,9 @@ function humanizeToolName(name: string): string {
 }
 
 function formatDurationLabel(durationMs: number): string {
-  return durationMs < 1000 ? `${durationMs} ms` : `${(durationMs / 1000).toFixed(1)} s`;
+  return durationMs < 1000
+    ? `${durationMs} ms`
+    : `${(durationMs / 1000).toFixed(1)} s`;
 }
 
 function stripQuotes(value: string): string {

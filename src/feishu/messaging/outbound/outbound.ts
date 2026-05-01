@@ -18,7 +18,12 @@ import { LarkClient } from '../../core/lark-client';
 import { larkLogger } from '../../core/lark-logger';
 import { parseFeishuRouteTarget } from '../../core/targets';
 import { isCommentTarget } from '../../core/comment-target';
-import { sendCardLark, sendCommentReplyLark, sendMediaLark, sendTextLark } from './deliver';
+import {
+  sendCardLark,
+  sendCommentReplyLark,
+  sendMediaLark,
+  sendTextLark,
+} from './deliver';
 
 const log = larkLogger('outbound/outbound');
 
@@ -134,7 +139,9 @@ function resolveFeishuSendContext(params: {
 }): FeishuSendContext {
   const routeTarget = parseFeishuRouteTarget(params.to);
   const explicitThreadId =
-    params.threadId != null && String(params.threadId).trim() !== '' ? String(params.threadId).trim() : undefined;
+    params.threadId != null && String(params.threadId).trim() !== ''
+      ? String(params.threadId).trim()
+      : undefined;
   const explicitReplyToId = params.replyToId?.trim() || undefined;
   const replyToMessageId = explicitReplyToId ?? routeTarget.replyToMessageId;
   const replyInThread = Boolean(explicitThreadId ?? routeTarget.threadId);
@@ -159,7 +166,8 @@ function resolveFeishuSendContext(params: {
 export const feishuOutbound: ChannelOutboundAdapter = {
   deliveryMode: 'direct',
 
-  chunker: (text, limit) => LarkClient.runtime.channel.text.chunkMarkdownText(text, limit),
+  chunker: (text, limit) =>
+    LarkClient.runtime.channel.text.chunkMarkdownText(text, limit),
 
   chunkerMode: 'markdown',
 
@@ -170,31 +178,69 @@ export const feishuOutbound: ChannelOutboundAdapter = {
 
     // Comment thread routing — route replies through Drive comment API
     if (isCommentTarget(to)) {
-      log.info(`sendText: detected comment target, routing through Drive comment API`);
-      const result = await sendCommentReplyLark({ cfg, to, text, accountId: accountId ?? undefined });
+      log.info(
+        `sendText: detected comment target, routing through Drive comment API`,
+      );
+      const result = await sendCommentReplyLark({
+        cfg,
+        to,
+        text,
+        accountId: accountId ?? undefined,
+      });
       return { channel: 'feishu', ...result };
     }
 
-    const ctx = resolveFeishuSendContext({ cfg, to, accountId, replyToId, threadId });
+    const ctx = resolveFeishuSendContext({
+      cfg,
+      to,
+      accountId,
+      replyToId,
+      threadId,
+    });
     const result = await sendTextLark({ ...ctx, to: ctx.to, text });
     return { channel: 'feishu', ...result };
   },
 
-  sendMedia: async ({ cfg, to, text, mediaUrl, mediaLocalRoots, accountId, replyToId, threadId }) => {
-    log.info(`sendMedia: target=${to}, ` + `hasText=${Boolean(text?.trim())}, mediaUrl=${mediaUrl ?? '(none)'}`);
+  sendMedia: async ({
+    cfg,
+    to,
+    text,
+    mediaUrl,
+    mediaLocalRoots,
+    accountId,
+    replyToId,
+    threadId,
+  }) => {
+    log.info(
+      `sendMedia: target=${to}, ` +
+        `hasText=${Boolean(text?.trim())}, mediaUrl=${mediaUrl ?? '(none)'}`,
+    );
 
     // Comment thread routing — send text (with media URL appended) via Drive comment API
     if (isCommentTarget(to)) {
-      log.info(`sendMedia: detected comment target, routing through Drive comment API`);
+      log.info(
+        `sendMedia: detected comment target, routing through Drive comment API`,
+      );
       const parts: string[] = [];
       if (text?.trim()) parts.push(text.trim());
       if (mediaUrl) parts.push(`📎 ${mediaUrl}`);
       const combinedText = parts.join('\n') || '(media)';
-      const result = await sendCommentReplyLark({ cfg, to, text: combinedText, accountId: accountId ?? undefined });
+      const result = await sendCommentReplyLark({
+        cfg,
+        to,
+        text: combinedText,
+        accountId: accountId ?? undefined,
+      });
       return { channel: 'feishu', ...result };
     }
 
-    const ctx = resolveFeishuSendContext({ cfg, to, accountId, replyToId, threadId });
+    const ctx = resolveFeishuSendContext({
+      cfg,
+      to,
+      accountId,
+      replyToId,
+      threadId,
+    });
 
     // Feishu media messages do not support inline captions — send text first.
     if (text?.trim()) {
@@ -204,11 +250,20 @@ export const feishuOutbound: ChannelOutboundAdapter = {
     // No mediaUrl — text-only fallback.
     if (!mediaUrl) {
       log.info('sendMedia: no mediaUrl provided, falling back to text-only');
-      const result = await sendTextLark({ ...ctx, to: ctx.to, text: text ?? '' });
+      const result = await sendTextLark({
+        ...ctx,
+        to: ctx.to,
+        text: text ?? '',
+      });
       return { channel: 'feishu', ...result };
     }
 
-    const result = await sendMediaLark({ ...ctx, to: ctx.to, mediaUrl, mediaLocalRoots });
+    const result = await sendMediaLark({
+      ...ctx,
+      to: ctx.to,
+      mediaUrl,
+      mediaLocalRoots,
+    });
     return {
       channel: 'feishu',
       messageId: result.messageId,
@@ -217,15 +272,35 @@ export const feishuOutbound: ChannelOutboundAdapter = {
     };
   },
 
-  sendPayload: async ({ cfg, to, payload, mediaLocalRoots, accountId, replyToId, threadId }) => {
-    const ctx = resolveFeishuSendContext({ cfg, to, accountId, replyToId, threadId });
+  sendPayload: async ({
+    cfg,
+    to,
+    payload,
+    mediaLocalRoots,
+    accountId,
+    replyToId,
+    threadId,
+  }) => {
+    const ctx = resolveFeishuSendContext({
+      cfg,
+      to,
+      accountId,
+      replyToId,
+      threadId,
+    });
 
     // --- channelData.feishu: card message support ---
-    const feishuData = payload.channelData?.feishu as FeishuChannelData | undefined;
+    const feishuData = payload.channelData?.feishu as
+      | FeishuChannelData
+      | undefined;
 
     // --- Resolve text + media from payload ---
     const text = payload.text ?? '';
-    const mediaUrls = payload.mediaUrls?.length ? payload.mediaUrls : payload.mediaUrl ? [payload.mediaUrl] : [];
+    const mediaUrls = payload.mediaUrls?.length
+      ? payload.mediaUrls
+      : payload.mediaUrl
+        ? [payload.mediaUrl]
+        : [];
 
     log.info(
       `sendPayload: target=${to}, ` +
@@ -241,11 +316,20 @@ export const feishuOutbound: ChannelOutboundAdapter = {
         await sendTextLark({ ...ctx, to: ctx.to, text });
       }
 
-      const cardResult = await sendCardLark({ ...ctx, to: ctx.to, card: feishuData.card });
+      const cardResult = await sendCardLark({
+        ...ctx,
+        to: ctx.to,
+        card: feishuData.card,
+      });
 
       const warnings: string[] = [];
       for (const mediaUrl of mediaUrls) {
-        const mediaResult = await sendMediaLark({ ...ctx, to: ctx.to, mediaUrl, mediaLocalRoots });
+        const mediaResult = await sendMediaLark({
+          ...ctx,
+          to: ctx.to,
+          mediaUrl,
+          mediaLocalRoots,
+        });
         if (mediaResult.warning) {
           warnings.push(mediaResult.warning);
         }
@@ -275,7 +359,12 @@ export const feishuOutbound: ChannelOutboundAdapter = {
     const warnings: string[] = [];
     let lastResult: FeishuSendResult | undefined;
     for (const mediaUrl of mediaUrls) {
-      lastResult = await sendMediaLark({ ...ctx, to: ctx.to, mediaUrl, mediaLocalRoots });
+      lastResult = await sendMediaLark({
+        ...ctx,
+        to: ctx.to,
+        mediaUrl,
+        mediaLocalRoots,
+      });
       if (lastResult.warning) {
         warnings.push(lastResult.warning);
       }

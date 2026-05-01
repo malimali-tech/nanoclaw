@@ -27,7 +27,9 @@ export class OwnerAccessDeniedError extends Error {
   readonly appOwnerId: string;
 
   constructor(userOpenId: string, appOwnerId: string) {
-    super('Permission denied: Only the app owner is authorized to use this feature.');
+    super(
+      'Permission denied: Only the app owner is authorized to use this feature.',
+    );
     this.name = 'OwnerAccessDeniedError';
     this.userOpenId = userOpenId;
     this.appOwnerId = appOwnerId;

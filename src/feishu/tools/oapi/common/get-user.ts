@@ -11,7 +11,14 @@
 
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
-import { StringEnum, assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json, registerTool } from '../helpers';
+import {
+  StringEnum,
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -20,7 +27,8 @@ import { StringEnum, assertLarkOk, createToolContext, handleInvokeErrorWithAutoA
 const GetUserSchema = Type.Object({
   user_id: Type.Optional(
     Type.String({
-      description: '用户 ID（格式如 ou_xxx）。若不传入，则获取当前用户自己的信息',
+      description:
+        '用户 ID（格式如 ou_xxx）。若不传入，则获取当前用户自己的信息',
     }),
   ),
   user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
@@ -146,5 +154,4 @@ export function registerGetUserTool(api: OpenClawPluginApi): void {
     },
     { name: 'feishu_get_user' },
   );
-
 }

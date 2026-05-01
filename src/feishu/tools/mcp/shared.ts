@@ -65,7 +65,12 @@ export function extractMcpUrlFromConfig(cfg: unknown): string | undefined {
   if (!isRecord(feishu)) return undefined;
   const url = feishu.mcpEndpoint;
   const legacyUrl = feishu.mcp_url;
-  const chosen = typeof url === 'string' ? url : typeof legacyUrl === 'string' ? legacyUrl : undefined;
+  const chosen =
+    typeof url === 'string'
+      ? url
+      : typeof legacyUrl === 'string'
+        ? legacyUrl
+        : undefined;
   if (typeof chosen !== 'string') return undefined;
   const trimmed = chosen.trim();
   return trimmed ? trimmed : undefined;
@@ -143,7 +148,8 @@ function getMcpEndpoint(brand?: LarkBrand): string {
 
 function buildAuthHeader(): string | undefined {
   // 允许通过环境变量注入鉴权（若服务端要求）
-  const token = _penv.FEISHU_MCP_BEARER_TOKEN?.trim() || _penv.FEISHU_MCP_TOKEN?.trim();
+  const token =
+    _penv.FEISHU_MCP_BEARER_TOKEN?.trim() || _penv.FEISHU_MCP_TOKEN?.trim();
 
   if (!token) return undefined;
   return token.toLowerCase().startsWith('bearer ') ? token : `Bearer ${token}`;
@@ -197,7 +203,9 @@ export async function callMcpTool(
 
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`MCP HTTP ${res.status} ${res.statusText}: ${text.slice(0, 4000)}`);
+    throw new Error(
+      `MCP HTTP ${res.status} ${res.statusText}: ${text.slice(0, 4000)}`,
+    );
   }
 
   let data: McpRpcResponse;
@@ -241,7 +249,9 @@ export function registerMcpTool<T extends Record<string, unknown>>(
       async execute(toolCallId, params) {
         const p = params as T;
         try {
-          log.debug?.(`Calling ${config.mcpToolName} (toolCallId: ${toolCallId})`);
+          log.debug?.(
+            `Calling ${config.mcpToolName} (toolCallId: ${toolCallId})`,
+          );
           const startTime = Date.now();
 
           // 执行参数验证

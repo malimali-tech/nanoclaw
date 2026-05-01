@@ -20,7 +20,10 @@ import type { ClawdbotConfig, OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
 import type { ConfiguredLarkAccount } from '../core/types';
 import { getLarkAccount } from '../core/accounts';
-import { OwnerAccessDeniedError, assertOwnerAccessStrict } from '../core/owner-policy';
+import {
+  OwnerAccessDeniedError,
+  assertOwnerAccessStrict,
+} from '../core/owner-policy';
 import { LarkClient } from '../core/lark-client';
 import { getAppGrantedScopes } from '../core/app-scope-checker';
 import type { LarkTicket } from '../core/lark-ticket';
@@ -29,12 +32,29 @@ import { larkLogger } from '../core/lark-logger';
 
 const log = larkLogger('tools/oauth');
 import { formatLarkError } from '../core/api-error';
-import { pollDeviceToken, requestDeviceAuthorization } from '../core/device-flow';
-import { type StoredUAToken, getStoredToken, setStoredToken, tokenStatus } from '../core/token-store';
+import {
+  pollDeviceToken,
+  requestDeviceAuthorization,
+} from '../core/device-flow';
+import {
+  type StoredUAToken,
+  getStoredToken,
+  setStoredToken,
+  tokenStatus,
+} from '../core/token-store';
 import { revokeUAT } from '../core/uat-client';
-import { createCardEntity, sendCardByCardId, updateCardKitCardForAuth } from '../card/cardkit';
+import {
+  createCardEntity,
+  sendCardByCardId,
+  updateCardKitCardForAuth,
+} from '../card/cardkit';
 import { dispatchSyntheticTextMessage } from '../messaging/inbound/synthetic-message';
-import { buildAuthCard, buildAuthFailedCard, buildAuthIdentityMismatchCard, buildAuthSuccessCard } from './oauth-cards';
+import {
+  buildAuthCard,
+  buildAuthFailedCard,
+  buildAuthIdentityMismatchCard,
+  buildAuthSuccessCard,
+} from './oauth-cards';
 import { formatToolResult, registerTool } from './helpers';
 
 const json = formatToolResult;
@@ -99,7 +119,8 @@ async function verifyTokenIdentity(
   accessToken: string,
   expectedOpenId: string,
 ): Promise<{ valid: boolean; actualOpenId?: string }> {
-  const domain = brand === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
+  const domain =
+    brand === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
   const url = `${domain}/open-apis/authen/v1/user_info`;
 
   try {
@@ -159,7 +180,8 @@ export function registerFeishuOAuthTool(api: OpenClawPluginApi): void {
         const senderOpenId = ticket?.senderOpenId;
         if (!senderOpenId) {
           return json({
-            error: '无法获取当前用户身份（senderOpenId），请在飞书对话中使用此工具。',
+            error:
+              '无法获取当前用户身份（senderOpenId），请在飞书对话中使用此工具。',
           });
         }
 
@@ -257,7 +279,10 @@ export interface ExecuteAuthorizeParams {
  */
 export async function executeAuthorize(
   params: ExecuteAuthorizeParams,
-): Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }> {
+): Promise<{
+  content: Array<{ type: 'text'; text: string }>;
+  details: unknown;
+}> {
   const {
     account,
     senderOpenId,
@@ -284,7 +309,8 @@ export async function executeAuthorize(
       log.warn(`non-owner user ${senderOpenId} attempted to authorize`);
       return json({
         error: 'permission_denied',
-        message: '当前应用仅限所有者（App Owner）使用。您没有权限发起授权，无法使用相关功能。',
+        message:
+          '当前应用仅限所有者（App Owner）使用。您没有权限发起授权，无法使用相关功能。',
       });
     }
     throw err;
@@ -301,12 +327,18 @@ export async function executeAuthorize(
     // 如果请求了特定 scope，检查是否已覆盖
     if (effectiveScope) {
       const requestedScopes = effectiveScope.split(/\s+/).filter(Boolean);
-      const grantedScopes = new Set((existing.scope ?? '').split(/\s+/).filter(Boolean));
-      const missingScopes = requestedScopes.filter((s) => !grantedScopes.has(s));
+      const grantedScopes = new Set(
+        (existing.scope ?? '').split(/\s+/).filter(Boolean),
+      );
+      const missingScopes = requestedScopes.filter(
+        (s) => !grantedScopes.has(s),
+      );
 
       if (missingScopes.length > 0) {
         // scope 不足 → 继续走 Device Flow（飞书 OAuth 是增量授权）
-        log.info(`existing token missing scopes [${missingScopes.join(', ')}], starting incremental auth`);
+        log.info(
+          `existing token missing scopes [${missingScopes.join(', ')}], starting incremental auth`,
+        );
         // 不 revoke 旧 token，直接用缺失的 scope 发起新 Device Flow
         // 飞书会累积授权，新 token 包含旧 + 新 scope
         // 继续执行下面的 Device Flow 逻辑
@@ -368,13 +400,17 @@ export async function executeAuthorize(
         log.info(`scope merge on reuse: [${[...merged].join(', ')}]`);
       }
 
-      log.info(`same message, replacing flow for user=${senderOpenId}, app=${appId}, reusing cardId=${reuseCardId}`);
+      log.info(
+        `same message, replacing flow for user=${senderOpenId}, app=${appId}, reusing cardId=${reuseCardId}`,
+      );
     } else {
       // 新对话（messageId 不同）→ 取消旧流 + 旧卡片标记"授权未完成" + 创建新卡片
       oldFlow.superseded = true;
       oldFlow.controller.abort();
       pendingFlows.delete(flowKey);
-      log.info(`new message, cancelling old flow for user=${senderOpenId}, app=${appId}, old cardId=${oldFlow.cardId}`);
+      log.info(
+        `new message, cancelling old flow for user=${senderOpenId}, app=${appId}, old cardId=${oldFlow.cardId}`,
+      );
       // 标记旧卡片为"授权未完成"
       try {
         await updateCardKitCardForAuth({
@@ -401,15 +437,22 @@ export async function executeAuthorize(
       const requestedScopes = effectiveScope.split(/\s+/).filter(Boolean);
       const appScopes = await getAppGrantedScopes(sdk, appId, 'user');
 
-      const availableScopes = requestedScopes.filter((s) => appScopes.includes(s));
+      const availableScopes = requestedScopes.filter((s) =>
+        appScopes.includes(s),
+      );
       unavailableScopes = requestedScopes.filter((s) => !appScopes.includes(s));
 
       if (unavailableScopes.length > 0) {
-        log.info(`app has not granted scopes [${unavailableScopes.join(', ')}], filtering them out`);
+        log.info(
+          `app has not granted scopes [${unavailableScopes.join(', ')}], filtering them out`,
+        );
 
         if (availableScopes.length === 0) {
           // 所有 scope 都未开通，直接返回错误
-          const openDomain = brand === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
+          const openDomain =
+            brand === 'lark'
+              ? 'https://open.larksuite.com'
+              : 'https://open.feishu.cn';
           const permissionUrl = `${openDomain}/app/${appId}/permission`;
           return json({
             error: 'app_scopes_not_granted',
@@ -421,7 +464,9 @@ export async function executeAuthorize(
 
         // 部分 scope 未开通，只授权已开通的 scope
         filteredScope = availableScopes.join(' ');
-        log.info(`proceeding with available scopes [${availableScopes.join(', ')}]`);
+        log.info(
+          `proceeding with available scopes [${availableScopes.join(', ')}]`,
+        );
       }
     } catch (err) {
       // 如果 scope 检查失败，记录日志但继续执行（降级处理）
@@ -446,7 +491,8 @@ export async function executeAuthorize(
     totalAppScopes,
     alreadyGranted,
     batchInfo,
-    filteredScopes: unavailableScopes.length > 0 ? unavailableScopes : undefined,
+    filteredScopes:
+      unavailableScopes.length > 0 ? unavailableScopes : undefined,
     appId,
     showBatchAuthHint,
     brand,
@@ -470,18 +516,26 @@ export async function executeAuthorize(
         sequence: newSeq,
         accountId,
       });
-      log.info(`updated existing card ${reuseCardId} with merged scopes, seq=${newSeq}`);
+      log.info(
+        `updated existing card ${reuseCardId} with merged scopes, seq=${newSeq}`,
+      );
     } catch (err) {
       log.warn(`failed to update existing card, creating new one: ${err}`);
       // 降级：创建新卡片
-      const newCardId = await createCardEntity({ cfg, card: authCard, accountId });
+      const newCardId = await createCardEntity({
+        cfg,
+        card: authCard,
+        accountId,
+      });
       if (!newCardId) return json({ error: '创建授权卡片失败' });
       if (chatId) {
         await sendCardByCardId({
           cfg,
           to: chatId,
           cardId: newCardId,
-          replyToMessageId: ticket?.messageId?.startsWith('om_') ? ticket.messageId : undefined,
+          replyToMessageId: ticket?.messageId?.startsWith('om_')
+            ? ticket.messageId
+            : undefined,
           replyInThread: Boolean(ticket?.threadId),
           accountId,
         });
@@ -499,7 +553,11 @@ export async function executeAuthorize(
     }
   } else {
     // 首次创建卡片
-    const newCardId = await createCardEntity({ cfg, card: authCard, accountId });
+    const newCardId = await createCardEntity({
+      cfg,
+      card: authCard,
+      accountId,
+    });
     if (!newCardId) {
       return json({ error: '创建授权卡片失败' });
     }
@@ -508,7 +566,9 @@ export async function executeAuthorize(
       cfg,
       to: chatId,
       cardId: newCardId,
-      replyToMessageId: ticket?.messageId?.startsWith('om_') ? ticket.messageId : undefined,
+      replyToMessageId: ticket?.messageId?.startsWith('om_')
+        ? ticket.messageId
+        : undefined,
       replyInThread: Boolean(ticket?.threadId),
       accountId,
     });
@@ -548,7 +608,11 @@ export async function executeAuthorize(
       }
       if (result.ok) {
         // ===== 身份校验：验证实际授权用户与发起人一致 =====
-        const identity = await verifyTokenIdentity(brand, result.token.accessToken, senderOpenId);
+        const identity = await verifyTokenIdentity(
+          brand,
+          result.token.accessToken,
+          senderOpenId,
+        );
         if (!identity.valid) {
           log.warn(
             `identity mismatch! expected=${senderOpenId}, ` +
@@ -685,17 +749,25 @@ export async function executeAuthorize(
 
   // 如果有被过滤的 scope，添加提示信息
   if (unavailableScopes.length > 0) {
-    const openDomain = brand === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
+    const openDomain =
+      brand === 'lark'
+        ? 'https://open.larksuite.com'
+        : 'https://open.feishu.cn';
     const permissionUrl = `${openDomain}/app/${appId}/permission`;
     message += `\n\n⚠️ **注意**：以下权限因应用未开通而被跳过，如需使用请先在开放平台开通：\n${unavailableScopes.map((s) => `- ${s}`).join('\n')}\n\n权限管理地址：${permissionUrl}`;
   }
 
-  const openDomainForResult = brand === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
+  const openDomainForResult =
+    brand === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
   return json({
     success: true,
     message,
     awaiting_authorization: true,
-    filtered_scopes: unavailableScopes.length > 0 ? unavailableScopes : undefined,
-    app_permission_url: unavailableScopes.length > 0 ? `${openDomainForResult}/app/${appId}/permission` : undefined,
+    filtered_scopes:
+      unavailableScopes.length > 0 ? unavailableScopes : undefined,
+    app_permission_url:
+      unavailableScopes.length > 0
+        ? `${openDomainForResult}/app/${appId}/permission`
+        : undefined,
   });
 }

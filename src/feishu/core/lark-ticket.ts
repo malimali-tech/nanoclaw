@@ -40,7 +40,10 @@ const store = new AsyncLocalStorage<LarkTicket>();
  * Run `fn` within a ticket context.  All async operations spawned inside
  * `fn` will inherit the context and can access it via {@link getTicket}.
  */
-export function withTicket<T>(ticket: LarkTicket, fn: () => T | Promise<T>): T | Promise<T> {
+export function withTicket<T>(
+  ticket: LarkTicket,
+  fn: () => T | Promise<T>,
+): T | Promise<T> {
   return store.run(ticket, fn);
 }
 

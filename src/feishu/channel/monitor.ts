@@ -49,8 +49,12 @@ async function monitorSingleAccount(params: {
 }): Promise<void> {
   const { account, runtime, abortSignal } = params;
   const { accountId } = account;
-  const log = runtime?.log ?? ((...args: unknown[]) => mlog.info(args.map(String).join(' ')));
-  const error = runtime?.error ?? ((...args: unknown[]) => mlog.error(args.map(String).join(' ')));
+  const log =
+    runtime?.log ??
+    ((...args: unknown[]) => mlog.info(args.map(String).join(' ')));
+  const error =
+    runtime?.error ??
+    ((...args: unknown[]) => mlog.error(args.map(String).join(' ')));
 
   // Only websocket mode is supported in the monitor path.
   const connectionMode = account.config.connectionMode ?? 'websocket';
@@ -97,14 +101,17 @@ async function monitorSingleAccount(params: {
     handlers: {
       'im.message.receive_v1': (data) => handleMessageEvent(ctx, data),
       'im.message.message_read_v1': async () => {},
-      'im.message.reaction.created_v1': (data) => handleReactionEvent(ctx, data),
+      'im.message.reaction.created_v1': (data) =>
+        handleReactionEvent(ctx, data),
       // These events are expected in normal usage but do not affect the
       // plugin's current behavior. Register no-op handlers to avoid SDK
       // warnings about missing handlers.
       'im.message.reaction.deleted_v1': async () => {},
       'im.chat.access_event.bot_p2p_chat_entered_v1': async () => {},
-      'im.chat.member.bot.added_v1': (data) => handleBotMembershipEvent(ctx, data, 'added'),
-      'im.chat.member.bot.deleted_v1': (data) => handleBotMembershipEvent(ctx, data, 'removed'),
+      'im.chat.member.bot.added_v1': (data) =>
+        handleBotMembershipEvent(ctx, data, 'added'),
+      'im.chat.member.bot.deleted_v1': (data) =>
+        handleBotMembershipEvent(ctx, data, 'removed'),
       // Drive comment event — fires when a user adds a comment or reply on a document.
       'drive.notice.comment_add_v1': (data) => handleCommentEvent(ctx, data),
       // 飞书 SDK EventDispatcher.register 不支持带返回值的处理器，此处 as any 是 SDK 类型限制的变通
@@ -116,7 +123,9 @@ async function monitorSingleAccount(params: {
   });
 
   // startWS resolves when abortSignal fires — probe result is logged inside startWS.
-  log(`feishu[${accountId}]: bot open_id resolved: ${lark.botOpenId ?? 'unknown'}`);
+  log(
+    `feishu[${accountId}]: bot open_id resolved: ${lark.botOpenId ?? 'unknown'}`,
+  );
   log(`feishu[${accountId}]: WebSocket client started`);
   mlog.info(`websocket started for account ${accountId}`);
 }
@@ -129,7 +138,9 @@ async function monitorSingleAccount(params: {
  * Start monitoring for all enabled Feishu accounts (or a single
  * account when `opts.accountId` is specified).
  */
-export async function monitorFeishuProvider(opts: MonitorFeishuOpts = {}): Promise<void> {
+export async function monitorFeishuProvider(
+  opts: MonitorFeishuOpts = {},
+): Promise<void> {
   const cfg = opts.config;
   if (!cfg) {
     throw new Error('Config is required for Feishu monitor');
@@ -140,13 +151,17 @@ export async function monitorFeishuProvider(opts: MonitorFeishuOpts = {}): Promi
   // account-scoped config context.
   LarkClient.setGlobalConfig(cfg);
 
-  const log = opts.runtime?.log ?? ((...args: unknown[]) => mlog.info(args.map(String).join(' ')));
+  const log =
+    opts.runtime?.log ??
+    ((...args: unknown[]) => mlog.info(args.map(String).join(' ')));
 
   // Single-account mode.
   if (opts.accountId) {
     const account = getLarkAccount(cfg, opts.accountId);
     if (!account.enabled || !account.configured) {
-      throw new Error(`Feishu account "${opts.accountId}" not configured or disabled`);
+      throw new Error(
+        `Feishu account "${opts.accountId}" not configured or disabled`,
+      );
     }
     await monitorSingleAccount({
       cfg,
@@ -164,7 +179,9 @@ export async function monitorFeishuProvider(opts: MonitorFeishuOpts = {}): Promi
     throw new Error('No enabled Feishu accounts configured');
   }
 
-  log(`feishu: starting ${accounts.length} account(s): ${accounts.map((a) => a.accountId).join(', ')}`);
+  log(
+    `feishu: starting ${accounts.length} account(s): ${accounts.map((a) => a.accountId).join(', ')}`,
+  );
 
   await Promise.all(
     accounts.map((account) =>

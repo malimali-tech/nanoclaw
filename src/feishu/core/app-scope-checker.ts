@@ -114,7 +114,11 @@ export async function getAppGrantedScopes(
       .map((s) => ({ scope: s.scope!, token_types: s.token_types }));
 
     // 3. 写缓存（缓存完整数据，包含 token_types 和原始 app 对象）
-    cache.set(appId, { rawScopes: validScopes, rawApp: app, fetchedAt: Date.now() });
+    cache.set(appId, {
+      rawScopes: validScopes,
+      rawApp: app,
+      fetchedAt: Date.now(),
+    });
     log.info(`fetched ${validScopes.length} scopes for app ${appId}`);
 
     // 4. 根据 tokenType 过滤
@@ -127,7 +131,9 @@ export async function getAppGrantedScopes(
       })
       .map((s) => s.scope);
 
-    log.info(`returning ${scopes.length} scopes${tokenType ? ` for ${tokenType} token` : ''}`);
+    log.info(
+      `returning ${scopes.length} scopes${tokenType ? ` for ${tokenType} token` : ''}`,
+    );
 
     return scopes;
   } catch (err) {
@@ -138,18 +144,25 @@ export async function getAppGrantedScopes(
 
     // 检查是否是权限相关的 HTTP 错误（400/403）
     // axios/SDK 异常对象通常包含 response.status 或 status 字段
-    const statusCode = (err as any)?.response?.status || (err as any)?.status || (err as any)?.statusCode;
+    const statusCode =
+      (err as any)?.response?.status ||
+      (err as any)?.status ||
+      (err as any)?.statusCode;
 
     const isPermissionError =
       statusCode === 400 ||
       statusCode === 403 ||
-      (err instanceof Error && (err.message.includes('status code 400') || err.message.includes('status code 403')));
+      (err instanceof Error &&
+        (err.message.includes('status code 400') ||
+          err.message.includes('status code 403')));
 
     if (isPermissionError) {
       throw new AppScopeCheckFailedError(appId);
     }
 
-    log.warn(`failed to fetch scopes for ${appId}: ${err instanceof Error ? err.message : err}`);
+    log.warn(
+      `failed to fetch scopes for ${appId}: ${err instanceof Error ? err.message : err}`,
+    );
     // 其他查询失败不阻塞调用，返回空数组（后续 API 调用如果缺 scope 会被服务端拒绝）
     return [];
   }
@@ -168,7 +181,10 @@ export async function getAppGrantedScopes(
  * @param sdk - Lark SDK 实例
  * @param appId - 应用 ID（可传 "me"）
  */
-export async function getAppInfo(sdk: Lark.Client, appId: string): Promise<AppInfo> {
+export async function getAppInfo(
+  sdk: Lark.Client,
+  appId: string,
+): Promise<AppInfo> {
   // 先确保缓存已填充（调一次 getAppGrantedScopes 来触发 API + 缓存）
   await getAppGrantedScopes(sdk, appId);
 
@@ -177,7 +193,12 @@ export async function getAppInfo(sdk: Lark.Client, appId: string): Promise<AppIn
 
   // 提取 owner 信息
   const owner = rawApp?.owner as
-    | { owner_id?: string; owner_type?: number; type?: number; owner_id_type?: string }
+    | {
+        owner_id?: string;
+        owner_type?: number;
+        type?: number;
+        owner_id_type?: string;
+      }
     | undefined;
   const creatorId = rawApp?.creator_id as string | undefined;
 
@@ -185,7 +206,9 @@ export async function getAppInfo(sdk: Lark.Client, appId: string): Promise<AppIn
   // 兼容两种字段名（owner_type 和 type）
   const ownerTypeValue = owner?.owner_type ?? (owner as any)?.type;
   const effectiveOwnerOpenId =
-    ownerTypeValue === 2 && owner?.owner_id ? owner.owner_id : (creatorId ?? owner?.owner_id);
+    ownerTypeValue === 2 && owner?.owner_id
+      ? owner.owner_id
+      : (creatorId ?? owner?.owner_id);
 
   return {
     appId,
@@ -210,7 +233,10 @@ export async function getAppInfo(sdk: Lark.Client, appId: string): Promise<AppIn
  * @param apiRequired - OAPI 要求的 scope 列表
  * @returns 交集 scope 列表
  */
-export function intersectScopes(appGranted: string[], apiRequired: string[]): string[] {
+export function intersectScopes(
+  appGranted: string[],
+  apiRequired: string[],
+): string[] {
   const grantedSet = new Set(appGranted);
   return apiRequired.filter((s) => grantedSet.has(s));
 }
@@ -224,7 +250,10 @@ export function intersectScopes(appGranted: string[], apiRequired: string[]): st
  * @param apiRequired - OAPI 要求的 scope 列表
  * @returns 缺失的 scope 列表
  */
-export function missingScopes(appGranted: string[], apiRequired: string[]): string[] {
+export function missingScopes(
+  appGranted: string[],
+  apiRequired: string[],
+): string[] {
   const grantedSet = new Set(appGranted);
   return apiRequired.filter((s) => !grantedSet.has(s));
 }

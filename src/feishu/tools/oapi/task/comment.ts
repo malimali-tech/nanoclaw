@@ -15,7 +15,14 @@
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
 
-import { StringEnum, assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json, registerTool } from '../helpers';
+import {
+  StringEnum,
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 import type { PaginatedData } from '../sdk-types';
 
 // ---------------------------------------------------------------------------
@@ -24,7 +31,8 @@ import type { PaginatedData } from '../sdk-types';
 
 const FeishuTaskCommentAuthType = Type.Optional(
   StringEnum(['tenant', 'user'], {
-    description: '调用 API 时使用的 Token 类型。可选值："tenant"（应用身份） 或 "user"（用户身份）。默认使用 "user"。',
+    description:
+      '调用 API 时使用的 Token 类型。可选值："tenant"（应用身份） 或 "user"（用户身份）。默认使用 "user"。',
   }),
 );
 
@@ -35,20 +43,26 @@ const FeishuTaskCommentSchema = Type.Union([
     auth_type: FeishuTaskCommentAuthType,
     task_guid: Type.String({ description: '任务 GUID' }),
     content: Type.String({ description: '评论内容（纯文本，最长 3000 字符）' }),
-    reply_to_comment_id: Type.Optional(Type.String({ description: '要回复的评论 ID（用于回复评论）' })),
+    reply_to_comment_id: Type.Optional(
+      Type.String({ description: '要回复的评论 ID（用于回复评论）' }),
+    ),
   }),
 
   // LIST (P1)
   Type.Object({
     action: Type.Literal('list'),
     auth_type: FeishuTaskCommentAuthType,
-    resource_id: Type.String({ description: '要获取评论的资源 ID（任务 GUID）' }),
+    resource_id: Type.String({
+      description: '要获取评论的资源 ID（任务 GUID）',
+    }),
     direction: Type.Optional(
       StringEnum(['asc', 'desc'], {
         description: '排序方式（asc=从旧到新，desc=从新到旧，默认 asc）',
       }),
     ),
-    page_size: Type.Optional(Type.Number({ description: '每页数量，默认 50，最大 100' })),
+    page_size: Type.Optional(
+      Type.Number({ description: '每页数量，默认 50，最大 100' }),
+    ),
     page_token: Type.Optional(Type.String({ description: '分页标记' })),
   }),
 
@@ -81,7 +95,7 @@ type FeishuTaskCommentParams = { auth_type?: 'tenant' | 'user' } & (
   | {
       action: 'get';
       comment_id: string;
-      }
+    }
 );
 
 // ---------------------------------------------------------------------------
@@ -113,7 +127,9 @@ export function registerFeishuTaskCommentTool(api: OpenClawPluginApi): void {
             // CREATE
             // -----------------------------------------------------------------
             case 'create': {
-              log.info(`create: task_guid=${p.task_guid}, reply_to=${p.reply_to_comment_id ?? 'none'}`);
+              log.info(
+                `create: task_guid=${p.task_guid}, reply_to=${p.reply_to_comment_id ?? 'none'}`,
+              );
 
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const data: any = {
@@ -228,5 +244,4 @@ export function registerFeishuTaskCommentTool(api: OpenClawPluginApi): void {
     },
     { name: 'feishu_task_comment' },
   );
-
 }

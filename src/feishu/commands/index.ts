@@ -50,7 +50,8 @@ const T: Record<
     toolsProfileWarn: (profile) =>
       `⚠️ 工具 Profile 当前为 \`${profile}\`，飞书工具可能无法加载。请检查配置是否正确。\n`,
     startFailed: (details) => `❌ 飞书 OpenClaw 插件启动失败：\n\n${details}`,
-    startWithWarnings: (version, details) => `⚠️ 飞书 OpenClaw 插件已启动 v${version}（存在警告）\n\n${details}`,
+    startWithWarnings: (version, details) =>
+      `⚠️ 飞书 OpenClaw 插件已启动 v${version}（存在警告）\n\n${details}`,
     startOk: (version) => `✅ 飞书 OpenClaw 插件已启动 v${version}`,
     helpTitle: (version) => `飞书OpenClaw插件 v${version}`,
     helpUsage: '用法：',
@@ -72,7 +73,8 @@ const T: Record<
       '```',
     toolsProfileWarn: (profile) =>
       `⚠️ Tools profile is currently set to \`${profile}\`. Feishu tools may not load properly. Please check your configuration.\n`,
-    startFailed: (details) => `❌ Feishu OpenClaw plugin failed to start:\n\n${details}`,
+    startFailed: (details) =>
+      `❌ Feishu OpenClaw plugin failed to start:\n\n${details}`,
     startWithWarnings: (version, details) =>
       `⚠️ Feishu OpenClaw plugin started v${version} (with warnings)\n\n${details}`,
     startOk: (version) => `✅ Feishu OpenClaw plugin started v${version}`,
@@ -95,7 +97,10 @@ const T: Record<
 /**
  * 运行 /feishu start 校验，返回 Markdown 格式结果。
  */
-export function runFeishuStart(config: OpenClawConfig, locale: FeishuLocale = 'zh_cn'): string {
+export function runFeishuStart(
+  config: OpenClawConfig,
+  locale: FeishuLocale = 'zh_cn',
+): string {
   const t = T[locale];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cfg = config as any;
@@ -130,7 +135,9 @@ export function runFeishuStart(config: OpenClawConfig, locale: FeishuLocale = 'z
 /**
  * 运行 /feishu start，同时生成中英双语结果。
  */
-export function runFeishuStartI18n(config: OpenClawConfig): Record<FeishuLocale, string> {
+export function runFeishuStartI18n(
+  config: OpenClawConfig,
+): Record<FeishuLocale, string> {
   return {
     zh_cn: runFeishuStart(config, 'zh_cn'),
     en_us: runFeishuStart(config, 'en_us'),
@@ -170,7 +177,8 @@ export function registerCommands(api: OpenClawPluginApi): void {
   // /feishu_diagnose
   api.registerCommand({
     name: 'feishu_diagnose',
-    description: 'Run Feishu plugin diagnostics to check config, connectivity, and permissions',
+    description:
+      'Run Feishu plugin diagnostics to check config, connectivity, and permissions',
     acceptsArgs: false,
     requireAuth: true,
     async handler(ctx) {
@@ -179,7 +187,9 @@ export function registerCommands(api: OpenClawPluginApi): void {
         return { text: formatDiagReportText(report) };
       } catch (err) {
         return {
-          text: T.zh_cn.diagFailed(err instanceof Error ? err.message : String(err)),
+          text: T.zh_cn.diagFailed(
+            err instanceof Error ? err.message : String(err),
+          ),
         };
       }
     },
@@ -197,7 +207,9 @@ export function registerCommands(api: OpenClawPluginApi): void {
         return { text: markdown };
       } catch (err) {
         return {
-          text: T.zh_cn.diagFailed(err instanceof Error ? err.message : String(err)),
+          text: T.zh_cn.diagFailed(
+            err instanceof Error ? err.message : String(err),
+          ),
         };
       }
     },
@@ -215,7 +227,9 @@ export function registerCommands(api: OpenClawPluginApi): void {
         return { text: result };
       } catch (err) {
         return {
-          text: T.zh_cn.authFailed(err instanceof Error ? err.message : String(err)),
+          text: T.zh_cn.authFailed(
+            err instanceof Error ? err.message : String(err),
+          ),
         };
       }
     },
@@ -253,7 +267,9 @@ export function registerCommands(api: OpenClawPluginApi): void {
         return { text: getFeishuHelp() };
       } catch (err) {
         return {
-          text: T.zh_cn.execFailed(err instanceof Error ? err.message : String(err)),
+          text: T.zh_cn.execFailed(
+            err instanceof Error ? err.message : String(err),
+          ),
         };
       }
     },

@@ -9,7 +9,11 @@ import type { ClawdbotConfig } from 'openclaw/plugin-sdk';
 import { LarkClient } from '../core/lark-client';
 import { larkLogger } from '../core/lark-logger';
 import { runWithMessageUnavailableGuard } from '../core/message-unavailable';
-import { normalizeFeishuTarget, normalizeMessageId, resolveReceiveIdType } from '../core/targets';
+import {
+  normalizeFeishuTarget,
+  normalizeMessageId,
+  resolveReceiveIdType,
+} from '../core/targets';
 import type { FeishuSendResult } from '../messaging/types';
 import { CardKitApiError } from './card-error';
 
@@ -41,7 +45,11 @@ interface CardKitResponse {
  * 默认 fail-fast：body-level 非零 code 视为业务错误，立即抛出，
  * 由调用方（streaming-card-controller 等）统一走 catch → guard 处理。
  */
-function logCardKitResponse(params: { resp: CardKitResponse; api: string; context: string }): void {
+function logCardKitResponse(params: {
+  resp: CardKitResponse;
+  api: string;
+  context: string;
+}): void {
   const { resp, api, context } = params;
   const { code, msg } = resp;
   log.info(`cardkit ${api} response`, { code, msg, context });
@@ -85,7 +93,9 @@ export async function createCardEntity(params: {
 
   // 兼容不同 SDK 包装层：优先 data.card_id，回退顶层 card_id
   const cardId =
-    ((response.data?.card_id ?? (response as Record<string, unknown>).card_id) as string | undefined) ?? null;
+    ((response.data?.card_id ??
+      (response as Record<string, unknown>).card_id) as string | undefined) ??
+    null;
   logCardKitResponse({
     resp: response,
     api: 'card.create',
@@ -190,7 +200,8 @@ export async function sendCardByCardId(params: {
   replyInThread?: boolean;
   accountId?: string;
 }): Promise<FeishuSendResult> {
-  const { cfg, to, cardId, replyToMessageId, replyInThread, accountId } = params;
+  const { cfg, to, cardId, replyToMessageId, replyInThread, accountId } =
+    params;
 
   const client = LarkClient.fromCfg(cfg, accountId).sdk;
 

@@ -14,8 +14,10 @@ import { registerMessageReadTools } from './message-read';
 
 export function registerFeishuImTools(api: OpenClawPluginApi): void {
   const registered: string[] = [];
-  if (registerFeishuImUserMessageTool(api)) registered.push('feishu_im_user_message');
-  if (registerFeishuImUserFetchResourceTool(api)) registered.push('feishu_im_user_fetch_resource');
+  if (registerFeishuImUserMessageTool(api))
+    registered.push('feishu_im_user_message');
+  if (registerFeishuImUserFetchResourceTool(api))
+    registered.push('feishu_im_user_fetch_resource');
   registered.push(...registerMessageReadTools(api));
   if (registered.length > 0) {
     api.logger.debug?.(`feishu_im: Registered ${registered.join(', ')}`);

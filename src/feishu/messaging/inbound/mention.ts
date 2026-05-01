@@ -46,7 +46,10 @@ export function nonBotMentions(ctx: MessageContext): MentionInfo[] {
 /**
  * Remove all @mention placeholder keys from the message text.
  */
-export function extractMessageBody(text: string, allMentionKeys: string[]): string {
+export function extractMessageBody(
+  text: string,
+  allMentionKeys: string[],
+): string {
   let result = text;
   for (const key of allMentionKeys) {
     result = result.replace(new RegExp(escapeRegExp(key) + '\\s*', 'g'), '');
@@ -93,14 +96,20 @@ export function formatMentionAllForCard(): string {
 // ---------------------------------------------------------------------------
 
 /** Prepend @mention tags (text format) to a message body. */
-export function buildMentionedMessage(targets: MentionInfo[], message: string): string {
+export function buildMentionedMessage(
+  targets: MentionInfo[],
+  message: string,
+): string {
   if (targets.length === 0) return message;
   const mentionTags = targets.map(formatMentionForText).join(' ');
   return `${mentionTags}\n${message}`;
 }
 
 /** Prepend @mention tags (card format) to card markdown content. */
-export function buildMentionedCardContent(targets: MentionInfo[], message: string): string {
+export function buildMentionedCardContent(
+  targets: MentionInfo[],
+  message: string,
+): string {
   if (targets.length === 0) return message;
   const mentionTags = targets.map(formatMentionForCard).join(' ');
   return `${mentionTags}\n${message}`;

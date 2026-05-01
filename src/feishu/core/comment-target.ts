@@ -22,7 +22,13 @@ export type CommentFileType = 'doc' | 'docx' | 'file' | 'sheet' | 'slides';
 /** Delivery mode for a comment target. */
 export type CommentDeliveryMode = 'reply' | 'create_whole';
 
-const VALID_FILE_TYPES = new Set<string>(['doc', 'docx', 'file', 'sheet', 'slides']);
+const VALID_FILE_TYPES = new Set<string>([
+  'doc',
+  'docx',
+  'file',
+  'sheet',
+  'slides',
+]);
 const VALID_DELIVERY_MODES = new Set<string>(['reply', 'create_whole']);
 
 const COMMENT_PREFIX = 'comment:';
@@ -99,7 +105,12 @@ export function parseFeishuCommentTarget(target: string): CommentTarget | null {
   if (parts.length === 3) {
     [fileType, fileToken, commentId] = parts;
   } else if (parts.length === 4 && VALID_DELIVERY_MODES.has(parts[0])) {
-    [deliveryMode, fileType, fileToken, commentId] = parts as [CommentDeliveryMode, string, string, string];
+    [deliveryMode, fileType, fileToken, commentId] = parts as [
+      CommentDeliveryMode,
+      string,
+      string,
+      string,
+    ];
   } else {
     return null;
   }

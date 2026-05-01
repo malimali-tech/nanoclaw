@@ -26,7 +26,11 @@ import { jsonResult, readReactionParams } from '../../core/sdk-compat';
 import { LarkClient } from '../../core/lark-client';
 import { getEnabledLarkAccounts } from '../../core/accounts';
 import { larkLogger } from '../../core/lark-logger';
-import { addReactionFeishu, listReactionsFeishu, removeReactionFeishu } from './reactions';
+import {
+  addReactionFeishu,
+  listReactionsFeishu,
+  removeReactionFeishu,
+} from './reactions';
 import { sendCardLark, sendTextLark } from './deliver';
 import { uploadAndSendMediaLark } from './media';
 
@@ -83,7 +87,11 @@ function parseCardParam(raw: unknown): Record<string, unknown> | undefined {
     }
     try {
       const parsed: unknown = JSON.parse(trimmed);
-      if (typeof parsed === 'object' && parsed != null && !Array.isArray(parsed)) {
+      if (
+        typeof parsed === 'object' &&
+        parsed != null &&
+        !Array.isArray(parsed)
+      ) {
         log.info('params.card was a JSON string, parsed successfully');
         return parsed as Record<string, unknown>;
       }
@@ -133,7 +141,8 @@ function readFeishuSendParams(
     readStringParam(params, 'filePath') ??
     readStringParam(params, 'url');
 
-  const fileName = readStringParam(params, 'fileName') ?? readStringParam(params, 'name');
+  const fileName =
+    readStringParam(params, 'fileName') ?? readStringParam(params, 'name');
 
   // Thread routing: when targeting the current chat (or unspecified),
   // inherit thread context from SDK toolContext.
@@ -142,7 +151,9 @@ function readFeishuSendParams(
 
   const replyToMessageId =
     readStringParam(params, 'replyTo') ??
-    (replyInThread && toolContext?.currentMessageId ? String(toolContext.currentMessageId) : undefined);
+    (replyInThread && toolContext?.currentMessageId
+      ? String(toolContext.currentMessageId)
+      : undefined);
 
   const card = parseCardParam(params.card);
 
@@ -187,7 +198,12 @@ export const feishuMessageActions: ChannelMessageActionAdapter = {
     try {
       switch (action) {
         case 'send':
-          return await deliverMessage(cfg, readFeishuSendParams(params, toolContext), aid, ctx.mediaLocalRoots);
+          return await deliverMessage(
+            cfg,
+            readFeishuSendParams(params, toolContext),
+            aid,
+            ctx.mediaLocalRoots,
+          );
         case 'react':
           return await handleReact(cfg, params, aid);
         case 'reactions':
@@ -226,7 +242,15 @@ async function deliverMessage(
   accountId?: string,
   mediaLocalRoots?: readonly string[],
 ) {
-  const { to, text, mediaUrl, fileName, replyToMessageId, replyInThread, card } = sp;
+  const {
+    to,
+    text,
+    mediaUrl,
+    fileName,
+    replyToMessageId,
+    replyInThread,
+    card,
+  } = sp;
 
   const payloadType = card ? 'card' : mediaUrl ? 'media' : 'text';
   const target = to || replyToMessageId || 'unknown';
@@ -247,7 +271,10 @@ async function deliverMessage(
 
   // Send text first if both text and card/media are present.
   if (text.trim() && (card || mediaUrl)) {
-    log.info(`deliverMessage: sending preceding text ` + `(${text.length} chars) before ${payloadType}`);
+    log.info(
+      `deliverMessage: sending preceding text ` +
+        `(${text.length} chars) before ${payloadType}`,
+    );
     await sendTextLark({ ...sendCtx, text });
   }
 
@@ -255,7 +282,11 @@ async function deliverMessage(
   if (card) {
     const result = await sendCardLark({ ...sendCtx, card });
     log.info(`deliverMessage: card sent, messageId=${result.messageId}`);
-    return jsonResult({ ok: true, messageId: result.messageId, chatId: result.chatId });
+    return jsonResult({
+      ok: true,
+      messageId: result.messageId,
+      chatId: result.chatId,
+    });
   }
 
   // Media path — uses uploadAndSendMediaLark directly to support fileName.
@@ -266,7 +297,11 @@ async function deliverMessage(
   // Text-only path.
   const result = await sendTextLark({ ...sendCtx, text });
   log.info(`deliverMessage: text sent, messageId=${result.messageId}`);
-  return jsonResult({ ok: true, messageId: result.messageId, chatId: result.chatId });
+  return jsonResult({
+    ok: true,
+    messageId: result.messageId,
+    chatId: result.chatId,
+  });
 }
 
 /**
@@ -294,7 +329,11 @@ async function deliverMedia(
       mediaLocalRoots,
     });
     log.info(`deliverMedia: sent, messageId=${result.messageId}`);
-    return jsonResult({ ok: true, messageId: result.messageId, chatId: result.chatId });
+    return jsonResult({
+      ok: true,
+      messageId: result.messageId,
+      chatId: result.chatId,
+    });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     log.error(`deliverMedia: upload failed for "${mediaUrl}": ${errMsg}`);
@@ -323,14 +362,20 @@ async function deliverMedia(
 // Reaction handlers
 // ---------------------------------------------------------------------------
 
-async function handleReact(cfg: OpenClawConfig, params: Record<string, unknown>, accountId?: string) {
+async function handleReact(
+  cfg: OpenClawConfig,
+  params: Record<string, unknown>,
+  accountId?: string,
+) {
   const messageId = readStringParam(params, 'messageId', { required: true });
   const { emoji, remove, isEmpty } = readReactionParams(params, {
     removeErrorMessage: 'Emoji is required to remove a Feishu reaction.',
   });
 
   if (remove || isEmpty) {
-    log.info(`react: removing emoji=${emoji || 'all'} from messageId=${messageId}`);
+    log.info(
+      `react: removing emoji=${emoji || 'all'} from messageId=${messageId}`,
+    );
     const reactions = await listReactionsFeishu({
       cfg,
       messageId,
@@ -361,7 +406,11 @@ async function handleReact(cfg: OpenClawConfig, params: Record<string, unknown>,
   return jsonResult({ ok: true, reactionId });
 }
 
-async function handleReactions(cfg: OpenClawConfig, params: Record<string, unknown>, accountId?: string) {
+async function handleReactions(
+  cfg: OpenClawConfig,
+  params: Record<string, unknown>,
+  accountId?: string,
+) {
   const messageId = readStringParam(params, 'messageId', { required: true });
   const emojiType = readStringParam(params, 'emoji');
 
@@ -387,7 +436,11 @@ async function handleReactions(cfg: OpenClawConfig, params: Record<string, unkno
 // Delete
 // ---------------------------------------------------------------------------
 
-async function handleDelete(cfg: OpenClawConfig, params: Record<string, unknown>, accountId?: string) {
+async function handleDelete(
+  cfg: OpenClawConfig,
+  params: Record<string, unknown>,
+  accountId?: string,
+) {
   const messageId = readStringParam(params, 'messageId', { required: true });
   log.info(`delete: messageId=${messageId}`);
   const client = LarkClient.fromCfg(cfg, accountId).sdk;

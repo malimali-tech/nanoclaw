@@ -54,7 +54,13 @@ export async function downloadResources(params: {
       }
 
       const fileName = result.fileName || res.fileName;
-      const saved = await core.channel.media.saveMediaBuffer(result.buffer, contentType, 'inbound', maxBytes, fileName);
+      const saved = await core.channel.media.saveMediaBuffer(
+        result.buffer,
+        contentType,
+        'inbound',
+        maxBytes,
+        fileName,
+      );
 
       const placeholder = inferPlaceholderFromType(res.type);
       out.push({
@@ -65,9 +71,13 @@ export async function downloadResources(params: {
         resourceType: res.type,
       });
 
-      log?.(`feishu: downloaded ${res.type} resource ${res.fileKey}, saved to ${saved.path}`);
+      log?.(
+        `feishu: downloaded ${res.type} resource ${res.fileKey}, saved to ${saved.path}`,
+      );
     } catch (err) {
-      log?.(`feishu: failed to download ${res.type} resource ${res.fileKey}: ${String(err)}`);
+      log?.(
+        `feishu: failed to download ${res.type} resource ${res.fileKey}: ${String(err)}`,
+      );
     }
   }
 
@@ -103,7 +113,9 @@ export function buildFeishuMediaPayload(mediaList: FeishuMediaInfo[]): {
 } {
   const first = mediaList[0];
   const mediaPaths = mediaList.map((m) => m.path);
-  const mediaTypes = mediaList.map((m) => m.contentType).filter(Boolean) as string[];
+  const mediaTypes = mediaList
+    .map((m) => m.contentType)
+    .filter(Boolean) as string[];
 
   return {
     MediaPath: first?.path,

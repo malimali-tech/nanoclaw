@@ -14,11 +14,16 @@ export function truncateText(value: string, maxLength: number): string {
   return `${value.slice(0, maxLength - 3)}...`;
 }
 
-const INLINE_ASSIGNMENT_RE = /(^|[\s"'`])([A-Za-z_][A-Za-z0-9_]*)(=(?:"[^"]*"|'[^']*'|[^\s"'`]+))/g;
-const AUTH_HEADER_SECRET_RE = /(Authorization\s*:\s*(?:Bearer|Basic|Token)\s+)([^'"\s]+)/gi;
-const QUOTED_HEADER_ARG_RE = /((?:^|[\s"'`])(?:-H|--header)\s+)(['"])([A-Za-z0-9_-]+)(\s*:\s*)([^'"]*)(\2)/gi;
-const UNQUOTED_HEADER_ARG_RE = /((?:^|[\s"'`])(?:-H|--header)\s+)([A-Za-z0-9_-]+)(\s*:\s*)([^\s"'`]+)/gi;
-const SECRET_FLAG_RE = /((?:^|[\s"'`]))(--?[A-Za-z0-9][A-Za-z0-9-]*)(=|\s+)(?:"([^"]*)"|'([^']*)'|([^\s"'`]+))/g;
+const INLINE_ASSIGNMENT_RE =
+  /(^|[\s"'`])([A-Za-z_][A-Za-z0-9_]*)(=(?:"[^"]*"|'[^']*'|[^\s"'`]+))/g;
+const AUTH_HEADER_SECRET_RE =
+  /(Authorization\s*:\s*(?:Bearer|Basic|Token)\s+)([^'"\s]+)/gi;
+const QUOTED_HEADER_ARG_RE =
+  /((?:^|[\s"'`])(?:-H|--header)\s+)(['"])([A-Za-z0-9_-]+)(\s*:\s*)([^'"]*)(\2)/gi;
+const UNQUOTED_HEADER_ARG_RE =
+  /((?:^|[\s"'`])(?:-H|--header)\s+)([A-Za-z0-9_-]+)(\s*:\s*)([^\s"'`]+)/gi;
+const SECRET_FLAG_RE =
+  /((?:^|[\s"'`]))(--?[A-Za-z0-9][A-Za-z0-9-]*)(=|\s+)(?:"([^"]*)"|'([^']*)'|([^\s"'`]+))/g;
 const SENSITIVE_NAME_RE =
   /token|secret|password|api[_-]?key|authorization|cookie|credential|bearer|session[_-]?id|client[_-]?secret|access[_-]?key/i;
 
@@ -28,11 +33,25 @@ export function redactInlineSecrets(value: string): string {
       isSensitiveName(key) ? `${prefix}${key}=[redacted]` : match,
     )
     .replace(AUTH_HEADER_SECRET_RE, '$1[redacted]')
-    .replace(QUOTED_HEADER_ARG_RE, (match, prefix: string, quote: string, name: string, separator: string) =>
-      shouldRedactHeaderValue(name) ? `${prefix}${quote}${name}${separator}[redacted]${quote}` : match,
+    .replace(
+      QUOTED_HEADER_ARG_RE,
+      (
+        match,
+        prefix: string,
+        quote: string,
+        name: string,
+        separator: string,
+      ) =>
+        shouldRedactHeaderValue(name)
+          ? `${prefix}${quote}${name}${separator}[redacted]${quote}`
+          : match,
     )
-    .replace(UNQUOTED_HEADER_ARG_RE, (match, prefix: string, name: string, separator: string) =>
-      shouldRedactHeaderValue(name) ? `${prefix}${name}${separator}[redacted]` : match,
+    .replace(
+      UNQUOTED_HEADER_ARG_RE,
+      (match, prefix: string, name: string, separator: string) =>
+        shouldRedactHeaderValue(name)
+          ? `${prefix}${name}${separator}[redacted]`
+          : match,
     )
     .replace(
       SECRET_FLAG_RE,

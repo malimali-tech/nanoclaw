@@ -30,9 +30,14 @@ export async function migrateLegacyGroupAllowFrom(params: {
   let next = params.cfg;
   const { prompter } = params;
 
-  const existingGroupAllowFrom = (next.channels?.feishu as FeishuConfig | undefined)?.groupAllowFrom ?? [];
-  const legacyChatIds = existingGroupAllowFrom.filter((e) => String(e).startsWith('oc_'));
-  const senderAllowFrom = existingGroupAllowFrom.filter((e) => !String(e).startsWith('oc_'));
+  const existingGroupAllowFrom =
+    (next.channels?.feishu as FeishuConfig | undefined)?.groupAllowFrom ?? [];
+  const legacyChatIds = existingGroupAllowFrom.filter((e) =>
+    String(e).startsWith('oc_'),
+  );
+  const senderAllowFrom = existingGroupAllowFrom.filter(
+    (e) => !String(e).startsWith('oc_'),
+  );
 
   if (legacyChatIds.length === 0) {
     return next;
@@ -58,7 +63,8 @@ export async function migrateLegacyGroupAllowFrom(params: {
   });
 
   if (migrate) {
-    const existingGroups = (next.channels?.feishu as FeishuConfig | undefined)?.groups ?? {};
+    const existingGroups =
+      (next.channels?.feishu as FeishuConfig | undefined)?.groups ?? {};
     const migratedGroups: Record<string, FeishuGroupConfig> = {
       ...existingGroups,
     };
@@ -80,7 +86,10 @@ export async function migrateLegacyGroupAllowFrom(params: {
       'Migration complete',
     );
   } else {
-    await prompter.note('Skipped migration. Please update config manually to avoid issues.', 'Migration skipped');
+    await prompter.note(
+      'Skipped migration. Please update config manually to avoid issues.',
+      'Migration skipped',
+    );
   }
 
   return next;

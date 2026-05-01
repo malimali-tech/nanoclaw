@@ -45,10 +45,14 @@ function consoleFallback(subsystem: string): RuntimeLogger {
   const tag = `feishu/${subsystem}`;
   /* eslint-disable no-console -- logger底层实现，console 是最终输出目标 */
   return {
-    debug: (msg, meta) => console.debug(`${GRAY}[${tag}]${RESET}`, msg, ...(meta ? [meta] : [])),
-    info: (msg, meta) => console.log(`${CYAN}[${tag}]${RESET}`, msg, ...(meta ? [meta] : [])),
-    warn: (msg, meta) => console.warn(`${YELLOW}[${tag}]${RESET}`, msg, ...(meta ? [meta] : [])),
-    error: (msg, meta) => console.error(`${RED}[${tag}]${RESET}`, msg, ...(meta ? [meta] : [])),
+    debug: (msg, meta) =>
+      console.debug(`${GRAY}[${tag}]${RESET}`, msg, ...(meta ? [meta] : [])),
+    info: (msg, meta) =>
+      console.log(`${CYAN}[${tag}]${RESET}`, msg, ...(meta ? [meta] : [])),
+    warn: (msg, meta) =>
+      console.warn(`${YELLOW}[${tag}]${RESET}`, msg, ...(meta ? [meta] : [])),
+    error: (msg, meta) =>
+      console.error(`${RED}[${tag}]${RESET}`, msg, ...(meta ? [meta] : [])),
   };
   /* eslint-enable no-console */
 }
@@ -85,7 +89,9 @@ function getTraceMeta(): Record<string, unknown> | null {
   return trace;
 }
 
-function enrichMeta(meta: Record<string, unknown> | undefined): Record<string, unknown> {
+function enrichMeta(
+  meta: Record<string, unknown> | undefined,
+): Record<string, unknown> {
   const trace = getTraceMeta();
   if (!trace) return meta ?? {};
   return meta ? { ...trace, ...meta } : trace;
@@ -119,7 +125,10 @@ function buildTracePrefix(): string {
  *   formatMessage("card.create response", { code: 0, cardId: "c_xxx" })
  *   → "feishu[default][msg:om_xxx]: card.create response (code=0, cardId=c_xxx)"
  */
-function formatMessage(message: string, meta: Record<string, unknown> | undefined): string {
+function formatMessage(
+  message: string,
+  meta: Record<string, unknown> | undefined,
+): string {
   const prefix = buildTracePrefix();
   if (!meta || Object.keys(meta).length === 0) return `${prefix} ${message}`;
   const parts = Object.entries(meta)
@@ -129,7 +138,9 @@ function formatMessage(message: string, meta: Record<string, unknown> | undefine
       return `${k}=${v}`;
     })
     .filter(Boolean);
-  return parts.length > 0 ? `${prefix} ${message} (${parts.join(', ')})` : `${prefix} ${message}`;
+  return parts.length > 0
+    ? `${prefix} ${message} (${parts.join(', ')})`
+    : `${prefix} ${message}`;
 }
 
 // ---------------------------------------------------------------------------

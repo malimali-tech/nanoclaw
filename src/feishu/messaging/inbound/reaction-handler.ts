@@ -18,10 +18,16 @@ import * as crypto from 'node:crypto';
 import type { ClawdbotConfig, RuntimeEnv } from 'openclaw/plugin-sdk';
 import type { HistoryEntry } from 'openclaw/plugin-sdk/reply-history';
 import { DEFAULT_GROUP_HISTORY_LIMIT } from 'openclaw/plugin-sdk/reply-history';
-import type { FeishuReactionCreatedEvent, MessageContext  } from '../types';
+import type { FeishuReactionCreatedEvent, MessageContext } from '../types';
 import { getLarkAccount } from '../../core/accounts';
-import { type FeishuMessageInfo, getMessageFeishu } from '../shared/message-lookup';
-import { getChatTypeFeishu, isThreadCapableGroup } from '../../core/chat-info-cache';
+import {
+  type FeishuMessageInfo,
+  getMessageFeishu,
+} from '../shared/message-lookup';
+import {
+  getChatTypeFeishu,
+  isThreadCapableGroup,
+} from '../../core/chat-info-cache';
 import { larkLogger } from '../../core/lark-logger';
 import { resolveUserName } from './user-name-cache';
 import { dispatchToAgent } from './dispatch';
@@ -70,7 +76,9 @@ export async function resolveReactionContext(params: {
   accountId?: string;
 }): Promise<ReactionContext | null> {
   const { cfg, event, botOpenId, runtime, accountId } = params;
-  const log = runtime?.log ?? ((...args: unknown[]) => logger.info(args.map(String).join(' ')));
+  const log =
+    runtime?.log ??
+    ((...args: unknown[]) => logger.info(args.map(String).join(' ')));
 
   const account = getLarkAccount(cfg, accountId);
   const reactionMode = account.config?.reactionNotifications ?? 'own';
@@ -99,28 +107,41 @@ export async function resolveReactionContext(params: {
 
   // "own" mode requires botOpenId to verify message ownership
   if (reactionMode === 'own' && !botOpenId) {
-    log(`feishu[${accountId}]: bot open_id unavailable, skipping reaction on ${messageId}`);
+    log(
+      `feishu[${accountId}]: bot open_id unavailable, skipping reaction on ${messageId}`,
+    );
     return null;
   }
 
   // ---- Fetch original message with timeout (fail-closed) ----
   const msg = await Promise.race([
     getMessageFeishu({ cfg, messageId, accountId }),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), REACTION_VERIFY_TIMEOUT_MS)),
+    new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), REACTION_VERIFY_TIMEOUT_MS),
+    ),
   ]).catch(() => null);
 
   if (!msg) {
-    log(`feishu[${accountId}]: reacted message ${messageId} not found or timed out, skipping`);
+    log(
+      `feishu[${accountId}]: reacted message ${messageId} not found or timed out, skipping`,
+    );
     return null;
   }
 
   // mget API returns app_id (cli_xxx) as sender.id for bot messages.
-  const isBotMessage = msg.senderType === 'app' && msg.senderId === account.appId;
-  const isOtherBotMessage = msg.senderType === 'app' && account.appId && msg.senderId !== account.appId;
+  const isBotMessage =
+    msg.senderType === 'app' && msg.senderId === account.appId;
+  const isOtherBotMessage =
+    msg.senderType === 'app' && account.appId && msg.senderId !== account.appId;
 
   // 'own': only react to this bot's messages; 'all': also skip other bots' messages.
-  if ((reactionMode === 'own' && !isBotMessage) || (reactionMode === 'all' && isOtherBotMessage)) {
-    log(`feishu[${accountId}]: reaction on ${isOtherBotMessage ? 'other bot' : 'non-bot'} message ${messageId}, skipping`);
+  if (
+    (reactionMode === 'own' && !isBotMessage) ||
+    (reactionMode === 'all' && isOtherBotMessage)
+  ) {
+    log(
+      `feishu[${accountId}]: reaction on ${isOtherBotMessage ? 'other bot' : 'non-bot'} message ${messageId}, skipping`,
+    );
     return null;
   }
 
@@ -164,9 +185,15 @@ export async function resolveReactionContext(params: {
   let threadCapable = false;
   const threadSessionEnabled = account.config?.threadSession === true;
   if (rawChatId && chatType === 'group') {
-    threadCapable = await isThreadCapableGroup({ cfg, chatId: rawChatId, accountId });
+    threadCapable = await isThreadCapableGroup({
+      cfg,
+      chatId: rawChatId,
+      accountId,
+    });
     if (threadSessionEnabled && threadCapable) {
-      log(`feishu[${accountId}]: reaction on thread-capable group ${rawChatId}, skipping (threadSession enabled)`);
+      log(
+        `feishu[${accountId}]: reaction on thread-capable group ${rawChatId}, skipping (threadSession enabled)`,
+      );
       return null;
     }
   }
@@ -195,8 +222,12 @@ export async function handleFeishuReaction(params: {
   preResolved: ReactionContext;
 }): Promise<void> {
   const { cfg, event, runtime, chatHistories, accountId, preResolved } = params;
-  const log = runtime?.log ?? ((...args: unknown[]) => logger.info(args.map(String).join(' ')));
-  const error = runtime?.error ?? ((...args: unknown[]) => logger.error(args.map(String).join(' ')));
+  const log =
+    runtime?.log ??
+    ((...args: unknown[]) => logger.info(args.map(String).join(' ')));
+  const error =
+    runtime?.error ??
+    ((...args: unknown[]) => logger.error(args.map(String).join(' ')));
 
   const emojiType = event.reaction_type?.emoji_type ?? '';
   const messageId = event.message_id;
@@ -212,7 +243,9 @@ export async function handleFeishuReaction(params: {
 
   // ---- Step B: Build MessageContext directly ----
   const excerpt =
-    preResolved.msg.content.length > 200 ? `${preResolved.msg.content.slice(0, 200)}…` : preResolved.msg.content;
+    preResolved.msg.content.length > 200
+      ? `${preResolved.msg.content.slice(0, 200)}…`
+      : preResolved.msg.content;
   const syntheticText = excerpt
     ? `[reacted with ${emojiType} to message ${messageId}: "${excerpt}"]`
     : `[reacted with ${emojiType} to message ${messageId}]`;
@@ -249,7 +282,11 @@ export async function handleFeishuReaction(params: {
   };
 
   // ---- Step C: Sender name resolution ----
-  const senderResult = await resolveUserName({ account, openId: operatorOpenId, log });
+  const senderResult = await resolveUserName({
+    account,
+    openId: operatorOpenId,
+    log,
+  });
   if (senderResult.name) {
     ctx = { ...ctx, senderName: senderResult.name };
   }
@@ -257,16 +294,24 @@ export async function handleFeishuReaction(params: {
   log(
     `feishu[${accountId}]: reaction "${emojiType}" by ${operatorOpenId} on ${messageId} (chatId=${preResolved.chatId}, chatType=${preResolved.chatType}${preResolved.threadId ? `, thread=${preResolved.threadId}` : ''}), dispatching to AI`,
   );
-  logger.info(`reaction "${emojiType}" by ${operatorOpenId} on ${messageId} (chatType=${preResolved.chatType})`);
+  logger.info(
+    `reaction "${emojiType}" by ${operatorOpenId} on ${messageId} (chatType=${preResolved.chatType})`,
+  );
 
   // ---- Step D: Group config resolution ----
   const isGroup = ctx.chatType === 'group';
-  const groupConfig = isGroup ? resolveFeishuGroupConfig({ cfg: accountFeishuCfg, groupId: ctx.chatId }) : undefined;
-  const defaultGroupConfig = isGroup ? accountFeishuCfg?.groups?.['*'] : undefined;
+  const groupConfig = isGroup
+    ? resolveFeishuGroupConfig({ cfg: accountFeishuCfg, groupId: ctx.chatId })
+    : undefined;
+  const defaultGroupConfig = isGroup
+    ? accountFeishuCfg?.groups?.['*']
+    : undefined;
 
   const historyLimit = Math.max(
     0,
-    accountFeishuCfg?.historyLimit ?? accountScopedCfg.messages?.groupChat?.historyLimit ?? DEFAULT_GROUP_HISTORY_LIMIT,
+    accountFeishuCfg?.historyLimit ??
+      accountScopedCfg.messages?.groupChat?.historyLimit ??
+      DEFAULT_GROUP_HISTORY_LIMIT,
   );
 
   // ---- Step E: Dispatch directly to agent ----
@@ -288,6 +333,8 @@ export async function handleFeishuReaction(params: {
       skipTyping: true,
     });
   } catch (err) {
-    error(`feishu[${accountId}]: error dispatching reaction event: ${String(err)}`);
+    error(
+      `feishu[${accountId}]: error dispatching reaction event: ${String(err)}`,
+    );
   }
 }

@@ -22,9 +22,16 @@ export type { FeishuDirectoryPeer, FeishuDirectoryGroup } from './types';
 // ---------------------------------------------------------------------------
 
 /** Case-insensitive substring match on id and optional name. */
-function matchesQuery(id: string, name: string | undefined, query: string): boolean {
+function matchesQuery(
+  id: string,
+  name: string | undefined,
+  query: string,
+): boolean {
   if (!query) return true;
-  return id.toLowerCase().includes(query) || (name?.toLowerCase().includes(query) ?? false);
+  return (
+    id.toLowerCase().includes(query) ||
+    (name?.toLowerCase().includes(query) ?? false)
+  );
 }
 
 /** Filter items and apply optional limit. */

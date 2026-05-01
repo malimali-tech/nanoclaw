@@ -17,7 +17,10 @@
 import type { OpenClawConfig } from 'openclaw/plugin-sdk';
 import { LarkClient } from '../../core/lark-client';
 import { normalizeMessageId } from '../../core/targets';
-import { isMessageUnavailableError, runWithMessageUnavailableGuard } from '../../core/message-unavailable';
+import {
+  isMessageUnavailableError,
+  runWithMessageUnavailableGuard,
+} from '../../core/message-unavailable';
 import { larkLogger } from '../../core/lark-logger';
 
 const log = larkLogger('outbound/typing');
@@ -103,7 +106,9 @@ export async function addTypingIndicator(params: {
     state.reactionId = response?.data?.reaction_id ?? null;
   } catch (error) {
     if (isMessageUnavailableError(error)) {
-      log.debug(`Skip add typing indicator for unavailable message`, { messageId: normalizedId });
+      log.debug(`Skip add typing indicator for unavailable message`, {
+        messageId: normalizedId,
+      });
       return state;
     }
     // Silently swallow the error. The typing indicator is a best-effort
@@ -162,7 +167,9 @@ export async function removeTypingIndicator(params: {
     });
   } catch (error) {
     if (isMessageUnavailableError(error)) {
-      log.debug(`Skip remove typing indicator for unavailable message`, { messageId: state.messageId });
+      log.debug(`Skip remove typing indicator for unavailable message`, {
+        messageId: state.messageId,
+      });
       return;
     }
     // Silently swallow the error. A leftover reaction is acceptable;

@@ -31,22 +31,25 @@ import type { CommentReplyListData } from '../sdk-types';
 
 const ReplyElementSchema = Type.Object({
   type: StringEnum(['text', 'mention', 'link']),
-  text: Type.Optional(Type.String({ description: '文本内容(type=text时必填)' })),
-  open_id: Type.Optional(Type.String({ description: '被@用户的open_id(type=mention时必填)' })),
+  text: Type.Optional(
+    Type.String({ description: '文本内容(type=text时必填)' }),
+  ),
+  open_id: Type.Optional(
+    Type.String({ description: '被@用户的open_id(type=mention时必填)' }),
+  ),
   url: Type.Optional(Type.String({ description: '链接URL(type=link时必填)' })),
 });
 
 const DocCommentsSchema = Type.Object({
   action: StringEnum(['list', 'list_replies', 'create', 'reply', 'patch']),
   file_token: Type.String({
-    description: '云文档token或wiki节点token(可从文档URL获取)。如果是wiki token，会自动转换为实际文档的obj_token',
+    description:
+      '云文档token或wiki节点token(可从文档URL获取)。如果是wiki token，会自动转换为实际文档的obj_token',
   }),
-  file_type: StringEnum(
-    ['doc', 'docx', 'sheet', 'file', 'slides', 'wiki'],
-    {
-      description: '文档类型。wiki类型会自动解析为实际文档类型(docx/sheet/bitable等)',
-    },
-  ),
+  file_type: StringEnum(['doc', 'docx', 'sheet', 'file', 'slides', 'wiki'], {
+    description:
+      '文档类型。wiki类型会自动解析为实际文档类型(docx/sheet/bitable等)',
+  }),
   // list action参数
   is_whole: Type.Optional(
     Type.Boolean({
@@ -64,7 +67,8 @@ const DocCommentsSchema = Type.Object({
   elements: Type.Optional(
     Type.Array(ReplyElementSchema, {
       description:
-        '评论内容元素数组(action=create/reply时必填)。' + '支持text(纯文本)、mention(@用户)、link(超链接)三种类型',
+        '评论内容元素数组(action=create/reply时必填)。' +
+        '支持text(纯文本)、mention(@用户)、link(超链接)三种类型',
     }),
   ),
   // list_replies / reply / patch action参数
@@ -190,9 +194,13 @@ async function assembleCommentsWithReplies(
         }
 
         assembled.reply_list = { replies };
-        log.info(`Assembled ${replies.length} replies for comment ${comment.comment_id}`);
+        log.info(
+          `Assembled ${replies.length} replies for comment ${comment.comment_id}`,
+        );
       } catch (err) {
-        log.warn(`Failed to fetch replies for comment ${comment.comment_id}: ${err}`);
+        log.warn(
+          `Failed to fetch replies for comment ${comment.comment_id}: ${err}`,
+        );
         // 保留原始回复数据
       }
     }
@@ -238,7 +246,9 @@ export function registerDocCommentsTool(api: OpenClawPluginApi): boolean {
           let actualFileType = p.file_type;
 
           if (p.file_type === 'wiki') {
-            log.info(`doc_comments: detected wiki token="${p.file_token}", converting to obj_token...`);
+            log.info(
+              `doc_comments: detected wiki token="${p.file_token}", converting to obj_token...`,
+            );
 
             try {
               const wikiNodeRes = await client.invoke(
@@ -330,9 +340,7 @@ export function registerDocCommentsTool(api: OpenClawPluginApi): boolean {
               return json({ error: 'comment_id 参数必填' });
             }
 
-            log.info(
-              `doc_comments.list_replies: comment_id="${p.comment_id}"`,
-            );
+            log.info(`doc_comments.list_replies: comment_id="${p.comment_id}"`);
 
             // Single-page fetch — return items + pagination metadata,
             // consistent with the list action's API semantics.
@@ -358,8 +366,12 @@ export function registerDocCommentsTool(api: OpenClawPluginApi): boolean {
             );
             assertLarkOk(replyRes as any);
 
-            const replyData = (replyRes as any).data as CommentReplyListData | undefined;
-            log.info(`doc_comments.list_replies: found ${replyData?.items?.length ?? 0} replies`);
+            const replyData = (replyRes as any).data as
+              | CommentReplyListData
+              | undefined;
+            log.info(
+              `doc_comments.list_replies: found ${replyData?.items?.length ?? 0} replies`,
+            );
 
             return json({
               items: replyData?.items ?? [],
@@ -376,7 +388,9 @@ export function registerDocCommentsTool(api: OpenClawPluginApi): boolean {
               });
             }
 
-            log.info(`doc_comments.create: file_type=${actualFileType}, elements=${p.elements.length}`);
+            log.info(
+              `doc_comments.create: file_type=${actualFileType}, elements=${p.elements.length}`,
+            );
 
             const sdkElements = convertElementsToSDKFormat(p.elements);
 
@@ -410,7 +424,9 @@ export function registerDocCommentsTool(api: OpenClawPluginApi): boolean {
             );
             assertLarkOk(res as any);
 
-            log.info(`doc_comments.create: created comment ${((res as any).data as any)?.comment_id}`);
+            log.info(
+              `doc_comments.create: created comment ${((res as any).data as any)?.comment_id}`,
+            );
 
             return json((res as any).data);
           }
@@ -433,31 +449,38 @@ export function registerDocCommentsTool(api: OpenClawPluginApi): boolean {
             // 使用 sdk.request() 发起请求（与 deliver.ts 一致），SDK 内部自动管理 TAT。
             // 双重 payload 格式兜底：先试 content.elements，失败再试 reply_elements。
             const replyUrl = `/open-apis/drive/v1/files/${actualFileToken}/comments/${p.comment_id}/replies`;
-            const replyParams = { file_type: actualFileType, user_id_type: userIdType };
+            const replyParams = {
+              file_type: actualFileType,
+              user_id_type: userIdType,
+            };
 
             let res: any;
             try {
               res = await client.invoke(
                 'feishu_doc_comments.reply',
-                (sdk) => (sdk as any).request({
-                  method: 'POST',
-                  url: replyUrl,
-                  params: replyParams,
-                  data: { content: { elements: sdkElements } },
-                }),
+                (sdk) =>
+                  (sdk as any).request({
+                    method: 'POST',
+                    url: replyUrl,
+                    params: replyParams,
+                    data: { content: { elements: sdkElements } },
+                  }),
                 { as: 'tenant' },
               );
             } catch (_firstErr) {
               // Fallback: 部分 API 版本使用 reply_elements 格式
-              log.info(`doc_comments.reply: first attempt failed, trying reply_elements format`);
+              log.info(
+                `doc_comments.reply: first attempt failed, trying reply_elements format`,
+              );
               res = await client.invoke(
                 'feishu_doc_comments.reply',
-                (sdk) => (sdk as any).request({
-                  method: 'POST',
-                  url: replyUrl,
-                  params: replyParams,
-                  data: { reply_elements: sdkElements },
-                }),
+                (sdk) =>
+                  (sdk as any).request({
+                    method: 'POST',
+                    url: replyUrl,
+                    params: replyParams,
+                    data: { reply_elements: sdkElements },
+                  }),
                 { as: 'tenant' },
               );
             }
@@ -480,7 +503,9 @@ export function registerDocCommentsTool(api: OpenClawPluginApi): boolean {
               });
             }
 
-            log.info(`doc_comments.patch: comment_id="${p.comment_id}", is_solved=${p.is_solved_value}`);
+            log.info(
+              `doc_comments.patch: comment_id="${p.comment_id}", is_solved=${p.is_solved_value}`,
+            );
 
             const res = await client.invoke(
               'feishu_doc_comments.patch',

@@ -31,7 +31,9 @@ export function normalizeTimeFormat(input: string): string {
     return input;
   }
 
-  const dtMatch = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)$/.exec(input);
+  const dtMatch = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)$/.exec(
+    input,
+  );
   if (dtMatch) {
     const d = new Date(`${dtMatch[1]}T${dtMatch[2]}`);
     if (!isNaN(d.getTime())) return d.toISOString();

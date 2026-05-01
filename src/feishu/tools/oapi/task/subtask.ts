@@ -31,7 +31,8 @@ import type { PaginatedData } from '../sdk-types';
 
 const FeishuTaskSubtaskAuthType = Type.Optional(
   StringEnum(['tenant', 'user'], {
-    description: '调用 API 时使用的 Token 类型。可选值："tenant"（应用身份） 或 "user"（用户身份）。默认使用 "user"。',
+    description:
+      '调用 API 时使用的 Token 类型。可选值："tenant"（应用身份） 或 "user"（用户身份）。默认使用 "user"。',
   }),
 );
 
@@ -46,15 +47,19 @@ const FeishuTaskSubtaskSchema = Type.Union([
     due: Type.Optional(
       Type.Object({
         timestamp: Type.String({
-          description: "截止时间（ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'）",
+          description:
+            "截止时间（ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'）",
         }),
-        is_all_day: Type.Optional(Type.Boolean({ description: '是否为全天任务' })),
+        is_all_day: Type.Optional(
+          Type.Boolean({ description: '是否为全天任务' }),
+        ),
       }),
     ),
     start: Type.Optional(
       Type.Object({
         timestamp: Type.String({
-          description: "开始时间（ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'）",
+          description:
+            "开始时间（ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'）",
         }),
         is_all_day: Type.Optional(Type.Boolean({ description: '是否为全天' })),
       }),
@@ -76,7 +81,9 @@ const FeishuTaskSubtaskSchema = Type.Union([
     action: Type.Literal('list'),
     auth_type: FeishuTaskSubtaskAuthType,
     task_guid: Type.String({ description: '父任务 GUID' }),
-    page_size: Type.Optional(Type.Number({ description: '每页数量，默认 50，最大 100' })),
+    page_size: Type.Optional(
+      Type.Number({ description: '每页数量，默认 50，最大 100' }),
+    ),
     page_token: Type.Optional(Type.String({ description: '分页标记' })),
   }),
 ]);
@@ -93,16 +100,14 @@ type FeishuTaskSubtaskParams = { auth_type?: 'tenant' | 'user' } & (
       description?: string;
       due?: { timestamp: string; is_all_day?: boolean };
       start?: { timestamp: string; is_all_day?: boolean };
-      members?: Array<{ id: string;
-        type?: 'user' | 'app';
-        role?: string }>;
+      members?: Array<{ id: string; type?: 'user' | 'app'; role?: string }>;
     }
   | {
       action: 'list';
       task_guid: string;
       page_size?: number;
       page_token?: string;
-      }
+    }
 );
 
 // ---------------------------------------------------------------------------
@@ -134,7 +139,9 @@ export function registerFeishuTaskSubtaskTool(api: OpenClawPluginApi): void {
             // CREATE
             // -----------------------------------------------------------------
             case 'create': {
-              log.info(`create: task_guid=${p.task_guid}, summary=${p.summary}`);
+              log.info(
+                `create: task_guid=${p.task_guid}, summary=${p.summary}`,
+              );
 
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const data: any = {
@@ -202,7 +209,9 @@ export function registerFeishuTaskSubtaskTool(api: OpenClawPluginApi): void {
               );
               assertLarkOk(res);
 
-              log.info(`create: created subtask ${res.data?.subtask?.guid ?? 'unknown'}`);
+              log.info(
+                `create: created subtask ${res.data?.subtask?.guid ?? 'unknown'}`,
+              );
 
               return json({
                 subtask: res.data?.subtask,
@@ -213,7 +222,9 @@ export function registerFeishuTaskSubtaskTool(api: OpenClawPluginApi): void {
             // LIST
             // -----------------------------------------------------------------
             case 'list': {
-              log.info(`list: task_guid=${p.task_guid}, page_size=${p.page_size ?? 50}`);
+              log.info(
+                `list: task_guid=${p.task_guid}, page_size=${p.page_size ?? 50}`,
+              );
 
               const res = await client.invoke(
                 'feishu_task_subtask.list',
@@ -253,5 +264,4 @@ export function registerFeishuTaskSubtaskTool(api: OpenClawPluginApi): void {
     },
     { name: 'feishu_task_subtask' },
   );
-
 }

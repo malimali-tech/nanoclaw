@@ -14,7 +14,14 @@
 
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
-import { StringEnum, assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json, registerTool } from '../helpers';
+import {
+  StringEnum,
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 import type { PaginatedData } from '../sdk-types';
 
 // ---------------------------------------------------------------------------
@@ -49,7 +56,12 @@ const FeishuCalendarEventAttendeeSchema = Type.Union([
       }),
     ),
     attendee_ability: Type.Optional(
-      StringEnum(['none', 'can_see_others', 'can_invite_others', 'can_modify_event']),
+      StringEnum([
+        'none',
+        'can_see_others',
+        'can_invite_others',
+        'can_modify_event',
+      ]),
     ),
   }),
 
@@ -72,11 +84,8 @@ const FeishuCalendarEventAttendeeSchema = Type.Union([
         description: '分页标记',
       }),
     ),
-    user_id_type: Type.Optional(
-      StringEnum(['open_id', 'union_id', 'user_id']),
-    ),
+    user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
   }),
-
 ]);
 
 // ---------------------------------------------------------------------------
@@ -105,11 +114,16 @@ type FeishuCalendarEventAttendeeParams =
 // Registration
 // ---------------------------------------------------------------------------
 
-export function registerFeishuCalendarEventAttendeeTool(api: OpenClawPluginApi): void {
+export function registerFeishuCalendarEventAttendeeTool(
+  api: OpenClawPluginApi,
+): void {
   if (!api.config) return;
   const cfg = api.config;
 
-  const { toolClient, log } = createToolContext(api, 'feishu_calendar_event_attendee');
+  const { toolClient, log } = createToolContext(
+    api,
+    'feishu_calendar_event_attendee',
+  );
 
   registerTool(
     api,
@@ -182,7 +196,9 @@ export function registerFeishuCalendarEventAttendeeTool(api: OpenClawPluginApi):
               );
               assertLarkOk(res);
 
-              log.info(`create: added ${p.attendees.length} attendees to event ${p.event_id}`);
+              log.info(
+                `create: added ${p.attendees.length} attendees to event ${p.event_id}`,
+              );
 
               return json({
                 attendees: res.data?.attendees,
@@ -193,7 +209,9 @@ export function registerFeishuCalendarEventAttendeeTool(api: OpenClawPluginApi):
             // LIST ATTENDEES
             // -----------------------------------------------------------------
             case 'list': {
-              log.info(`list: calendar_id=${p.calendar_id}, event_id=${p.event_id}, page_size=${p.page_size ?? 50}`);
+              log.info(
+                `list: calendar_id=${p.calendar_id}, event_id=${p.event_id}, page_size=${p.page_size ?? 50}`,
+              );
 
               const res = await client.invoke(
                 'feishu_calendar_event_attendee.list',
@@ -225,7 +243,6 @@ export function registerFeishuCalendarEventAttendeeTool(api: OpenClawPluginApi):
                 page_token: data?.page_token,
               });
             }
-
           }
         } catch (err) {
           return await handleInvokeErrorWithAutoAuth(err, cfg);
@@ -234,5 +251,4 @@ export function registerFeishuCalendarEventAttendeeTool(api: OpenClawPluginApi):
     },
     { name: 'feishu_calendar_event_attendee' },
   );
-
 }

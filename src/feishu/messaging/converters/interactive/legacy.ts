@@ -7,7 +7,10 @@
 
 import type { Obj } from './types';
 
-export function convertLegacyCard(parsed: Obj): { content: string; resources: never[] } {
+export function convertLegacyCard(parsed: Obj): {
+  content: string;
+  resources: never[];
+} {
   const texts: string[] = [];
 
   const header = parsed.header as Obj | undefined;
@@ -38,7 +41,11 @@ function extractTexts(elements: unknown[], out: string[]): void {
       continue;
     }
 
-    if (elem.tag === 'div' || elem.tag === 'plain_text' || elem.tag === 'lark_md') {
+    if (
+      elem.tag === 'div' ||
+      elem.tag === 'plain_text' ||
+      elem.tag === 'lark_md'
+    ) {
       const text = elem.text as Obj | undefined;
       if (text?.content && typeof text.content === 'string') {
         out.push(text.content);

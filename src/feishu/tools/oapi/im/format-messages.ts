@@ -12,14 +12,21 @@
 
 import type { LarkAccount } from '../../../core/types';
 import type { ToolClient } from '../../../core/tool-client';
-import type { ApiMessageItem, ConvertContext } from '../../../messaging/converters/types';
+import type {
+  ApiMessageItem,
+  ConvertContext,
+} from '../../../messaging/converters/types';
 import { larkLogger } from '../../../core/lark-logger';
 import {
   buildConvertContextFromItem,
   convertMessageContent,
   extractMentionOpenId,
 } from '../../../messaging/converters/content-converter';
-import { batchResolveUserNamesAsUser, getUATUserName, setUATUserNames } from './user-name-uat';
+import {
+  batchResolveUserNamesAsUser,
+  getUATUserName,
+  setUATUserNames,
+} from './user-name-uat';
 import { millisStringToDateTime } from './time-utils';
 
 const log = larkLogger('oapi/im/format-messages');
@@ -53,11 +60,18 @@ function createUATFetchSubMessages(client: ToolClient) {
       code?: number;
       msg?: string;
       data?: { items?: ApiMessageItem[] };
-    }>('feishu_im_user_get_messages.default', `/open-apis/im/v1/messages/${messageId}`, {
-      method: 'GET',
-      query: { user_id_type: 'open_id', card_msg_content_type: 'raw_card_content' },
-      as: 'user',
-    });
+    }>(
+      'feishu_im_user_get_messages.default',
+      `/open-apis/im/v1/messages/${messageId}`,
+      {
+        method: 'GET',
+        query: {
+          user_id_type: 'open_id',
+          card_msg_content_type: 'raw_card_content',
+        },
+        as: 'user',
+      },
+    );
     if (res.code !== 0) {
       throw new Error(`API error: code=${res.code} msg=${res.msg}`);
     }
@@ -132,7 +146,9 @@ export async function formatMessageItem(
   }
 
   // 转换 create_time（飞书 API 返回毫秒时间戳字符串 → ISO 8601 +08:00）
-  const createTime = item.create_time ? millisStringToDateTime(item.create_time) : '';
+  const createTime = item.create_time
+    ? millisStringToDateTime(item.create_time)
+    : '';
 
   const formatted: FormattedMessage = {
     message_id: messageId,
@@ -194,14 +210,18 @@ export async function formatMessageList(
   const senderIds = [
     ...new Set(
       items
-        .map((item) => (item.sender?.sender_type === 'user' ? item.sender.id : undefined))
+        .map((item) =>
+          item.sender?.sender_type === 'user' ? item.sender.id : undefined,
+        )
         .filter((id): id is string => !!id),
     ),
   ];
 
   // 3. 批量解析 UAT 缓存中缺失的名字
   if (senderIds.length > 0) {
-    const missing = senderIds.filter((id) => getUATUserName(accountId, id) === undefined);
+    const missing = senderIds.filter(
+      (id) => getUATUserName(accountId, id) === undefined,
+    );
     if (missing.length > 0) {
       await batchResolveUserNamesAsUser({ client, openIds: missing, log });
     }
@@ -220,5 +240,9 @@ export async function formatMessageList(
   };
 
   // 5. 逐条格式化
-  return Promise.all(items.map((item) => formatMessageItem(item, accountId, nameResolver, ctxOverrides)));
+  return Promise.all(
+    items.map((item) =>
+      formatMessageItem(item, accountId, nameResolver, ctxOverrides),
+    ),
+  );
 }

@@ -14,8 +14,18 @@
 
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
-import { assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json , registerTool } from '../helpers';
-import type { CalendarGetData, CalendarListData, CalendarPrimaryData } from '../sdk-types';
+import {
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
+import type {
+  CalendarGetData,
+  CalendarListData,
+  CalendarPrimaryData,
+} from '../sdk-types';
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -27,7 +37,8 @@ const FeishuCalendarCalendarSchema = Type.Union([
     action: Type.Literal('list'),
     page_size: Type.Optional(
       Type.Number({
-        description: 'Number of calendars to return per page (default: 50, max: 1000)',
+        description:
+          'Number of calendars to return per page (default: 50, max: 1000)',
       }),
     ),
     page_token: Type.Optional(
@@ -64,11 +75,16 @@ type FeishuCalendarCalendarParams =
 // Registration
 // ---------------------------------------------------------------------------
 
-export function registerFeishuCalendarCalendarTool(api: OpenClawPluginApi): void {
+export function registerFeishuCalendarCalendarTool(
+  api: OpenClawPluginApi,
+): void {
   if (!api.config) return;
   const cfg = api.config;
 
-  const { toolClient, log } = createToolContext(api, 'feishu_calendar_calendar');
+  const { toolClient, log } = createToolContext(
+    api,
+    'feishu_calendar_calendar',
+  );
 
   registerTool(
     api,
@@ -88,7 +104,9 @@ export function registerFeishuCalendarCalendarTool(api: OpenClawPluginApi): void
             // LIST CALENDARS
             // -----------------------------------------------------------------
             case 'list': {
-              log.info(`list: page_size=${p.page_size ?? 50}, page_token=${p.page_token ?? 'none'}`);
+              log.info(
+                `list: page_size=${p.page_size ?? 50}, page_token=${p.page_token ?? 'none'}`,
+              );
 
               const res = await client.invoke(
                 'feishu_calendar_calendar.list',
@@ -165,7 +183,9 @@ export function registerFeishuCalendarCalendarTool(api: OpenClawPluginApi): void
 
               const data = res.data as CalendarPrimaryData | undefined;
               const calendars = data?.calendars ?? [];
-              log.info(`primary: returned ${calendars.length} primary calendars`);
+              log.info(
+                `primary: returned ${calendars.length} primary calendars`,
+              );
 
               return json({
                 calendars,
@@ -179,5 +199,4 @@ export function registerFeishuCalendarCalendarTool(api: OpenClawPluginApi): void
     },
     { name: 'feishu_calendar_calendar' },
   );
-
 }

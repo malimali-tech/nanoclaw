@@ -50,7 +50,9 @@ interface AgentEntry {
  * @returns Array of agent entries, or empty array if none configured.
  */
 export function listConfiguredAgents(cfg: ClawdbotConfig): AgentEntry[] {
-  const agents = (cfg as Record<string, unknown>).agents as { list?: AgentEntry[] } | undefined;
+  const agents = (cfg as Record<string, unknown>).agents as
+    | { list?: AgentEntry[] }
+    | undefined;
   return agents?.list ?? [];
 }
 
@@ -61,7 +63,10 @@ export function listConfiguredAgents(cfg: ClawdbotConfig): AgentEntry[] {
  * @param agentId - The agent ID to search for.
  * @returns The matching agent entry, or `undefined` if not found.
  */
-export function resolveAgentEntry(cfg: ClawdbotConfig, agentId: string): AgentEntry | undefined {
+export function resolveAgentEntry(
+  cfg: ClawdbotConfig,
+  agentId: string,
+): AgentEntry | undefined {
   return listConfiguredAgents(cfg).find((a) => a.id === agentId);
 }
 
@@ -74,7 +79,10 @@ export function resolveAgentEntry(cfg: ClawdbotConfig, agentId: string): AgentEn
  * @param agentId - The agent ID.
  * @returns The display name, or `undefined` if none configured.
  */
-export function getAgentDisplayName(cfg: ClawdbotConfig, agentId: string): string | undefined {
+export function getAgentDisplayName(
+  cfg: ClawdbotConfig,
+  agentId: string,
+): string | undefined {
   const entry = resolveAgentEntry(cfg, agentId);
   if (!entry) return undefined;
   return entry.identity?.name ?? entry.name;
@@ -87,7 +95,10 @@ export function getAgentDisplayName(cfg: ClawdbotConfig, agentId: string): strin
  * @param agentId - The agent ID.
  * @returns Skill allowlist, or `undefined` if no agent-level filter.
  */
-export function getAgentSkillsFilter(cfg: ClawdbotConfig, agentId: string): string[] | undefined {
+export function getAgentSkillsFilter(
+  cfg: ClawdbotConfig,
+  agentId: string,
+): string[] | undefined {
   return resolveAgentEntry(cfg, agentId)?.skills;
 }
 
@@ -98,7 +109,10 @@ export function getAgentSkillsFilter(cfg: ClawdbotConfig, agentId: string): stri
  * @param agentId - The agent ID.
  * @returns Tools policy object, or `undefined` if none configured.
  */
-export function getAgentToolsPolicy(cfg: ClawdbotConfig, agentId: string): AgentToolsPolicy | undefined {
+export function getAgentToolsPolicy(
+  cfg: ClawdbotConfig,
+  agentId: string,
+): AgentToolsPolicy | undefined {
   const entry = resolveAgentEntry(cfg, agentId);
   if (!entry?.tools) return undefined;
   const { allow, deny } = entry.tools;
@@ -144,7 +158,10 @@ export function mergeSkillFilters(
  * @param policy - The agent's tool policy.
  * @returns `true` if the tool is allowed, `false` if denied.
  */
-export function isToolAllowedByPolicy(toolName: string, policy: AgentToolsPolicy | undefined): boolean {
+export function isToolAllowedByPolicy(
+  toolName: string,
+  policy: AgentToolsPolicy | undefined,
+): boolean {
   if (!policy) return true;
 
   if (policy.deny && policy.deny.length > 0) {

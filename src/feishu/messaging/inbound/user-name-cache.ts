@@ -17,7 +17,11 @@ import { LarkClient } from '../../core/lark-client';
 import { getUserNameCache } from './user-name-cache-store';
 import { type PermissionError, extractPermissionError } from './permission';
 
-export { UserNameCache, clearUserNameCache, getUserNameCache } from './user-name-cache-store';
+export {
+  UserNameCache,
+  clearUserNameCache,
+  getUserNameCache,
+} from './user-name-cache-store';
 
 // ---------------------------------------------------------------------------
 // Batch resolve via contact/v3/users/batch
@@ -74,7 +78,8 @@ export async function batchResolveUserNames(params: {
       for (const item of items) {
         const openId: string | undefined = item.open_id;
         if (!openId) continue;
-        const name: string = item.name || item.display_name || item.nickname || item.en_name || '';
+        const name: string =
+          item.name || item.display_name || item.nickname || item.en_name || '';
         cache.set(openId, name);
         result.set(openId, name);
         resolved.add(openId);

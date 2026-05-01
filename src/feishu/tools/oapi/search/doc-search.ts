@@ -30,12 +30,14 @@ import {
 const TimeRangeSchema = Type.Object({
   start: Type.Optional(
     Type.String({
-      description: "时间范围的起始时间，ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'",
+      description:
+        "时间范围的起始时间，ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'",
     }),
   ),
   end: Type.Optional(
     Type.String({
-      description: "时间范围的截止时间，ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'",
+      description:
+        "时间范围的截止时间，ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'",
     }),
   ),
 });
@@ -101,13 +103,15 @@ const FeishuSearchDocWikiSchema = Type.Object({
         create_time: Type.Optional(TimeRangeSchema),
       },
       {
-        description: '搜索过滤条件（可选）。不传则搜索所有文档和 Wiki；传了则同时对文档和 Wiki 应用相同的过滤条件。',
+        description:
+          '搜索过滤条件（可选）。不传则搜索所有文档和 Wiki；传了则同时对文档和 Wiki 应用相同的过滤条件。',
       },
     ),
   ),
   page_token: Type.Optional(
     Type.String({
-      description: '分页标记。首次请求不填；当返回结果中 has_more 为 true 时，可传入返回的 page_token 继续请求下一页',
+      description:
+        '分页标记。首次请求不填；当返回结果中 has_more 为 true 时，可传入返回的 page_token 继续请求下一页',
     }),
   ),
   page_size: Type.Optional(
@@ -145,9 +149,14 @@ interface FeishuSearchDocWikiParams {
   page_size?: number;
 }
 
-function normalizeSearchResultTimeFields<T>(value: T, converted: { count: number }): T {
+function normalizeSearchResultTimeFields<T>(
+  value: T,
+  converted: { count: number },
+): T {
   if (Array.isArray(value)) {
-    return value.map((item) => normalizeSearchResultTimeFields(item, converted)) as T;
+    return value.map((item) =>
+      normalizeSearchResultTimeFields(item, converted),
+    ) as T;
   }
 
   if (!value || typeof value !== 'object') {
@@ -176,7 +185,9 @@ function normalizeSearchResultTimeFields<T>(value: T, converted: { count: number
 // Registration
 // ---------------------------------------------------------------------------
 
-export function registerFeishuSearchDocWikiTool(api: OpenClawPluginApi): boolean {
+export function registerFeishuSearchDocWikiTool(
+  api: OpenClawPluginApi,
+): boolean {
   if (!api.config) return false;
   const cfg = api.config;
 
@@ -207,7 +218,9 @@ export function registerFeishuSearchDocWikiTool(api: OpenClawPluginApi): boolean
               // query 为可选参数，默认使用空字符串（表示空搜）
               const query = p.query ?? '';
 
-              log.info(`search: query="${query}", has_filter=${!!p.filter}, page_size=${p.page_size ?? 15}`);
+              log.info(
+                `search: query="${query}", has_filter=${!!p.filter}, page_size=${p.page_size ?? 15}`,
+              );
 
               // 构建请求体
               const requestData: any = {
@@ -225,7 +238,9 @@ export function registerFeishuSearchDocWikiTool(api: OpenClawPluginApi): boolean
                   filter.open_time = convertTimeRange(filter.open_time) as any;
                 }
                 if (filter.create_time) {
-                  filter.create_time = convertTimeRange(filter.create_time) as any;
+                  filter.create_time = convertTimeRange(
+                    filter.create_time,
+                  ) as any;
                 }
 
                 // 同时设置 doc_filter 和 wiki_filter（内容相同）
@@ -239,7 +254,9 @@ export function registerFeishuSearchDocWikiTool(api: OpenClawPluginApi): boolean
                 // 即使没有筛选条件，也必须传空对象（否则 API 不返回内容）
                 requestData.doc_filter = {};
                 requestData.wiki_filter = {};
-                log.info(`search: no filter provided, using empty filters (required by API)`);
+                log.info(
+                  `search: no filter provided, using empty filters (required by API)`,
+                );
               }
 
               // 使用 client.invoke 统一封装底层 request 调用
@@ -264,7 +281,9 @@ export function registerFeishuSearchDocWikiTool(api: OpenClawPluginApi): boolean
 
               // 检查响应
               if ((res as any).code !== 0) {
-                throw new Error(`API Error: code=${(res as any).code}, msg=${(res as any).msg}`);
+                throw new Error(
+                  `API Error: code=${(res as any).code}, msg=${(res as any).msg}`,
+                );
               }
 
               const data = res.data || {};
@@ -273,8 +292,13 @@ export function registerFeishuSearchDocWikiTool(api: OpenClawPluginApi): boolean
                 `search: found ${data.res_units?.length ?? 0} results, total=${data.total ?? 0}, has_more=${data.has_more ?? false}`,
               );
               const converted = { count: 0 };
-              const normalizedResults = normalizeSearchResultTimeFields(data.res_units, converted);
-              log.info(`search: normalized ${converted.count} timestamp fields to ISO8601`);
+              const normalizedResults = normalizeSearchResultTimeFields(
+                data.res_units,
+                converted,
+              );
+              log.info(
+                `search: normalized ${converted.count} timestamp fields to ISO8601`,
+              );
 
               return json({
                 total: data.total,

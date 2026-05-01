@@ -57,7 +57,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * @param parsed - The parsed JSON object
  * @returns List of post content bodies to process
  */
-function collectPostContents(parsed: Record<string, unknown>): FeishuPostLocaleContent[] {
+function collectPostContents(
+  parsed: Record<string, unknown>,
+): FeishuPostLocaleContent[] {
   if ('title' in parsed || 'content' in parsed) {
     return [parsed as FeishuPostLocaleContent];
   }
@@ -105,10 +107,16 @@ function collectPostContents(parsed: Record<string, unknown>): FeishuPostLocaleC
  * @param text - Raw markdown text
  * @returns Converted text, or the original text when runtime is unavailable
  */
-function convertMarkdownTablesForLark(cfg: ClawdbotConfig, text: string): string {
+function convertMarkdownTablesForLark(
+  cfg: ClawdbotConfig,
+  text: string,
+): string {
   try {
     const runtime = LarkClient.runtime;
-    if (runtime?.channel?.text?.convertMarkdownTables && runtime.channel.text.resolveMarkdownTableMode) {
+    if (
+      runtime?.channel?.text?.convertMarkdownTables &&
+      runtime.channel.text.resolveMarkdownTableMode
+    ) {
       const tableMode = runtime.channel.text.resolveMarkdownTableMode({
         cfg,
         channel: 'feishu',
@@ -131,7 +139,11 @@ function convertMarkdownTablesForLark(cfg: ClawdbotConfig, text: string): string
  * @param content - The JSON string from tool parameters
  * @returns Pre-processed JSON string
  */
-function preprocessPostContent(cfg: ClawdbotConfig, msgType: string, content: string): string {
+function preprocessPostContent(
+  cfg: ClawdbotConfig,
+  msgType: string,
+  content: string,
+): string {
   if (msgType !== 'post') {
     return content;
   }
@@ -160,7 +172,11 @@ function preprocessPostContent(cfg: ClawdbotConfig, msgType: string, content: st
         }
 
         for (const block of line) {
-          if (!isRecord(block) || block.tag !== 'md' || typeof block.text !== 'string') {
+          if (
+            !isRecord(block) ||
+            block.tag !== 'md' ||
+            typeof block.text !== 'string'
+          ) {
             continue;
           }
 
@@ -188,13 +204,25 @@ const FeishuImMessageSchema = Type.Union([
   Type.Object({
     action: Type.Literal('send'),
     receive_id_type: StringEnum(['open_id', 'chat_id'], {
-      description: '接收者 ID 类型：open_id（私聊，ou_xxx）、chat_id（群聊，oc_xxx）',
+      description:
+        '接收者 ID 类型：open_id（私聊，ou_xxx）、chat_id（群聊，oc_xxx）',
     }),
     receive_id: Type.String({
-      description: "接收者 ID，与 receive_id_type 对应。open_id 填 'ou_xxx'，chat_id 填 'oc_xxx'",
+      description:
+        "接收者 ID，与 receive_id_type 对应。open_id 填 'ou_xxx'，chat_id 填 'oc_xxx'",
     }),
     msg_type: StringEnum(
-      ['text', 'post', 'image', 'file', 'audio', 'media', 'interactive', 'share_chat', 'share_user'],
+      [
+        'text',
+        'post',
+        'image',
+        'file',
+        'audio',
+        'media',
+        'interactive',
+        'share_chat',
+        'share_user',
+      ],
       {
         description:
           '消息类型：text（纯文本）、post（富文本）、image（图片）、file（文件）、interactive（消息卡片）、share_chat（群名片）、share_user（个人名片）等',
@@ -210,7 +238,8 @@ const FeishuImMessageSchema = Type.Union([
     }),
     uuid: Type.Optional(
       Type.String({
-        description: '幂等唯一标识。同一 uuid 在 1 小时内只会发送一条消息，用于去重',
+        description:
+          '幂等唯一标识。同一 uuid 在 1 小时内只会发送一条消息，用于去重',
       }),
     ),
   }),
@@ -222,9 +251,20 @@ const FeishuImMessageSchema = Type.Union([
       description: '被回复消息的 ID（om_xxx 格式）',
     }),
     msg_type: StringEnum(
-      ['text', 'post', 'image', 'file', 'audio', 'media', 'interactive', 'share_chat', 'share_user'],
+      [
+        'text',
+        'post',
+        'image',
+        'file',
+        'audio',
+        'media',
+        'interactive',
+        'share_chat',
+        'share_user',
+      ],
       {
-        description: '消息类型：text（纯文本）、post（富文本）、image（图片）、interactive（消息卡片）等',
+        description:
+          '消息类型：text（纯文本）、post（富文本）、image（图片）、interactive（消息卡片）等',
       },
     ),
     content: Type.String({
@@ -232,7 +272,8 @@ const FeishuImMessageSchema = Type.Union([
     }),
     reply_in_thread: Type.Optional(
       Type.Boolean({
-        description: '是否以话题形式回复。true 则消息出现在该消息的话题中，false（默认）则出现在聊天主流',
+        description:
+          '是否以话题形式回复。true 则消息出现在该消息的话题中，false（默认）则出现在聊天主流',
       }),
     ),
     uuid: Type.Optional(
@@ -269,7 +310,9 @@ type FeishuImMessageParams =
 // Registration
 // ---------------------------------------------------------------------------
 
-export function registerFeishuImUserMessageTool(api: OpenClawPluginApi): boolean {
+export function registerFeishuImUserMessageTool(
+  api: OpenClawPluginApi,
+): boolean {
   if (!api.config) return false;
   const cfg = api.config;
   const { toolClient, log } = createToolContext(api, 'feishu_im_user_message');
@@ -303,8 +346,15 @@ export function registerFeishuImUserMessageTool(api: OpenClawPluginApi): boolean
               log.info(
                 `send: receive_id_type=${p.receive_id_type}, receive_id=${p.receive_id}, msg_type=${p.msg_type}`,
               );
-              const accountScopedCfg = createAccountScopedConfig(cfg, client.account.accountId);
-              const processedContent = preprocessPostContent(accountScopedCfg, p.msg_type, p.content);
+              const accountScopedCfg = createAccountScopedConfig(
+                cfg,
+                client.account.accountId,
+              );
+              const processedContent = preprocessPostContent(
+                accountScopedCfg,
+                p.msg_type,
+                p.content,
+              );
 
               const res = await client.invoke(
                 'feishu_im_user_message.send',
@@ -345,8 +395,15 @@ export function registerFeishuImUserMessageTool(api: OpenClawPluginApi): boolean
               log.info(
                 `reply: message_id=${p.message_id}, msg_type=${p.msg_type}, reply_in_thread=${p.reply_in_thread ?? false}`,
               );
-              const accountScopedCfg = createAccountScopedConfig(cfg, client.account.accountId);
-              const processedContent = preprocessPostContent(accountScopedCfg, p.msg_type, p.content);
+              const accountScopedCfg = createAccountScopedConfig(
+                cfg,
+                client.account.accountId,
+              );
+              const processedContent = preprocessPostContent(
+                accountScopedCfg,
+                p.msg_type,
+                p.content,
+              );
 
               const res = await client.invoke(
                 'feishu_im_user_message.reply',

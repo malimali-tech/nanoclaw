@@ -30,10 +30,14 @@ import { nonBotMentions } from './mention';
  * InboundHistory, etc.), so we only inject the mention data that the SDK
  * does not natively support.
  */
-export function buildMentionAnnotation(ctx: MessageContext): string | undefined {
+export function buildMentionAnnotation(
+  ctx: MessageContext,
+): string | undefined {
   const mentions = nonBotMentions(ctx);
   if (mentions.length === 0) return undefined;
-  const mentionDetails = mentions.map((t) => `${t.name} (open_id: ${t.openId})`).join(', ');
+  const mentionDetails = mentions
+    .map((t) => `${t.name} (open_id: ${t.openId})`)
+    .join(', ');
   return `[System: This message @mentions the following users: ${mentionDetails}. Use these open_ids when performing actions involving these users.]`;
 }
 
@@ -50,7 +54,10 @@ export function buildMentionAnnotation(ctx: MessageContext): string | undefined 
  * the body cleaner and avoiding misleading heuristics for non-text
  * message types (merge_forward, interactive cards, etc.).
  */
-export function buildMessageBody(ctx: MessageContext, quotedContent?: string): string {
+export function buildMessageBody(
+  ctx: MessageContext,
+  quotedContent?: string,
+): string {
   let messageBody = ctx.content;
   if (quotedContent) {
     messageBody = `[Replying to: "${quotedContent}"]\n\n${ctx.content}`;
@@ -170,7 +177,9 @@ export function buildEnvelopeWithHistory(
   });
 
   let combinedBody = body;
-  const historyKey = dc.isGroup ? threadScopedKey(dc.ctx.chatId, dc.isThread ? dc.ctx.threadId : undefined) : undefined;
+  const historyKey = dc.isGroup
+    ? threadScopedKey(dc.ctx.chatId, dc.isThread ? dc.ctx.threadId : undefined)
+    : undefined;
 
   if (dc.isGroup && historyKey && chatHistories) {
     combinedBody = buildPendingHistoryContextFromMap({

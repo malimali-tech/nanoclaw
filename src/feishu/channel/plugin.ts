@@ -14,7 +14,11 @@ import type { ChannelThreadingToolContext } from 'openclaw/plugin-sdk/channel-co
 import { DEFAULT_ACCOUNT_ID } from 'openclaw/plugin-sdk/account-id';
 import { PAIRING_APPROVED_MESSAGE } from 'openclaw/plugin-sdk/channel-status';
 import type { LarkAccount } from '../core/types';
-import { getDefaultLarkAccountId, getLarkAccount, getLarkAccountIds } from '../core/accounts';
+import {
+  getDefaultLarkAccountId,
+  getLarkAccount,
+  getLarkAccountIds,
+} from '../core/accounts';
 import { feishuOutbound } from '../messaging/outbound/outbound';
 import { feishuMessageActions } from '../messaging/outbound/actions';
 import { resolveFeishuGroupToolPolicy } from '../messaging/inbound/policy';
@@ -24,7 +28,12 @@ import { looksLikeFeishuId, normalizeFeishuTarget } from '../core/targets';
 import { triggerOnboarding } from '../tools/onboarding-auth';
 import { larkLogger } from '../core/lark-logger';
 import { FEISHU_CONFIG_JSON_SCHEMA } from '../core/config-schema';
-import { applyAccountConfig, collectFeishuSecurityWarnings, deleteAccount, setAccountEnabled } from './config-adapter';
+import {
+  applyAccountConfig,
+  collectFeishuSecurityWarnings,
+  deleteAccount,
+  setAccountEnabled,
+} from './config-adapter';
 import {
   listFeishuDirectoryGroups,
   listFeishuDirectoryGroupsLive,
@@ -47,7 +56,12 @@ function adaptDirectoryParams(params: {
   query?: string | null;
   limit?: number | null;
   accountId?: string | null;
-}): { cfg: ClawdbotConfig; query?: string; limit?: number; accountId?: string } {
+}): {
+  cfg: ClawdbotConfig;
+  query?: string;
+  limit?: number;
+  accountId?: string;
+} {
   return {
     cfg: params.cfg,
     query: params.query ?? undefined,
@@ -88,7 +102,8 @@ export const feishuPlugin: ChannelPlugin<LarkAccount> = {
 
   pairing: {
     idLabel: 'feishuUserId',
-    normalizeAllowEntry: (entry) => entry.replace(/^(feishu|user|open_id):/i, ''),
+    normalizeAllowEntry: (entry) =>
+      entry.replace(/^(feishu|user|open_id):/i, ''),
     notifyApproval: async ({ cfg, id }) => {
       const accountId = getDefaultLarkAccountId(cfg);
       pluginLog.info('notifyApproval called', { id, accountId });
@@ -206,7 +221,10 @@ export const feishuPlugin: ChannelPlugin<LarkAccount> = {
 
   security: {
     collectWarnings: ({ cfg, accountId }) =>
-      collectFeishuSecurityWarnings({ cfg, accountId: accountId ?? DEFAULT_ACCOUNT_ID }),
+      collectFeishuSecurityWarnings({
+        cfg,
+        accountId: accountId ?? DEFAULT_ACCOUNT_ID,
+      }),
   },
 
   // -------------------------------------------------------------------------
@@ -240,8 +258,10 @@ export const feishuPlugin: ChannelPlugin<LarkAccount> = {
     self: async () => null,
     listPeers: async (p) => listFeishuDirectoryPeers(adaptDirectoryParams(p)),
     listGroups: async (p) => listFeishuDirectoryGroups(adaptDirectoryParams(p)),
-    listPeersLive: async (p) => listFeishuDirectoryPeersLive(adaptDirectoryParams(p)),
-    listGroupsLive: async (p) => listFeishuDirectoryGroupsLive(adaptDirectoryParams(p)),
+    listPeersLive: async (p) =>
+      listFeishuDirectoryPeersLive(adaptDirectoryParams(p)),
+    listGroupsLive: async (p) =>
+      listFeishuDirectoryGroupsLive(adaptDirectoryParams(p)),
   },
 
   // -------------------------------------------------------------------------
@@ -255,9 +275,15 @@ export const feishuPlugin: ChannelPlugin<LarkAccount> = {
   // -------------------------------------------------------------------------
 
   threading: {
-    buildToolContext: ({ context, hasRepliedRef }): ChannelThreadingToolContext => ({
+    buildToolContext: ({
+      context,
+      hasRepliedRef,
+    }): ChannelThreadingToolContext => ({
       currentChannelId: normalizeFeishuTarget(context.To ?? '') ?? undefined,
-      currentThreadTs: context.MessageThreadId != null ? String(context.MessageThreadId) : undefined,
+      currentThreadTs:
+        context.MessageThreadId != null
+          ? String(context.MessageThreadId)
+          : undefined,
       currentMessageId: context.CurrentMessageId,
       hasRepliedRef,
     }),
@@ -293,7 +319,9 @@ export const feishuPlugin: ChannelPlugin<LarkAccount> = {
       lastProbeAt: snapshot.lastProbeAt ?? null,
     }),
     probeAccount: async ({ account }) => {
-      return await LarkClient.fromAccount(account).probe({ maxAgeMs: PROBE_CACHE_TTL_MS });
+      return await LarkClient.fromAccount(account).probe({
+        maxAgeMs: PROBE_CACHE_TTL_MS,
+      });
     },
     buildAccountSnapshot: ({ account, runtime, probe }) => ({
       accountId: account.accountId,
@@ -321,7 +349,9 @@ export const feishuPlugin: ChannelPlugin<LarkAccount> = {
       const account = getLarkAccount(ctx.cfg, ctx.accountId);
       const port = account.config?.webhookPort ?? null;
       ctx.setStatus({ accountId: ctx.accountId, port });
-      ctx.log?.info(`starting feishu[${ctx.accountId}] (mode: ${account.config?.connectionMode ?? 'websocket'})`);
+      ctx.log?.info(
+        `starting feishu[${ctx.accountId}] (mode: ${account.config?.connectionMode ?? 'websocket'})`,
+      );
       return monitorFeishuProvider({
         config: ctx.cfg,
         runtime: ctx.runtime,

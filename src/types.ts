@@ -100,6 +100,32 @@ export interface TaskRunLog {
 
 // --- Channel abstraction ---
 
+/**
+ * Per-turn streaming handle returned by `Channel.openStream`. The agent layer
+ * forwards model events into the handle as they arrive; the channel decides how
+ * to render them (e.g. a Feishu CardKit card edited in place, an IRC PRIVMSG
+ * burst, etc.). `finalize` MUST always be called exactly once, even on error
+ * paths, so the channel can flip terminal state and release resources.
+ */
+export interface StreamHandle {
+  appendText(delta: string): Promise<void>;
+  appendReasoning(delta: string): Promise<void>;
+  appendToolUse(
+    toolCallId: string,
+    toolName: string,
+    args: unknown,
+  ): Promise<void>;
+  appendToolResult(
+    toolCallId: string,
+    toolName: string,
+    result: unknown,
+    isError: boolean,
+  ): Promise<void>;
+  finalize(opts?: {
+    reason?: 'normal' | 'aborted' | 'error';
+  }): Promise<void>;
+}
+
 export interface Channel {
   name: string;
   connect(): Promise<void>;
@@ -111,6 +137,15 @@ export interface Channel {
   setTyping?(jid: string, isTyping: boolean): Promise<void>;
   // Optional: sync group/chat names from the platform.
   syncGroups?(force: boolean): Promise<void>;
+  /**
+   * Optional: open a per-turn streaming handle for `jid`. Channels that
+   * implement this opt into incremental rendering — the agent runtime will
+   * forward `text_delta` / `thinking_delta` / `tool_execution_*` events to the
+   * handle as they arrive, and call `finalize()` once on `turn_end`. Channels
+   * that don't implement this fall back to the buffered single-shot
+   * `sendMessage` path (the existing behaviour for whatsapp etc).
+   */
+  openStream?(jid: string): Promise<StreamHandle>;
 }
 
 // Callback type that channels use to deliver inbound messages

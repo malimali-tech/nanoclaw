@@ -49,7 +49,11 @@ function mergeFeishuAccountConfig(
 }
 
 /** Set the `enabled` flag on a Feishu account. */
-export function setAccountEnabled(cfg: ClawdbotConfig, accountId: string, enabled: boolean): ClawdbotConfig {
+export function setAccountEnabled(
+  cfg: ClawdbotConfig,
+  accountId: string,
+  enabled: boolean,
+): ClawdbotConfig {
   return mergeFeishuAccountConfig(cfg, accountId, { enabled });
 }
 
@@ -63,7 +67,10 @@ export function applyAccountConfig(
 }
 
 /** Delete a Feishu account entry from the config. */
-export function deleteAccount(cfg: ClawdbotConfig, accountId: string): ClawdbotConfig {
+export function deleteAccount(
+  cfg: ClawdbotConfig,
+  accountId: string,
+): ClawdbotConfig {
   const isDefault = !accountId || accountId === DEFAULT_ACCOUNT_ID;
 
   if (isDefault) {
@@ -97,7 +104,10 @@ export function deleteAccount(cfg: ClawdbotConfig, accountId: string): ClawdbotC
 }
 
 /** Collect security warnings for a Feishu account. */
-export function collectFeishuSecurityWarnings(params: { cfg: ClawdbotConfig; accountId: string }): string[] {
+export function collectFeishuSecurityWarnings(params: {
+  cfg: ClawdbotConfig;
+  accountId: string;
+}): string[] {
   const { cfg, accountId } = params;
   const warnings: string[] = [];
 
@@ -105,9 +115,12 @@ export function collectFeishuSecurityWarnings(params: { cfg: ClawdbotConfig; acc
   const feishuCfg = account.config;
   // cfg.channels.defaults is a cross-channel defaults object (not formally typed)
   const defaultGroupPolicy = (
-    (cfg.channels as Record<string, unknown> | undefined)?.defaults as { groupPolicy?: string } | undefined
+    (cfg.channels as Record<string, unknown> | undefined)?.defaults as
+      | { groupPolicy?: string }
+      | undefined
   )?.groupPolicy;
-  const groupPolicy = feishuCfg?.groupPolicy ?? defaultGroupPolicy ?? 'allowlist';
+  const groupPolicy =
+    feishuCfg?.groupPolicy ?? defaultGroupPolicy ?? 'allowlist';
   if (groupPolicy === 'open') {
     warnings.push(
       `- Feishu[${account.accountId}] groups: groupPolicy="open" allows any group to interact (mention-gated). To restrict which groups are allowed, set groupPolicy="allowlist" and list group IDs in channels.feishu.groups. To restrict which senders can trigger the bot, set channels.feishu.groupAllowFrom with user open_ids (ou_xxx).`,

@@ -41,7 +41,9 @@ export const LARK_ERROR = {
 } as const;
 
 /** refresh token 端点可重试的错误码集合（服务端瞬时故障）。遇到后重试一次，仍失败则清 token。 */
-export const REFRESH_TOKEN_RETRYABLE: ReadonlySet<number> = new Set([LARK_ERROR.REFRESH_SERVER_ERROR]);
+export const REFRESH_TOKEN_RETRYABLE: ReadonlySet<number> = new Set([
+  LARK_ERROR.REFRESH_SERVER_ERROR,
+]);
 
 /** 消息终止错误码集合（撤回/删除），遇到后应停止对该消息的后续操作。 */
 export const MESSAGE_TERMINAL_CODES: ReadonlySet<number> = new Set([
@@ -50,7 +52,10 @@ export const MESSAGE_TERMINAL_CODES: ReadonlySet<number> = new Set([
 ]);
 
 /** access_token 失效相关的错误码集合，遇到后可尝试刷新重试。 */
-export const TOKEN_RETRY_CODES: ReadonlySet<number> = new Set([LARK_ERROR.TOKEN_INVALID, LARK_ERROR.TOKEN_EXPIRED]);
+export const TOKEN_RETRY_CODES: ReadonlySet<number> = new Set([
+  LARK_ERROR.TOKEN_INVALID,
+  LARK_ERROR.TOKEN_EXPIRED,
+]);
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -112,7 +117,9 @@ export class AppScopeCheckFailedError extends Error {
   readonly appId?: string;
 
   constructor(appId?: string) {
-    super('应用缺少 application:application:self_manage 权限，无法查询应用权限配置。请管理员在开放平台开通该权限。');
+    super(
+      '应用缺少 application:application:self_manage 权限，无法查询应用权限配置。请管理员在开放平台开通该权限。',
+    );
     this.name = 'AppScopeCheckFailedError';
     this.appId = appId;
   }
@@ -142,9 +149,13 @@ export class AppScopeMissingError extends Error {
     allRequiredScopes?: string[],
   ) {
     if (scopeNeedType === 'one') {
-      super(`应用缺少权限 [${info.scopes.join(', ')}](开启任一权限即可)，请管理员在开放平台开通。`);
+      super(
+        `应用缺少权限 [${info.scopes.join(', ')}](开启任一权限即可)，请管理员在开放平台开通。`,
+      );
     } else {
-      super(`应用缺少权限 [${info.scopes.join(', ')}]，请管理员在开放平台开通。`);
+      super(
+        `应用缺少权限 [${info.scopes.join(', ')}]，请管理员在开放平台开通。`,
+      );
     }
     this.name = 'AppScopeMissingError';
     this.apiName = info.apiName;

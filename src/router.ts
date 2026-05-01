@@ -1,4 +1,4 @@
-import { Channel, NewMessage } from './types.js';
+import { Channel, NewMessage, StreamHandle } from './types.js';
 import { formatLocalTime } from './timezone.js';
 
 export function escapeXml(s: string): string {
@@ -56,4 +56,19 @@ export function findChannel(
   jid: string,
 ): Channel | undefined {
   return channels.find((c) => c.ownsJid(jid));
+}
+
+/**
+ * Open a streaming handle for `jid` if the owning channel implements
+ * `openStream`. Returns null when no connected channel owns the JID, or when
+ * the owning channel hasn't opted into streaming — callers fall back to the
+ * buffered `routeOutbound` path in that case.
+ */
+export async function openStream(
+  channels: Channel[],
+  jid: string,
+): Promise<StreamHandle | null> {
+  const channel = channels.find((c) => c.ownsJid(jid) && c.isConnected());
+  if (!channel || !channel.openStream) return null;
+  return channel.openStream(jid);
 }

@@ -45,7 +45,9 @@ export const DEFAULT_TOOLS_CONFIG: Required<FeishuToolsConfig> = {
  * Fields present in the input take precedence; anything absent falls back
  * to the default value.
  */
-export function resolveToolsConfig(cfg?: FeishuToolsConfig): Required<FeishuToolsConfig> {
+export function resolveToolsConfig(
+  cfg?: FeishuToolsConfig,
+): Required<FeishuToolsConfig> {
   if (!cfg) return { ...DEFAULT_TOOLS_CONFIG };
 
   return {
@@ -70,7 +72,9 @@ export function resolveToolsConfig(cfg?: FeishuToolsConfig): Required<FeishuTool
  * 工具注册是全局的（启动时注册一次），只要任意一个账户启用了某工具，
  * 该工具就应被注册。执行时由 LarkTicket 路由到具体账户。
  */
-export function resolveAnyEnabledToolsConfig(accounts: LarkAccount[]): Required<FeishuToolsConfig> {
+export function resolveAnyEnabledToolsConfig(
+  accounts: LarkAccount[],
+): Required<FeishuToolsConfig> {
   const merged: Required<FeishuToolsConfig> = {
     doc: false,
     wiki: false,
@@ -82,7 +86,9 @@ export function resolveAnyEnabledToolsConfig(accounts: LarkAccount[]): Required<
     okr: false,
   };
   for (const account of accounts) {
-    const cfg = resolveToolsConfig((account.config as { tools?: FeishuToolsConfig }).tools);
+    const cfg = resolveToolsConfig(
+      (account.config as { tools?: FeishuToolsConfig }).tools,
+    );
     merged.doc = merged.doc || cfg.doc;
     merged.wiki = merged.wiki || cfg.wiki;
     merged.drive = merged.drive || cfg.drive;
@@ -134,7 +140,10 @@ function matchesAnyPattern(value: string, patterns: string[]): boolean {
  * shouldRegisterTool(cfg, "feishu_task_task")        // true
  * ```
  */
-export function shouldRegisterTool(cfg: ClawdbotConfig, toolName: string): boolean {
+export function shouldRegisterTool(
+  cfg: ClawdbotConfig,
+  toolName: string,
+): boolean {
   const feishuConfig = cfg.channels?.feishu;
   const denyList = feishuConfig?.['tools']?.['deny'];
 

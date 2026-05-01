@@ -39,7 +39,9 @@ export async function getAppOwnerFallback(
     const appInfo = await getAppInfo(sdk, appId);
     return appInfo.effectiveOwnerOpenId;
   } catch (err) {
-    log.warn(`failed to get owner for ${appId}: ${err instanceof Error ? err.message : err}`);
+    log.warn(
+      `failed to get owner for ${appId}: ${err instanceof Error ? err.message : err}`,
+    );
     return undefined; // fail-open: 获取失败不阻塞业务
   }
 }

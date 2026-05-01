@@ -78,7 +78,11 @@ export interface ConvertContext {
    * Injected by `convertMessageContent()` so converter modules do not need
    * to import the main dispatcher directly.
    */
-  convertMessageContent?: (raw: string, messageType: string, ctx: ConvertContext) => Promise<ConvertResult>;
+  convertMessageContent?: (
+    raw: string,
+    messageType: string,
+    ctx: ConvertContext,
+  ) => Promise<ConvertResult>;
   /** 是否删除机器人 mention（事件推送场景=true，历史消息读取=false） */
   stripBotMentions?: boolean;
 }
@@ -97,7 +101,10 @@ export interface ConvertResult {
  * May return a ConvertResult synchronously or a Promise for types that
  * require async operations (e.g. merge_forward expansion via API).
  */
-export type ContentConverterFn = (raw: string, ctx: ConvertContext) => ConvertResult | Promise<ConvertResult>;
+export type ContentConverterFn = (
+  raw: string,
+  ctx: ConvertContext,
+) => ConvertResult | Promise<ConvertResult>;
 
 /**
  * Element within a Feishu "post" (rich text) content block.

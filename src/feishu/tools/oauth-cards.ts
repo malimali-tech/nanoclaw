@@ -31,7 +31,8 @@ const CARD_TEXTS = {
   zh_cn: {
     authRequired: '请授权以继续当前操作',
     goAuth: '前往授权',
-    expiresHint: (min: number) => `<font color='grey'>授权链接将在 ${min} 分钟后失效，届时需重新发起</font>`,
+    expiresHint: (min: number) =>
+      `<font color='grey'>授权链接将在 ${min} 分钟后失效，届时需重新发起</font>`,
     batchAuthHint:
       "<font color='grey'>💡如果你希望一次性授予所有插件所需要的权限，可以告诉我「授予所有用户权限」，我会协助你完成。</font>",
 
@@ -76,7 +77,8 @@ const CARD_TEXTS = {
       "<font color='grey'>Let me know if you ever need to revoke the permissions.</font>",
 
     authIncomplete: 'Authorization incomplete',
-    authExpiredBody: 'The link is no longer active. Please restart the process.',
+    authExpiredBody:
+      'The link is no longer active. Please restart the process.',
 
     authMismatchTitle: 'Authorization failed: Account mismatch',
     authMismatchBody: (brandName: string) =>
@@ -92,7 +94,11 @@ function i18nContent(zh: string, en: string): Record<Locale, string> {
 
 /** 构造带 i18n_content 的 plain_text（默认语言为英文） */
 function i18nPlainText(zh: string, en: string) {
-  return { tag: 'plain_text' as const, content: en, i18n_content: i18nContent(zh, en) };
+  return {
+    tag: 'plain_text' as const,
+    content: en,
+    i18n_content: i18nContent(zh, en),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +139,15 @@ export function buildAuthCard(params: {
     ios_url: inAppUrl,
   };
 
-  const scopeParams = { scope, isBatchAuth, totalAppScopes, alreadyGranted, batchInfo, filteredScopes, appId };
+  const scopeParams = {
+    scope,
+    isBatchAuth,
+    totalAppScopes,
+    alreadyGranted,
+    batchInfo,
+    filteredScopes,
+    appId,
+  };
   const scopeDescZh = formatScopeDescription('zh_cn', scopeParams);
   const scopeDescEn = formatScopeDescription('en_us', scopeParams);
 
@@ -173,7 +187,10 @@ export function buildAuthCard(params: {
     {
       tag: 'markdown',
       content: enT.expiresHint(expiresMin),
-      i18n_content: i18nContent(zhT.expiresHint(expiresMin), enT.expiresHint(expiresMin)),
+      i18n_content: i18nContent(
+        zhT.expiresHint(expiresMin),
+        enT.expiresHint(expiresMin),
+      ),
       text_size: 'notation',
     },
     // 批量授权提示（仅 auto-auth 流程展示）
@@ -233,12 +250,17 @@ export function formatScopeDescription(
     appId?: string;
   },
 ): string {
-  const { scope, isBatchAuth, totalAppScopes, alreadyGranted, batchInfo } = params;
+  const { scope, isBatchAuth, totalAppScopes, alreadyGranted, batchInfo } =
+    params;
   const t = CARD_TEXTS[locale];
   const scopes = scope?.split(/\s+/).filter(Boolean);
 
   if (isBatchAuth && scopes && scopes.length > 0) {
-    let message = t.batchScopeMsg(scopes.length, totalAppScopes ?? 0, alreadyGranted ?? 0);
+    let message = t.batchScopeMsg(
+      scopes.length,
+      totalAppScopes ?? 0,
+      alreadyGranted ?? 0,
+    );
 
     if (scopes.length > 5) {
       const previewScopes = scopes.slice(0, 3).join('\n');
@@ -257,7 +279,13 @@ export function formatScopeDescription(
 
   if (!scopes?.length) return t.scopeDesc;
 
-  return t.scopeDesc + '\n\n' + t.requiredScopes + '\n' + scopes.map((s) => `- ${s}`).join('\n');
+  return (
+    t.scopeDesc +
+    '\n\n' +
+    t.requiredScopes +
+    '\n' +
+    scopes.map((s) => `- ${s}`).join('\n')
+  );
 }
 
 export function toInAppWebUrl(targetUrl: string, brand?: LarkBrand): string {
@@ -272,10 +300,15 @@ export function toInAppWebUrl(targetUrl: string, brand?: LarkBrand): string {
   const separator = targetUrl.includes('?') ? '&' : '?';
   const fullUrl = `${targetUrl}${separator}lk_meta=${lkMeta}`;
   const encoded = encodeURIComponent(fullUrl);
-  return `${applinkDomain(brand)}/client/web_url/open` + `?mode=sidebar-semi&max_width=800&reload=false&url=${encoded}`;
+  return (
+    `${applinkDomain(brand)}/client/web_url/open` +
+    `?mode=sidebar-semi&max_width=800&reload=false&url=${encoded}`
+  );
 }
 
-export function buildAuthSuccessCard(brand?: LarkBrand): Record<string, unknown> {
+export function buildAuthSuccessCard(
+  brand?: LarkBrand,
+): Record<string, unknown> {
   const zhT = CARD_TEXTS.zh_cn;
   const enT = CARD_TEXTS.en_us;
   const brandZh = brand === 'lark' ? 'Lark' : '飞书';
@@ -312,7 +345,10 @@ export function buildAuthSuccessCard(brand?: LarkBrand): Record<string, unknown>
         {
           tag: 'markdown',
           content: enT.authSuccessBody(brandEn),
-          i18n_content: i18nContent(zhT.authSuccessBody(brandZh), enT.authSuccessBody(brandEn)),
+          i18n_content: i18nContent(
+            zhT.authSuccessBody(brandZh),
+            enT.authSuccessBody(brandEn),
+          ),
         },
       ],
     },
@@ -361,7 +397,9 @@ export function buildAuthFailedCard(_reason: string): Record<string, unknown> {
   };
 }
 
-export function buildAuthIdentityMismatchCard(brand?: LarkBrand): Record<string, unknown> {
+export function buildAuthIdentityMismatchCard(
+  brand?: LarkBrand,
+): Record<string, unknown> {
   const zhT = CARD_TEXTS.zh_cn;
   const enT = CARD_TEXTS.en_us;
   const brandZh = brand === 'lark' ? 'Lark' : '飞书';
@@ -390,7 +428,10 @@ export function buildAuthIdentityMismatchCard(brand?: LarkBrand): Record<string,
         {
           tag: 'markdown',
           content: enT.authMismatchBody(brandEn),
-          i18n_content: i18nContent(zhT.authMismatchBody(brandZh), enT.authMismatchBody(brandEn)),
+          i18n_content: i18nContent(
+            zhT.authMismatchBody(brandZh),
+            enT.authMismatchBody(brandEn),
+          ),
         },
       ],
     },

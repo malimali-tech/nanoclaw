@@ -17,7 +17,13 @@
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
 
-import { assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json , registerTool } from '../helpers';
+import {
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 import type { PaginatedData } from '../sdk-types';
 
 // ---------------------------------------------------------------------------
@@ -31,7 +37,9 @@ const FeishuBitableAppTableSchema = Type.Union([
     app_token: Type.String({ description: '多维表格 token' }),
     table: Type.Object({
       name: Type.String({ description: '数据表名称' }),
-      default_view_name: Type.Optional(Type.String({ description: '默认视图名称' })),
+      default_view_name: Type.Optional(
+        Type.String({ description: '默认视图名称' }),
+      ),
       fields: Type.Optional(
         Type.Array(
           Type.Object({
@@ -40,9 +48,14 @@ const FeishuBitableAppTableSchema = Type.Union([
               description:
                 '字段类型（1=文本，2=数字，3=单选，4=多选，5=日期，7=复选框，11=人员，13=电话，15=超链接，17=附件，1001=创建时间，1002=修改时间等）',
             }),
-            property: Type.Optional(Type.Any({ description: '字段属性配置（根据类型而定）' })),
+            property: Type.Optional(
+              Type.Any({ description: '字段属性配置（根据类型而定）' }),
+            ),
           }),
-          { description: '字段列表（可选，但强烈建议在创建表时就传入所有字段，避免后续逐个添加）。不传则创建空表。' },
+          {
+            description:
+              '字段列表（可选，但强烈建议在创建表时就传入所有字段，避免后续逐个添加）。不传则创建空表。',
+          },
         ),
       ),
     }),
@@ -52,7 +65,9 @@ const FeishuBitableAppTableSchema = Type.Union([
   Type.Object({
     action: Type.Literal('list'),
     app_token: Type.String({ description: '多维表格 token' }),
-    page_size: Type.Optional(Type.Number({ description: '每页数量，默认 50，最大 100' })),
+    page_size: Type.Optional(
+      Type.Number({ description: '每页数量，默认 50，最大 100' }),
+    ),
     page_token: Type.Optional(Type.String({ description: '分页标记' })),
   }),
 
@@ -75,7 +90,6 @@ const FeishuBitableAppTableSchema = Type.Union([
       { description: '要批量创建的数据表列表' },
     ),
   }),
-
 ]);
 
 // ---------------------------------------------------------------------------
@@ -119,12 +133,17 @@ type FeishuBitableAppTableParams =
 // Registration
 // ---------------------------------------------------------------------------
 
-export function registerFeishuBitableAppTableTool(api: OpenClawPluginApi): void {
+export function registerFeishuBitableAppTableTool(
+  api: OpenClawPluginApi,
+): void {
   if (!api.config) return;
 
   const cfg = api.config;
 
-  const { toolClient, log } = createToolContext(api, 'feishu_bitable_app_table');
+  const { toolClient, log } = createToolContext(
+    api,
+    'feishu_bitable_app_table',
+  );
 
   registerTool(
     api,
@@ -156,14 +175,19 @@ export function registerFeishuBitableAppTableTool(api: OpenClawPluginApi): void 
               if (tableData.fields) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 tableData.fields = tableData.fields.map((field: any) => {
-                  if ((field.type === 7 || field.type === 15) && field.property !== undefined) {
-                    const fieldTypeName = field.type === 15 ? 'URL' : 'Checkbox';
+                  if (
+                    (field.type === 7 || field.type === 15) &&
+                    field.property !== undefined
+                  ) {
+                    const fieldTypeName =
+                      field.type === 15 ? 'URL' : 'Checkbox';
                     log.warn(
                       `create: ${fieldTypeName} field (type=${field.type}, name="${field.field_name}") detected with property parameter. ` +
                         `Removing property to avoid API error. ` +
                         `${fieldTypeName} fields must omit the property parameter entirely.`,
                     );
-                    const { property: _property, ...fieldWithoutProperty } = field;
+                    const { property: _property, ...fieldWithoutProperty } =
+                      field;
                     return fieldWithoutProperty;
                   }
                   return field;
@@ -201,7 +225,9 @@ export function registerFeishuBitableAppTableTool(api: OpenClawPluginApi): void 
             // LIST
             // -----------------------------------------------------------------
             case 'list': {
-              log.info(`list: app_token=${p.app_token}, page_size=${p.page_size ?? 50}`);
+              log.info(
+                `list: app_token=${p.app_token}, page_size=${p.page_size ?? 50}`,
+              );
 
               const res = await client.invoke(
                 'feishu_bitable_app_table.list',
@@ -237,7 +263,9 @@ export function registerFeishuBitableAppTableTool(api: OpenClawPluginApi): void 
             // PATCH
             // -----------------------------------------------------------------
             case 'patch': {
-              log.info(`patch: app_token=${p.app_token}, table_id=${p.table_id}, name=${p.name}`);
+              log.info(
+                `patch: app_token=${p.app_token}, table_id=${p.table_id}, name=${p.name}`,
+              );
 
               const res = await client.invoke(
                 'feishu_bitable_app_table.patch',
@@ -275,7 +303,9 @@ export function registerFeishuBitableAppTableTool(api: OpenClawPluginApi): void 
                 });
               }
 
-              log.info(`batch_create: app_token=${p.app_token}, tables_count=${p.tables.length}`);
+              log.info(
+                `batch_create: app_token=${p.app_token}, tables_count=${p.tables.length}`,
+              );
 
               const res = await client.invoke(
                 'feishu_bitable_app_table.batch_create',
@@ -295,13 +325,14 @@ export function registerFeishuBitableAppTableTool(api: OpenClawPluginApi): void 
               );
               assertLarkOk(res);
 
-              log.info(`batch_create: created ${p.tables.length} tables in app ${p.app_token}`);
+              log.info(
+                `batch_create: created ${p.tables.length} tables in app ${p.app_token}`,
+              );
 
               return json({
                 table_ids: res.data?.table_ids,
               });
             }
-
           }
         } catch (err) {
           return await handleInvokeErrorWithAutoAuth(err, cfg);
@@ -310,5 +341,4 @@ export function registerFeishuBitableAppTableTool(api: OpenClawPluginApi): void 
     },
     { name: 'feishu_bitable_app_table' },
   );
-
 }

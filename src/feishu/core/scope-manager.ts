@@ -39,7 +39,11 @@
  * ```
  */
 
-import { TOOL_SCOPES, type ToolActionKey, type ToolScopeMapping } from './tool-scopes';
+import {
+  TOOL_SCOPES,
+  type ToolActionKey,
+  type ToolScopeMapping,
+} from './tool-scopes';
 
 // ===== 导出类型和数据 =====
 
@@ -79,7 +83,9 @@ export function getRequiredScopes(toolAction: ToolActionKey): string[] {
  * // 返回两个动作的所有唯一 scopes
  * ```
  */
-export function getRequiredScopesForActions(toolActions: ToolActionKey[]): string[] {
+export function getRequiredScopesForActions(
+  toolActions: ToolActionKey[],
+): string[] {
   const scopesSet = new Set<string>();
 
   for (const action of toolActions) {
@@ -151,7 +157,10 @@ export function getActionsForScope(scope: string): ToolActionKey[] {
  * checkAppScopes("feishu_calendar_event.create", partialAppScopes); // false
  * ```
  */
-export function checkAppScopes(toolAction: ToolActionKey, appGrantedScopes: Set<string> | string[]): boolean {
+export function checkAppScopes(
+  toolAction: ToolActionKey,
+  appGrantedScopes: Set<string> | string[],
+): boolean {
   const requiredScopes = getRequiredScopes(toolAction);
 
   // 如果不需要任何 scope，则总是满足要求
@@ -159,7 +168,9 @@ export function checkAppScopes(toolAction: ToolActionKey, appGrantedScopes: Set<
     return true;
   }
 
-  const grantedSet = Array.isArray(appGrantedScopes) ? new Set(appGrantedScopes) : appGrantedScopes;
+  const grantedSet = Array.isArray(appGrantedScopes)
+    ? new Set(appGrantedScopes)
+    : appGrantedScopes;
 
   return requiredScopes.every((scope) => grantedSet.has(scope));
 }
@@ -178,9 +189,14 @@ export function checkAppScopes(toolAction: ToolActionKey, appGrantedScopes: Set<
  * // 返回: ["calendar:calendar.event:update"]
  * ```
  */
-export function getMissingAppScopes(toolAction: ToolActionKey, appGrantedScopes: Set<string> | string[]): string[] {
+export function getMissingAppScopes(
+  toolAction: ToolActionKey,
+  appGrantedScopes: Set<string> | string[],
+): string[] {
   const requiredScopes = getRequiredScopes(toolAction);
-  const grantedSet = Array.isArray(appGrantedScopes) ? new Set(appGrantedScopes) : appGrantedScopes;
+  const grantedSet = Array.isArray(appGrantedScopes)
+    ? new Set(appGrantedScopes)
+    : appGrantedScopes;
 
   return requiredScopes.filter((scope) => !grantedSet.has(scope));
 }
@@ -206,7 +222,10 @@ export function getMissingAppScopes(toolAction: ToolActionKey, appGrantedScopes:
  * checkUserScopes("feishu_calendar_event.create", partialUserScopes); // false
  * ```
  */
-export function checkUserScopes(toolAction: ToolActionKey, userGrantedScopes: Set<string> | string[]): boolean {
+export function checkUserScopes(
+  toolAction: ToolActionKey,
+  userGrantedScopes: Set<string> | string[],
+): boolean {
   const requiredScopes = getRequiredScopes(toolAction);
 
   // 如果不需要任何 scope，则总是满足要求
@@ -214,7 +233,9 @@ export function checkUserScopes(toolAction: ToolActionKey, userGrantedScopes: Se
     return true;
   }
 
-  const grantedSet = Array.isArray(userGrantedScopes) ? new Set(userGrantedScopes) : userGrantedScopes;
+  const grantedSet = Array.isArray(userGrantedScopes)
+    ? new Set(userGrantedScopes)
+    : userGrantedScopes;
 
   return requiredScopes.every((scope) => grantedSet.has(scope));
 }
@@ -233,9 +254,14 @@ export function checkUserScopes(toolAction: ToolActionKey, userGrantedScopes: Se
  * // 返回: ["calendar:calendar.event:update"]
  * ```
  */
-export function getMissingUserScopes(toolAction: ToolActionKey, userGrantedScopes: Set<string> | string[]): string[] {
+export function getMissingUserScopes(
+  toolAction: ToolActionKey,
+  userGrantedScopes: Set<string> | string[],
+): string[] {
   const requiredScopes = getRequiredScopes(toolAction);
-  const grantedSet = Array.isArray(userGrantedScopes) ? new Set(userGrantedScopes) : userGrantedScopes;
+  const grantedSet = Array.isArray(userGrantedScopes)
+    ? new Set(userGrantedScopes)
+    : userGrantedScopes;
 
   return requiredScopes.filter((scope) => !grantedSet.has(scope));
 }

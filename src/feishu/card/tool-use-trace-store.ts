@@ -9,7 +9,11 @@
  * reply payload text.
  */
 
-import { normalizeToolName, redactInlineSecrets, truncateText } from './reasoning-utils';
+import {
+  normalizeToolName,
+  redactInlineSecrets,
+  truncateText,
+} from './reasoning-utils';
 
 export interface ToolUseTraceStep {
   id: string;
@@ -95,7 +99,9 @@ export function recordToolUseStart(params: {
     toolName,
     toolCallId: toolCallId || undefined,
     runId: runId || undefined,
-    params: sanitizeTraceValue(toolParams, 0, { source: 'params' }) as Record<string, unknown> | undefined,
+    params: sanitizeTraceValue(toolParams, 0, { source: 'params' }) as
+      | Record<string, unknown>
+      | undefined,
     status: 'running',
     startedAt: now,
   });
@@ -113,21 +119,39 @@ export function recordToolUseEnd(params: {
   error?: string;
   durationMs?: number;
 }): void {
-  const { sessionKey, toolName, toolParams, toolCallId, runId, result, error, durationMs } = params;
+  const {
+    sessionKey,
+    toolName,
+    toolParams,
+    toolCallId,
+    runId,
+    result,
+    error,
+    durationMs,
+  } = params;
   if (!sessionKey || !toolName) return;
 
   const state = sessionTraces.get(sessionKey);
   if (!state) return;
 
-  if (runId && state.currentRunId !== undefined && state.currentRunId !== runId) {
+  if (
+    runId &&
+    state.currentRunId !== undefined &&
+    state.currentRunId !== runId
+  ) {
     return;
   }
 
   const now = Date.now();
-  const sanitizedParams = sanitizeTraceValue(toolParams, 0, { source: 'params' }) as
-    | Record<string, unknown>
-    | undefined;
-  const pendingIndex = findPendingStepIndex(state.steps, toolName, sanitizedParams, toolCallId);
+  const sanitizedParams = sanitizeTraceValue(toolParams, 0, {
+    source: 'params',
+  }) as Record<string, unknown> | undefined;
+  const pendingIndex = findPendingStepIndex(
+    state.steps,
+    toolName,
+    sanitizedParams,
+    toolCallId,
+  );
 
   if (pendingIndex >= 0) {
     const step = state.steps[pendingIndex];
@@ -172,8 +196,16 @@ export function getToolUseTraceSteps(sessionKey?: string): ToolUseTraceStep[] {
   }
   const now = Date.now();
   return state.steps.map((step) => {
-    if (step.status === 'running' && now - step.startedAt > STEP_RUNNING_TIMEOUT_MS) {
-      return { ...step, status: 'error' as const, error: 'timed out', finishedAt: now };
+    if (
+      step.status === 'running' &&
+      now - step.startedAt > STEP_RUNNING_TIMEOUT_MS
+    ) {
+      return {
+        ...step,
+        status: 'error' as const,
+        error: 'timed out',
+        finishedAt: now,
+      };
     }
     return { ...step };
   });
@@ -225,7 +257,9 @@ function pruneTraceStore(): void {
   if (sessionTraces.size <= MAX_SESSION_TRACES) return;
 
   const overflow = sessionTraces.size - MAX_SESSION_TRACES;
-  const entries = [...sessionTraces.entries()].sort((a, b) => a[1].updatedAt - b[1].updatedAt);
+  const entries = [...sessionTraces.entries()].sort(
+    (a, b) => a[1].updatedAt - b[1].updatedAt,
+  );
   for (const [sessionKey] of entries.slice(0, overflow)) {
     sessionTraces.delete(sessionKey);
   }
@@ -245,7 +279,11 @@ export function sanitizeTraceValue(
   if (depth >= 2) return '[truncated]';
 
   if (Array.isArray(value)) {
-    return value.slice(0, 8).map((item) => sanitizeTraceValue(item, depth + 1, { source: context.source }));
+    return value
+      .slice(0, 8)
+      .map((item) =>
+        sanitizeTraceValue(item, depth + 1, { source: context.source }),
+      );
   }
 
   if (typeof value === 'object') {
@@ -255,7 +293,10 @@ export function sanitizeTraceValue(
     for (const [key, entryValue] of Object.entries(input).slice(0, 12)) {
       output[key] = isSensitiveKey(key)
         ? '[redacted]'
-        : sanitizeTraceValue(entryValue, depth + 1, { source: context.source, key });
+        : sanitizeTraceValue(entryValue, depth + 1, {
+            source: context.source,
+            key,
+          });
     }
 
     return output;
@@ -275,7 +316,10 @@ function sanitizeTraceString(
   return redactedUrl;
 }
 
-function resolveStringLimit(context: { source?: 'params' | 'result' | 'generic'; key?: string }): number {
+function resolveStringLimit(context: {
+  source?: 'params' | 'result' | 'generic';
+  key?: string;
+}): number {
   const key = context.key?.toLowerCase() ?? '';
   if (/(?:^|_)(?:command|script|description|prompt|task)(?:$|_)/.test(key)) {
     return COMMAND_STRING_LIMIT;
@@ -302,7 +346,10 @@ function isSensitiveKey(key: string): boolean {
 }
 
 function redactUrlParams(url: string): string {
-  return url.replace(/([?&])(api_key|token|secret|key)=[^&]*/gi, '$1$2=[redacted]');
+  return url.replace(
+    /([?&])(api_key|token|secret|key)=[^&]*/gi,
+    '$1$2=[redacted]',
+  );
 }
 
 function fingerprintTraceValue(value: unknown): string {

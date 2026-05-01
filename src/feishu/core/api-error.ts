@@ -17,7 +17,10 @@
  * and produce user-friendly messages with actionable authorization links.
  */
 
-import { extractPermissionGrantUrl, extractPermissionScopes } from './permission-url';
+import {
+  extractPermissionGrantUrl,
+  extractPermissionScopes,
+} from './permission-url';
 import { LARK_ERROR } from './auth-errors';
 
 // ---------------------------------------------------------------------------
@@ -34,7 +37,10 @@ function formatPermissionError(code: number, msg: string): string | null {
   const authUrl = extractPermissionGrantUrl(msg);
   const scopes = extractPermissionScopes(msg);
 
-  return `权限不足：应用缺少 [${scopes}] 权限。\n` + `请管理员点击以下链接申请并开通权限：\n${authUrl}`;
+  return (
+    `权限不足：应用缺少 [${scopes}] 权限。\n` +
+    `请管理员点击以下链接申请并开通权限：\n${authUrl}`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +75,11 @@ export function extractLarkApiCode(err: unknown): number | undefined {
     response?: { data?: { code?: unknown } };
   };
 
-  return coerceCode(e.code) ?? coerceCode(e.data?.code) ?? coerceCode(e.response?.data?.code);
+  return (
+    coerceCode(e.code) ??
+    coerceCode(e.data?.code) ??
+    coerceCode(e.response?.data?.code)
+  );
 }
 
 // ---------------------------------------------------------------------------

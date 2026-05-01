@@ -21,10 +21,18 @@ import type { ClawdbotConfig, OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
 import { getTicket, withTicket } from '../core/lark-ticket';
 import { larkLogger } from '../core/lark-logger';
-import { createCardEntity, sendCardByCardId, updateCardKitCard } from '../card/cardkit';
+import {
+  createCardEntity,
+  sendCardByCardId,
+  updateCardKitCard,
+} from '../card/cardkit';
 import { buildQueueKey, enqueueFeishuChatTask } from '../channel/chat-queue';
 import { handleFeishuMessage } from '../messaging/inbound/handler';
-import { checkToolRegistration, formatToolError, formatToolResult } from './helpers';
+import {
+  checkToolRegistration,
+  formatToolError,
+  formatToolResult,
+} from './helpers';
 
 const log = larkLogger('tools/ask-user-question');
 
@@ -53,7 +61,11 @@ const SELECT_FIELD_NAME = 'selection';
 const SUBMIT_BUTTON_PREFIX = 'ask_user_submit_';
 
 /** Shared V2 card config */
-const V2_CONFIG = { wide_screen_mode: true, update_multi: true, locales: ['zh_cn', 'en_us'] };
+const V2_CONFIG = {
+  wide_screen_mode: true,
+  update_multi: true,
+  locales: ['zh_cn', 'en_us'],
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -151,7 +163,10 @@ function consumePendingQuestion(questionId: string): void {
  * Only returns a result when exactly one non-submitted pending question
  * exists for this chat — refuses to guess when ambiguous.
  */
-function findQuestionByChat(accountId: string, chatId: string): QuestionContext | undefined {
+function findQuestionByChat(
+  accountId: string,
+  chatId: string,
+): QuestionContext | undefined {
   const baseKey = buildQueueKey(accountId, chatId);
   const set = byChatContext.get(baseKey);
   if (!set) return undefined;
@@ -162,7 +177,9 @@ function findQuestionByChat(accountId: string, chatId: string): QuestionContext 
       if (match) {
         // Ambiguous: more than one non-submitted question in this chat.
         // Refuse to guess — operationId is required to disambiguate.
-        log.warn(`chat-scoped fallback ambiguous: multiple pending questions in ${baseKey}`);
+        log.warn(
+          `chat-scoped fallback ambiguous: multiple pending questions in ${baseKey}`,
+        );
         return undefined;
       }
       match = ctx;
@@ -195,7 +212,11 @@ function getSelectFieldName(questionIndex: number): string {
  *
  * @returns 卡片回调响应，或 undefined 表示非本模块的 action
  */
-export function handleAskUserAction(data: unknown, _cfg: ClawdbotConfig, accountId: string): unknown | undefined {
+export function handleAskUserAction(
+  data: unknown,
+  _cfg: ClawdbotConfig,
+  accountId: string,
+): unknown | undefined {
   let action: string | undefined;
   let operationId: string | undefined;
   let senderOpenId: string | undefined;
@@ -272,16 +293,22 @@ export function handleAskUserAction(data: unknown, _cfg: ClawdbotConfig, account
   }
   if (!ctx) {
     if (operationId) {
-      log.warn(`ask-user action: question ${operationId} not found (expired or already handled)`);
+      log.warn(
+        `ask-user action: question ${operationId} not found (expired or already handled)`,
+      );
     }
-    return operationId ? { toast: { type: 'info', content: '该问题已过期或已被回答' } } : undefined;
+    return operationId
+      ? { toast: { type: 'info', content: '该问题已过期或已被回答' } }
+      : undefined;
   }
   if (ctx.submitted) {
     return { toast: { type: 'info', content: '该问题已提交，请等待处理' } };
   }
 
   if (senderOpenId && ctx.senderOpenId && senderOpenId !== ctx.senderOpenId) {
-    return { toast: { type: 'warning', content: '只有被提问的用户可以回答此问题' } };
+    return {
+      toast: { type: 'warning', content: '只有被提问的用户可以回答此问题' },
+    };
   }
 
   if (!formValue) {
@@ -341,7 +368,9 @@ export function handleAskUserAction(data: unknown, _cfg: ClawdbotConfig, account
     });
   });
 
-  log.info(`question ${operationId} submitted, synthetic message will be injected`);
+  log.info(
+    `question ${operationId} submitted, synthetic message will be injected`,
+  );
 
   // Return immediate visual feedback via Feishu callback response:
   // - toast: ephemeral success message for the clicking user
@@ -368,7 +397,10 @@ export function handleAskUserAction(data: unknown, _cfg: ClawdbotConfig, account
  * them in a new turn. Follows the same pattern as oauth.ts for auth-complete
  * synthetic messages. Retries on failure to prevent answer loss.
  */
-async function injectAnswerSyntheticMessage(ctx: QuestionContext, answers: Record<string, string>): Promise<void> {
+async function injectAnswerSyntheticMessage(
+  ctx: QuestionContext,
+  answers: Record<string, string>,
+): Promise<void> {
   const syntheticMsgId = `${ctx.messageId}:ask-user-answer:${ctx.questionId}`;
 
   // Format answers as readable text for the AI
@@ -416,7 +448,9 @@ async function injectAnswerSyntheticMessage(ctx: QuestionContext, answers: Recor
   let lastError: unknown;
   for (let attempt = 0; attempt <= INJECT_MAX_RETRIES; attempt++) {
     if (attempt > 0) {
-      log.info(`retrying synthetic message injection (attempt ${attempt + 1}) for question ${ctx.questionId}`);
+      log.info(
+        `retrying synthetic message injection (attempt ${attempt + 1}) for question ${ctx.questionId}`,
+      );
       await new Promise((r) => setTimeout(r, INJECT_RETRY_DELAY_MS));
     }
 
@@ -454,7 +488,9 @@ async function injectAnswerSyntheticMessage(ctx: QuestionContext, answers: Recor
       // Wait for the task to actually execute (not just enqueue)
       await promise;
       consumePendingQuestion(ctx.questionId);
-      log.info(`synthetic answer message dispatched (${status}) for question ${ctx.questionId}`);
+      log.info(
+        `synthetic answer message dispatched (${status}) for question ${ctx.questionId}`,
+      );
       // Update card to answered state only after synthetic message succeeds.
       // This ensures the card stays submittable for retry if injection fails.
       try {
@@ -465,7 +501,9 @@ async function injectAnswerSyntheticMessage(ctx: QuestionContext, answers: Recor
       return; // success
     } catch (err) {
       lastError = err;
-      log.warn(`synthetic message injection attempt ${attempt + 1} failed: ${err}`);
+      log.warn(
+        `synthetic message injection attempt ${attempt + 1} failed: ${err}`,
+      );
     }
   }
 
@@ -480,7 +518,9 @@ async function injectAnswerSyntheticMessage(ctx: QuestionContext, answers: Recor
   // Revert card from "processing" back to interactive form so user can retry.
   try {
     await updateCardToSubmittable(ctx);
-    log.info(`reverted card to submittable state for question ${ctx.questionId}`);
+    log.info(
+      `reverted card to submittable state for question ${ctx.questionId}`,
+    );
   } catch (err) {
     log.warn(`failed to revert card to submittable state: ${err}`);
   }
@@ -490,21 +530,31 @@ async function injectAnswerSyntheticMessage(ctx: QuestionContext, answers: Recor
 // Form value readers
 // ---------------------------------------------------------------------------
 
-function readFormTextField(formValue: Record<string, unknown>, fieldName: string): string | undefined {
+function readFormTextField(
+  formValue: Record<string, unknown>,
+  fieldName: string,
+): string | undefined {
   const value = formValue[fieldName];
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function readFormMultiSelect(formValue: Record<string, unknown>, fieldName: string): string[] {
+function readFormMultiSelect(
+  formValue: Record<string, unknown>,
+  fieldName: string,
+): string[] {
   const raw = formValue[fieldName];
   if (Array.isArray(raw)) {
-    return raw.filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+    return raw.filter(
+      (v): v is string => typeof v === 'string' && v.trim().length > 0,
+    );
   }
   if (typeof raw === 'string' && raw.trim()) {
     try {
       const parsed = JSON.parse(raw.trim());
       if (Array.isArray(parsed)) {
-        return parsed.filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+        return parsed.filter(
+          (v): v is string => typeof v === 'string' && v.trim().length > 0,
+        );
       }
     } catch {
       // not JSON
@@ -521,7 +571,10 @@ function readFormMultiSelect(formValue: Record<string, unknown>, fieldName: stri
 /**
  * Build a left-right row: label on left, control on right.
  */
-function buildLabeledRow(label: Record<string, unknown>, control: Record<string, unknown>): Record<string, unknown> {
+function buildLabeledRow(
+  label: Record<string, unknown>,
+  control: Record<string, unknown>,
+): Record<string, unknown> {
   return {
     tag: 'column_set',
     flex_mode: 'stretch',
@@ -552,7 +605,10 @@ function buildLabeledRow(label: Record<string, unknown>, control: Record<string,
  * All controls use `name` for form_value collection. No `value` property
  * is set on interactive components — they do not fire individual callbacks.
  */
-function buildQuestionFormElements(q: QuestionItem, questionIndex: number): Record<string, unknown>[] {
+function buildQuestionFormElements(
+  q: QuestionItem,
+  questionIndex: number,
+): Record<string, unknown>[] {
   const elems: Record<string, unknown>[] = [];
   const labelMd = { tag: 'markdown', content: `**${q.header}**` };
 
@@ -614,9 +670,15 @@ function buildQuestionFormElements(q: QuestionItem, questionIndex: number): Reco
   }
 
   // ---- Option descriptions ----
-  const descLines = q.options.filter((opt) => opt.description).map((opt) => `• **${opt.label}**: ${opt.description}`);
+  const descLines = q.options
+    .filter((opt) => opt.description)
+    .map((opt) => `• **${opt.label}**: ${opt.description}`);
   if (descLines.length > 0) {
-    elems.push({ tag: 'markdown', content: descLines.join('\n'), text_size: 'notation' });
+    elems.push({
+      tag: 'markdown',
+      content: descLines.join('\n'),
+      text_size: 'notation',
+    });
   }
 
   return elems;
@@ -628,7 +690,10 @@ function buildQuestionFormElements(q: QuestionItem, questionIndex: number): Reco
  * All elements are wrapped in a single `form` container.
  * Submit button uses `form_action_type: "submit"` to collect all values.
  */
-function buildAskUserCard(questions: QuestionItem[], questionId: string): Record<string, unknown> {
+function buildAskUserCard(
+  questions: QuestionItem[],
+  questionId: string,
+): Record<string, unknown> {
   const formElements: Record<string, unknown>[] = [];
 
   for (let i = 0; i < questions.length; i++) {
@@ -691,7 +756,10 @@ function buildAskUserCard(questions: QuestionItem[], questionId: string): Record
   };
 }
 
-function buildAnsweredCard(questions: QuestionItem[], answers: Record<string, string>): Record<string, unknown> {
+function buildAnsweredCard(
+  questions: QuestionItem[],
+  answers: Record<string, string>,
+): Record<string, unknown> {
   const elements: Record<string, unknown>[] = [];
 
   for (let i = 0; i < questions.length; i++) {
@@ -738,7 +806,10 @@ function buildAnsweredCard(questions: QuestionItem[], answers: Record<string, st
   };
 }
 
-function buildProcessingCard(questions: QuestionItem[], answers: Record<string, string>): Record<string, unknown> {
+function buildProcessingCard(
+  questions: QuestionItem[],
+  answers: Record<string, string>,
+): Record<string, unknown> {
   const elements: Record<string, unknown>[] = [];
 
   for (let i = 0; i < questions.length; i++) {
@@ -800,14 +871,20 @@ function buildExpiredCard(questions: QuestionItem[]): Record<string, unknown> {
       elements.push({ tag: 'hr' });
     }
     elements.push(
-      buildLabeledRow({ tag: 'markdown', content: `**${q.header}**` }, { tag: 'markdown', content: q.question }),
+      buildLabeledRow(
+        { tag: 'markdown', content: `**${q.header}**` },
+        { tag: 'markdown', content: q.question },
+      ),
     );
   }
 
   elements.push({
     tag: 'markdown',
     content: '⏱ 该问题已过期',
-    i18n_content: { zh_cn: '⏱ 该问题已过期', en_us: '⏱ This question has expired' },
+    i18n_content: {
+      zh_cn: '⏱ 该问题已过期',
+      en_us: '⏱ This question has expired',
+    },
     text_size: 'notation',
   });
 
@@ -823,7 +900,10 @@ function buildExpiredCard(questions: QuestionItem[]): Record<string, unknown> {
       subtitle: {
         tag: 'plain_text',
         content: '未在规定时间内回答',
-        i18n_content: { zh_cn: '未在规定时间内回答', en_us: 'No response within time limit' },
+        i18n_content: {
+          zh_cn: '未在规定时间内回答',
+          en_us: 'No response within time limit',
+        },
       },
       text_tag_list: [
         {
@@ -842,7 +922,10 @@ function buildExpiredCard(questions: QuestionItem[]): Record<string, unknown> {
 // Card Update Helpers
 // ---------------------------------------------------------------------------
 
-async function updateCardToAnswered(ctx: QuestionContext, answers: Record<string, string>): Promise<void> {
+async function updateCardToAnswered(
+  ctx: QuestionContext,
+  answers: Record<string, string>,
+): Promise<void> {
   const card = buildAnsweredCard(ctx.questions, answers);
   ctx.cardSequence++;
   await updateCardKitCard({
@@ -886,11 +969,15 @@ const AskUserQuestionSchema = Type.Object({
   questions: Type.Array(
     Type.Object({
       question: Type.String({ description: 'The question to ask the user' }),
-      header: Type.String({ description: 'Short label for the question (max 12 chars)' }),
+      header: Type.String({
+        description: 'Short label for the question (max 12 chars)',
+      }),
       options: Type.Array(
         Type.Object({
           label: Type.String({ description: 'Display text for this option' }),
-          description: Type.String({ description: 'Explanation of what this option means' }),
+          description: Type.String({
+            description: 'Explanation of what this option means',
+          }),
         }),
         {
           description:
@@ -900,7 +987,8 @@ const AskUserQuestionSchema = Type.Object({
         },
       ),
       multiSelect: Type.Boolean({
-        description: 'Whether multiple options can be selected (ignored when options is empty)',
+        description:
+          'Whether multiple options can be selected (ignored when options is empty)',
       }),
     }),
     {
@@ -939,16 +1027,22 @@ export function registerAskUserQuestionTool(api: OpenClawPluginApi): void {
 
       const ticket = getTicket();
       if (!ticket) {
-        return formatToolError('AskUserQuestion can only be used in a Feishu message context');
+        return formatToolError(
+          'AskUserQuestion can only be used in a Feishu message context',
+        );
       }
 
       const { chatId, accountId, senderOpenId, threadId } = ticket;
       if (!senderOpenId) {
-        return formatToolError('Cannot determine the target user (no senderOpenId in ticket)');
+        return formatToolError(
+          'Cannot determine the target user (no senderOpenId in ticket)',
+        );
       }
 
       const questionId = randomUUID();
-      log.info(`creating ask-user-question: id=${questionId}, questions=${questions.length}, chat=${chatId}`);
+      log.info(
+        `creating ask-user-question: id=${questionId}, questions=${questions.length}, chat=${chatId}`,
+      );
 
       // 1. Build and send card
       const card = buildAskUserCard(questions, questionId);
@@ -962,7 +1056,9 @@ export function registerAskUserQuestionTool(api: OpenClawPluginApi): void {
       }
 
       if (!cardId) {
-        return formatToolError('Failed to create question card: no card_id returned');
+        return formatToolError(
+          'Failed to create question card: no card_id returned',
+        );
       }
 
       try {

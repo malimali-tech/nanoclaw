@@ -113,7 +113,9 @@ export function isLikelyAbortText(text: string): boolean {
  * In group chats, bot mention placeholders (`@_user_N`) are stripped so
  * a message like `@Bot stop` is detected as `stop`.
  */
-export function extractRawTextFromEvent(event: FeishuMessageEvent): string | undefined {
+export function extractRawTextFromEvent(
+  event: FeishuMessageEvent,
+): string | undefined {
   if (!event.message || event.message.message_type !== 'text') {
     return undefined;
   }

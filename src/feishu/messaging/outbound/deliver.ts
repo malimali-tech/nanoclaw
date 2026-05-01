@@ -12,7 +12,10 @@ import type { ClawdbotConfig } from 'openclaw/plugin-sdk';
 import type { FeishuSendResult } from '../types';
 import { createAccountScopedConfig } from '../../core/accounts';
 import { LarkClient } from '../../core/lark-client';
-import { normalizeFeishuTarget, resolveReceiveIdType } from '../../core/targets';
+import {
+  normalizeFeishuTarget,
+  resolveReceiveIdType,
+} from '../../core/targets';
 import { parseFeishuCommentTarget } from '../../core/comment-target';
 import { optimizeMarkdownStyle } from '../../card/markdown-style';
 import { formatLarkError } from '../../core/api-error';
@@ -50,14 +53,21 @@ function buildPostContent(text: string): string {
  *   `<at user_id=ou_xxx></at>`   → `<at user_id="ou_xxx"></at>`
  */
 function normalizeAtMentions(text: string): string {
-  return text.replace(/<at\s+(?:id|open_id|user_id)\s*=\s*"?([^">\s]+)"?\s*>/gi, '<at user_id="$1">');
+  return text.replace(
+    /<at\s+(?:id|open_id|user_id)\s*=\s*"?([^">\s]+)"?\s*>/gi,
+    '<at user_id="$1">',
+  );
 }
 
 /**
  * Pre-process text for Lark rendering:
  * mention normalisation + table conversion + style optimization.
  */
-function prepareTextForLark(cfg: ClawdbotConfig, text: string, accountId?: string): string {
+function prepareTextForLark(
+  cfg: ClawdbotConfig,
+  text: string,
+  accountId?: string,
+): string {
   let processed = normalizeAtMentions(text);
 
   // Convert markdown tables to Feishu-compatible format using per-account
@@ -65,12 +75,18 @@ function prepareTextForLark(cfg: ClawdbotConfig, text: string, accountId?: strin
   try {
     const accountScopedCfg = createAccountScopedConfig(cfg, accountId);
     const runtime = LarkClient.runtime;
-    if (runtime?.channel?.text?.convertMarkdownTables && runtime.channel.text.resolveMarkdownTableMode) {
+    if (
+      runtime?.channel?.text?.convertMarkdownTables &&
+      runtime.channel.text.resolveMarkdownTableMode
+    ) {
       const tableMode = runtime.channel.text.resolveMarkdownTableMode({
         cfg: accountScopedCfg,
         channel: 'feishu',
       });
-      processed = runtime.channel.text.convertMarkdownTables(processed, tableMode);
+      processed = runtime.channel.text.convertMarkdownTables(
+        processed,
+        tableMode,
+      );
     }
   } catch {
     // Runtime not available -- use the text as-is.
@@ -92,11 +108,15 @@ async function sendImMessage(params: {
   replyToMessageId?: string;
   replyInThread?: boolean;
 }): Promise<FeishuSendResult> {
-  const { client, to, content, msgType, replyToMessageId, replyInThread } = params;
+  const { client, to, content, msgType, replyToMessageId, replyInThread } =
+    params;
 
   // --- Reply path ---
   if (replyToMessageId) {
-    log.info(`replying to message ${replyToMessageId} ` + `(msg_type=${msgType}, thread=${replyInThread ?? false})`);
+    log.info(
+      `replying to message ${replyToMessageId} ` +
+        `(msg_type=${msgType}, thread=${replyInThread ?? false})`,
+    );
     const response = await client.im.message.reply({
       path: { message_id: replyToMessageId },
       data: { content, msg_type: msgType, reply_in_thread: replyInThread },
@@ -114,7 +134,8 @@ async function sendImMessage(params: {
   const target = normalizeFeishuTarget(to);
   if (!target) {
     throw new Error(
-      `Cannot send message: "${to}" is not a valid target. ` + `Expected a chat_id (oc_*), open_id (ou_*), or user_id.`,
+      `Cannot send message: "${to}" is not a valid target. ` +
+        `Expected a chat_id (oc_*), open_id (ou_*), or user_id.`,
     );
   }
 
@@ -164,7 +185,10 @@ function detectCardJson(text: string): Record<string, unknown> | undefined {
     if (obj.schema === '2.0') return obj;
 
     // v1 Message Card — must have elements[] AND (config OR header)
-    if (Array.isArray(obj.elements) && (obj.config !== undefined || obj.header !== undefined)) {
+    if (
+      Array.isArray(obj.elements) &&
+      (obj.config !== undefined || obj.header !== undefined)
+    ) {
       return obj;
     }
 
@@ -239,15 +263,26 @@ export interface SendTextLarkParams {
  * });
  * ```
  */
-export async function sendTextLark(params: SendTextLarkParams): Promise<FeishuSendResult> {
+export async function sendTextLark(
+  params: SendTextLarkParams,
+): Promise<FeishuSendResult> {
   const { cfg, to, text, replyToMessageId, replyInThread, accountId } = params;
 
   // Detect card JSON in text — route to card sending before text preprocessing.
   const card = detectCardJson(text);
   if (card) {
     const version = card.schema === '2.0' ? 'v2' : 'v1';
-    log.info(`detected ${version} card JSON in text (target=${to}), routing to sendCardLark`);
-    return sendCardLark({ cfg, to, card, replyToMessageId, replyInThread, accountId });
+    log.info(
+      `detected ${version} card JSON in text (target=${to}), routing to sendCardLark`,
+    );
+    return sendCardLark({
+      cfg,
+      to,
+      card,
+      replyToMessageId,
+      replyInThread,
+      accountId,
+    });
   }
 
   log.info(`sendTextLark: target=${to}, textLength=${text.length}`);
@@ -255,7 +290,14 @@ export async function sendTextLark(params: SendTextLarkParams): Promise<FeishuSe
   const processedText = prepareTextForLark(cfg, text, accountId);
   const content = buildPostContent(processedText);
 
-  return sendImMessage({ client, to, content, msgType: 'post', replyToMessageId, replyInThread });
+  return sendImMessage({
+    client,
+    to,
+    content,
+    msgType: 'post',
+    replyToMessageId,
+    replyInThread,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +365,9 @@ export interface SendCardLarkParams {
  * });
  * ```
  */
-export async function sendCardLark(params: SendCardLarkParams): Promise<FeishuSendResult> {
+export async function sendCardLark(
+  params: SendCardLarkParams,
+): Promise<FeishuSendResult> {
   const { cfg, to, card, replyToMessageId, replyInThread, accountId } = params;
 
   const version = card.schema === '2.0' ? 'v2' : 'v1';
@@ -333,7 +377,14 @@ export async function sendCardLark(params: SendCardLarkParams): Promise<FeishuSe
   const content = JSON.stringify(card);
 
   try {
-    return await sendImMessage({ client, to, content, msgType: 'interactive', replyToMessageId, replyInThread });
+    return await sendImMessage({
+      client,
+      to,
+      content,
+      msgType: 'interactive',
+      replyToMessageId,
+      replyInThread,
+    });
   } catch (err) {
     const detail = formatLarkError(err);
     log.error(`sendCardLark failed: ${detail}`);
@@ -397,8 +448,18 @@ export interface SendMediaLarkParams {
  * });
  * ```
  */
-export async function sendMediaLark(params: SendMediaLarkParams): Promise<FeishuSendResult> {
-  const { cfg, to, mediaUrl, replyToMessageId, replyInThread, accountId, mediaLocalRoots } = params;
+export async function sendMediaLark(
+  params: SendMediaLarkParams,
+): Promise<FeishuSendResult> {
+  const {
+    cfg,
+    to,
+    mediaUrl,
+    replyToMessageId,
+    replyInThread,
+    accountId,
+    mediaLocalRoots,
+  } = params;
 
   log.info(`sendMediaLark: target=${to}, mediaUrl=${mediaUrl}`);
 
@@ -471,7 +532,9 @@ export interface SendCommentReplyLarkParams {
  *
  * @throws {Error} When the target is not a valid comment target or API fails.
  */
-export async function sendCommentReplyLark(params: SendCommentReplyLarkParams): Promise<FeishuSendResult> {
+export async function sendCommentReplyLark(
+  params: SendCommentReplyLarkParams,
+): Promise<FeishuSendResult> {
   const { cfg, to, text, accountId } = params;
 
   const target = parseFeishuCommentTarget(to);
@@ -514,7 +577,9 @@ export async function sendCommentReplyLark(params: SendCommentReplyLarkParams): 
       };
     } catch (err) {
       const detail = formatLarkError(err);
-      log.error(`sendCommentReplyLark failed to create whole comment: ${detail}`);
+      log.error(
+        `sendCommentReplyLark failed to create whole comment: ${detail}`,
+      );
       throw new Error(`Comment create failed: ${detail}`, { cause: err });
     }
   }

@@ -39,7 +39,9 @@ export const DEFAULT_FOOTER_CONFIG: Required<FeishuFooterConfig> = {
  * Fields present in the input take precedence; anything absent falls back
  * to the default value.
  */
-export function resolveFooterConfig(cfg?: FeishuFooterConfig): Required<FeishuFooterConfig> {
+export function resolveFooterConfig(
+  cfg?: FeishuFooterConfig,
+): Required<FeishuFooterConfig> {
   if (!cfg) return { ...DEFAULT_FOOTER_CONFIG };
   return {
     status: cfg.status ?? DEFAULT_FOOTER_CONFIG.status,

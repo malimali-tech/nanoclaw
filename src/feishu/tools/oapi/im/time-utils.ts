@@ -62,7 +62,9 @@ export function millisStringToDateTime(millis: string): string {
 export function dateTimeToSeconds(datetime: string): number {
   const d = new Date(datetime);
   if (isNaN(d.getTime())) {
-    throw new Error(`无法解析 ISO 8601 时间: "${datetime}"。格式示例: 2026-02-27T14:30:00+08:00`);
+    throw new Error(
+      `无法解析 ISO 8601 时间: "${datetime}"。格式示例: 2026-02-27T14:30:00+08:00`,
+    );
   }
   return Math.floor(d.getTime() / 1000);
 }
@@ -76,7 +78,9 @@ export function dateTimeToSecondsString(datetime: string): string {
 export function dateTimeToMillis(datetime: string): number {
   const d = new Date(datetime);
   if (isNaN(d.getTime())) {
-    throw new Error(`无法解析 ISO 8601 时间: "${datetime}"。格式示例: 2026-02-27T14:30:00+08:00`);
+    throw new Error(
+      `无法解析 ISO 8601 时间: "${datetime}"。格式示例: 2026-02-27T14:30:00+08:00`,
+    );
   }
   return d.getTime();
 }
@@ -155,18 +159,26 @@ export function parseTimeRange(input: string): TimeRange {
     }
 
     case 'this_month': {
-      const firstDay = new Date(Date.UTC(bjNow.getUTCFullYear(), bjNow.getUTCMonth(), 1));
+      const firstDay = new Date(
+        Date.UTC(bjNow.getUTCFullYear(), bjNow.getUTCMonth(), 1),
+      );
       start = beijingStartOfDay(firstDay);
       end = now;
       break;
     }
 
     case 'last_month': {
-      const firstDayThisMonth = new Date(Date.UTC(bjNow.getUTCFullYear(), bjNow.getUTCMonth(), 1));
+      const firstDayThisMonth = new Date(
+        Date.UTC(bjNow.getUTCFullYear(), bjNow.getUTCMonth(), 1),
+      );
       const lastDayPrevMonth = new Date(firstDayThisMonth);
       lastDayPrevMonth.setUTCDate(lastDayPrevMonth.getUTCDate() - 1);
       const firstDayPrevMonth = new Date(
-        Date.UTC(lastDayPrevMonth.getUTCFullYear(), lastDayPrevMonth.getUTCMonth(), 1),
+        Date.UTC(
+          lastDayPrevMonth.getUTCFullYear(),
+          lastDayPrevMonth.getUTCMonth(),
+          1,
+        ),
       );
       start = beijingStartOfDay(firstDayPrevMonth);
       end = beijingEndOfDay(lastDayPrevMonth);
@@ -199,7 +211,10 @@ export function parseTimeRange(input: string): TimeRange {
 /**
  * 解析时间范围标识，返回 Unix 秒字符串对（供 SDK 调用）。
  */
-export function parseTimeRangeToSeconds(input: string): { start: string; end: string } {
+export function parseTimeRangeToSeconds(input: string): {
+  start: string;
+  end: string;
+} {
   const range = parseTimeRange(input);
   return {
     start: dateTimeToSecondsString(range.start),
@@ -218,13 +233,26 @@ function toBeijingDate(d: Date): Date {
 
 /** 北京时间当天 00:00:00 对应的真实 UTC Date */
 function beijingStartOfDay(bjDate: Date): Date {
-  return new Date(Date.UTC(bjDate.getUTCFullYear(), bjDate.getUTCMonth(), bjDate.getUTCDate()) - BJ_OFFSET_MS);
+  return new Date(
+    Date.UTC(
+      bjDate.getUTCFullYear(),
+      bjDate.getUTCMonth(),
+      bjDate.getUTCDate(),
+    ) - BJ_OFFSET_MS,
+  );
 }
 
 /** 北京时间当天 23:59:59 对应的真实 UTC Date */
 function beijingEndOfDay(bjDate: Date): Date {
   return new Date(
-    Date.UTC(bjDate.getUTCFullYear(), bjDate.getUTCMonth(), bjDate.getUTCDate(), 23, 59, 59) - BJ_OFFSET_MS,
+    Date.UTC(
+      bjDate.getUTCFullYear(),
+      bjDate.getUTCMonth(),
+      bjDate.getUTCDate(),
+      23,
+      59,
+      59,
+    ) - BJ_OFFSET_MS,
   );
 }
 

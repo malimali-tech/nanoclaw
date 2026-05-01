@@ -12,7 +12,14 @@
 
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
-import { assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json, parseTimeToRFC3339 , registerTool } from '../helpers';
+import {
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  parseTimeToRFC3339,
+  registerTool,
+} from '../helpers';
 import type { FreebusyData } from '../sdk-types';
 
 // ---------------------------------------------------------------------------
@@ -22,10 +29,12 @@ import type { FreebusyData } from '../sdk-types';
 const FeishuCalendarFreebusySchema = Type.Object({
   action: Type.Literal('list'),
   time_min: Type.String({
-    description: "查询起始时间（ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'）",
+    description:
+      "查询起始时间（ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'）",
   }),
   time_max: Type.String({
-    description: "查询结束时间（ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'）",
+    description:
+      "查询结束时间（ISO 8601 / RFC 3339 格式（包含时区），例如 '2024-01-01T00:00:00+08:00'）",
   }),
   user_ids: Type.Array(
     Type.String({
@@ -54,11 +63,16 @@ interface FeishuCalendarFreebusyParams {
 // Registration
 // ---------------------------------------------------------------------------
 
-export function registerFeishuCalendarFreebusyTool(api: OpenClawPluginApi): void {
+export function registerFeishuCalendarFreebusyTool(
+  api: OpenClawPluginApi,
+): void {
   if (!api.config) return;
   const cfg = api.config;
 
-  const { toolClient, log } = createToolContext(api, 'feishu_calendar_freebusy');
+  const { toolClient, log } = createToolContext(
+    api,
+    'feishu_calendar_freebusy',
+  );
 
   registerTool(
     api,
@@ -96,14 +110,18 @@ export function registerFeishuCalendarFreebusyTool(api: OpenClawPluginApi): void
             });
           }
 
-          log.info(`[FREEBUSY] Validation passed, user_ids count: ${p.user_ids.length}`);
+          log.info(
+            `[FREEBUSY] Validation passed, user_ids count: ${p.user_ids.length}`,
+          );
 
           // Convert time strings to RFC 3339 format (required by freebusy API)
           const timeMin = parseTimeToRFC3339(p.time_min);
           const timeMax = parseTimeToRFC3339(p.time_max);
 
           if (!timeMin || !timeMax) {
-            log.warn(`[FREEBUSY] Time format error: time_min=${p.time_min}, time_max=${p.time_max}`);
+            log.warn(
+              `[FREEBUSY] Time format error: time_min=${p.time_min}, time_max=${p.time_max}`,
+            );
             return json({
               error:
                 "Invalid time format. Must use ISO 8601 / RFC 3339 with timezone, e.g. '2024-01-01T00:00:00+08:00' or '2026-02-25 14:00:00'.",
@@ -138,7 +156,9 @@ export function registerFeishuCalendarFreebusyTool(api: OpenClawPluginApi): void
 
           const data = res.data as FreebusyData | undefined;
           const freebusyLists = data?.freebusy_lists ?? [];
-          log.info(`[FREEBUSY] Success: returned ${freebusyLists.length} user(s) freebusy data`);
+          log.info(
+            `[FREEBUSY] Success: returned ${freebusyLists.length} user(s) freebusy data`,
+          );
 
           return json({
             freebusy_lists: freebusyLists,
@@ -157,5 +177,4 @@ export function registerFeishuCalendarFreebusyTool(api: OpenClawPluginApi): void
     },
     { name: 'feishu_calendar_freebusy' },
   );
-
 }

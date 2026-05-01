@@ -24,7 +24,11 @@ interface DiagLogger {
 import type * as Lark from '@larksuiteoapi/node-sdk';
 
 import { probeFeishu } from '../channel/probe';
-import { getEnabledLarkAccounts, getLarkAccount, getLarkAccountIds } from '../core/accounts';
+import {
+  getEnabledLarkAccounts,
+  getLarkAccount,
+  getLarkAccountIds,
+} from '../core/accounts';
 import { LarkClient } from '../core/lark-client';
 
 /**
@@ -115,7 +119,9 @@ async function extractRecentErrors(logPath: string): Promise<string[]> {
       const lines = content.split('\n').filter(Boolean);
       // Only pick timestamped log entries at error/warn level,
       // ignoring stack trace fragments and other noise.
-      const errorLines = lines.filter((line) => TIMESTAMPED_LINE_RE.test(line) && ERROR_LEVEL_RE.test(line));
+      const errorLines = lines.filter(
+        (line) => TIMESTAMPED_LINE_RE.test(line) && ERROR_LEVEL_RE.test(line),
+      );
       return errorLines.slice(-MAX_ERROR_LINES);
     } finally {
       await fd.close();
@@ -125,14 +131,20 @@ async function extractRecentErrors(logPath: string): Promise<string[]> {
   }
 }
 
-async function checkAppScopes(client: Lark.Client): Promise<{ granted: number; pending: number; summary: string }> {
+async function checkAppScopes(
+  client: Lark.Client,
+): Promise<{ granted: number; pending: number; summary: string }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const res = await (client as any).application.scope.list({});
   assertLarkOk(res);
 
   const scopes = res.data?.scopes ?? [];
-  const granted = scopes.filter((s: { grant_status?: number }) => s.grant_status === 1);
-  const pending = scopes.filter((s: { grant_status?: number }) => s.grant_status !== 1);
+  const granted = scopes.filter(
+    (s: { grant_status?: number }) => s.grant_status === 1,
+  );
+  const pending = scopes.filter(
+    (s: { grant_status?: number }) => s.grant_status !== 1,
+  );
 
   return {
     granted: granted.length,
@@ -167,7 +179,9 @@ function detectRegisteredTools(config: OpenClawConfig): string[] {
   return tools;
 }
 
-async function diagnoseAccount(account: LarkAccount): Promise<AccountDiagResult> {
+async function diagnoseAccount(
+  account: LarkAccount,
+): Promise<AccountDiagResult> {
   const checks: DiagCheckResult[] = [];
   const result: AccountDiagResult = {
     accountId: account.accountId,
@@ -224,7 +238,9 @@ async function diagnoseAccount(account: LarkAccount): Promise<AccountDiagResult>
       checks.push({
         name: 'Bot 信息',
         status: probeResult.botName ? 'pass' : 'warn',
-        message: probeResult.botName ? `${probeResult.botName} (${probeResult.botOpenId})` : '未获取到 Bot 名称',
+        message: probeResult.botName
+          ? `${probeResult.botName} (${probeResult.botOpenId})`
+          : '未获取到 Bot 名称',
       });
     }
   } catch (err) {
@@ -244,7 +260,10 @@ async function diagnoseAccount(account: LarkAccount): Promise<AccountDiagResult>
       name: '应用权限',
       status: scopesResult.pending > 0 ? 'warn' : 'pass',
       message: scopesResult.summary,
-      details: scopesResult.pending > 0 ? '存在未授权的权限，可能影响部分功能' : undefined,
+      details:
+        scopesResult.pending > 0
+          ? '存在未授权的权限，可能影响部分功能'
+          : undefined,
     });
   } catch (err) {
     checks.push({
@@ -268,7 +287,10 @@ async function diagnoseAccount(account: LarkAccount): Promise<AccountDiagResult>
 // Core
 // ---------------------------------------------------------------------------
 
-export async function runDiagnosis(params: { config: OpenClawConfig; logger?: DiagLogger }): Promise<DiagReport> {
+export async function runDiagnosis(params: {
+  config: OpenClawConfig;
+  logger?: DiagLogger;
+}): Promise<DiagReport> {
   const { config } = params;
   // Use the global config to enumerate all accounts — the passed-in
   // config may be account-scoped (accounts map stripped).
@@ -323,11 +345,17 @@ export async function runDiagnosis(params: { config: OpenClawConfig; logger?: Di
   globalChecks.push({
     name: '最近错误日志',
     status: recentErrors.length > 0 ? 'warn' : 'pass',
-    message: recentErrors.length > 0 ? `发现 ${recentErrors.length} 条错误` : '无最近错误',
+    message:
+      recentErrors.length > 0
+        ? `发现 ${recentErrors.length} 条错误`
+        : '无最近错误',
   });
 
   // -- Overall status --
-  const allChecks = [...globalChecks, ...accountResults.flatMap((a) => a.checks)];
+  const allChecks = [
+    ...globalChecks,
+    ...accountResults.flatMap((a) => a.checks),
+  ];
   const hasFail = allChecks.some((c) => c.status === 'fail');
   const hasWarn = allChecks.some((c) => c.status === 'warn');
 
@@ -380,7 +408,9 @@ export function formatDiagReportText(report: DiagReport): string {
   lines.push('【环境信息】');
   lines.push(`  Node.js:     ${report.environment.nodeVersion}`);
   lines.push(`  插件版本:    ${report.environment.pluginVersion}`);
-  lines.push(`  系统:        ${report.environment.platform} ${report.environment.arch}`);
+  lines.push(
+    `  系统:        ${report.environment.platform} ${report.environment.arch}`,
+  );
   lines.push('');
 
   // Global checks
@@ -614,10 +644,30 @@ const EXPECTED_STAGES: { kind: EventKind; label: string }[] = [
 ];
 
 /** Time gap thresholds (ms) for performance warnings. */
-const PERF_THRESHOLDS: { from: EventKind; to: EventKind; warnMs: number; label: string }[] = [
-  { from: 'received', to: 'dispatching', warnMs: 500, label: '消息接收 → 分发' },
-  { from: 'dispatching', to: 'card_created', warnMs: 5000, label: '分发 → 卡片创建' },
-  { from: 'card_created', to: 'card_stream', warnMs: 30000, label: '卡片创建 → 首次流式输出' },
+const PERF_THRESHOLDS: {
+  from: EventKind;
+  to: EventKind;
+  warnMs: number;
+  label: string;
+}[] = [
+  {
+    from: 'received',
+    to: 'dispatching',
+    warnMs: 500,
+    label: '消息接收 → 分发',
+  },
+  {
+    from: 'dispatching',
+    to: 'card_created',
+    warnMs: 5000,
+    label: '分发 → 卡片创建',
+  },
+  {
+    from: 'card_created',
+    to: 'card_stream',
+    warnMs: 30000,
+    label: '卡片创建 → 首次流式输出',
+  },
 ];
 
 function parseTraceLines(lines: string[]): TraceEvent[] {
@@ -649,7 +699,9 @@ export function analyzeTrace(lines: string[], _messageId: string): string {
 
   // ── Section 1: Timeline ──
   out.push('');
-  out.push(`${ANSI.bold}【时间线】${ANSI.reset} (${events.length} 条日志，跨度 ${(totalMs / 1000).toFixed(1)}s)`);
+  out.push(
+    `${ANSI.bold}【时间线】${ANSI.reset} (${events.length} 条日志，跨度 ${(totalMs / 1000).toFixed(1)}s)`,
+  );
   out.push(sep);
 
   let prevMs = startTime;
@@ -688,7 +740,10 @@ export function analyzeTrace(lines: string[], _messageId: string): string {
     flushStream();
 
     const label = EVENT_LABEL[kind] ?? kind;
-    const gapWarn = deltaMs > 5000 ? ` ${ANSI.yellow}⚠ ${(deltaMs / 1000).toFixed(1)}s${ANSI.reset}` : '';
+    const gapWarn =
+      deltaMs > 5000
+        ? ` ${ANSI.yellow}⚠ ${(deltaMs / 1000).toFixed(1)}s${ANSI.reset}`
+        : '';
 
     // Marker for errors
     let marker = '  ';
@@ -730,7 +785,9 @@ export function analyzeTrace(lines: string[], _messageId: string): string {
       detail = ev.body.replace('rejected: ', '');
     }
 
-    out.push(`${ANSI.gray}[${offsetStr}]${ANSI.reset} ${marker}${label}${detail ? ` — ${detail}` : ''}${gapWarn}`);
+    out.push(
+      `${ANSI.gray}[${offsetStr}]${ANSI.reset} ${marker}${label}${detail ? ` — ${detail}` : ''}${gapWarn}`,
+    );
   }
   flushStream();
   out.push('');
@@ -743,11 +800,17 @@ export function analyzeTrace(lines: string[], _messageId: string): string {
   for (const stage of EXPECTED_STAGES) {
     if (!kindSet.has(stage.kind)) {
       // dispatch_complete 和 reply_completed 缺失仅在有 dispatching 时才告警
-      if ((stage.kind === 'dispatch_complete' || stage.kind === 'reply_completed') && !kindSet.has('dispatching'))
+      if (
+        (stage.kind === 'dispatch_complete' ||
+          stage.kind === 'reply_completed') &&
+        !kindSet.has('dispatching')
+      )
         continue;
       // card 相关阶段在有 rejected 时不告警
       if (
-        (stage.kind === 'card_created' || stage.kind === 'card_sent' || stage.kind === 'card_stream') &&
+        (stage.kind === 'card_created' ||
+          stage.kind === 'card_sent' ||
+          stage.kind === 'card_stream') &&
         kindSet.has('rejected')
       )
         continue;
@@ -758,14 +821,20 @@ export function analyzeTrace(lines: string[], _messageId: string): string {
   // 2.2 Errors
   for (const ev of events) {
     const kind = classifyEvent(ev.body);
-    if (kind === 'rejected') issues.push(`消息被拒绝: ${ev.body.replace('rejected: ', '')}`);
+    if (kind === 'rejected')
+      issues.push(`消息被拒绝: ${ev.body.replace('rejected: ', '')}`);
     if (kind === 'reply_error') issues.push(`回复错误: ${ev.body}`);
     if (kind === 'tool_fail') issues.push(`工具失败: ${ev.body}`);
     if (kind === 'card_stream_fail') issues.push(`流式更新失败: ${ev.body}`);
     if (kind === 'card_fallback') issues.push(`卡片降级: ${ev.body}`);
 
     // CardKit non-zero code
-    if (kind === 'card_stream' || kind === 'card_update' || kind === 'card_settings' || kind === 'card_created') {
+    if (
+      kind === 'card_stream' ||
+      kind === 'card_update' ||
+      kind === 'card_settings' ||
+      kind === 'card_created'
+    ) {
       const codeMatch = ev.body.match(/code=(\d+)/);
       if (codeMatch && codeMatch[1] !== '0') {
         issues.push(`API 返回错误码: code=${codeMatch[1]} — ${ev.body}`);
@@ -793,9 +862,13 @@ export function analyzeTrace(lines: string[], _messageId: string): string {
   }
 
   // 2.4 Duplicate delivery
-  const receivedCount = events.filter((e) => classifyEvent(e.body) === 'received').length;
+  const receivedCount = events.filter(
+    (e) => classifyEvent(e.body) === 'received',
+  ).length;
   if (receivedCount > 1) {
-    issues.push(`重复投递: 同一消息被接收 ${receivedCount} 次（WebSocket 重投递）`);
+    issues.push(
+      `重复投递: 同一消息被接收 ${receivedCount} 次（WebSocket 重投递）`,
+    );
   }
 
   // 2.5 Card stream continuity
@@ -855,12 +928,16 @@ export function analyzeTrace(lines: string[], _messageId: string): string {
     // Break down time
     const dispatchComplete = events.find(
       (e) =>
-        classifyEvent(e.body) === 'dispatch_complete' && e.body.includes('replies=') && !e.body.includes('replies=0'),
+        classifyEvent(e.body) === 'dispatch_complete' &&
+        e.body.includes('replies=') &&
+        !e.body.includes('replies=0'),
     );
     if (dispatchComplete) {
       const m = dispatchComplete.body.match(/elapsed=(\d+)ms/);
       if (m) {
-        out.push(`  其中 Agent 处理耗时 ${(parseInt(m[1], 10) / 1000).toFixed(1)}s（含 AI 推理 + 工具调用）。`);
+        out.push(
+          `  其中 Agent 处理耗时 ${(parseInt(m[1], 10) / 1000).toFixed(1)}s（含 AI 推理 + 工具调用）。`,
+        );
       }
     }
   } else if (hasError) {
@@ -889,7 +966,9 @@ export function formatDiagReportCli(report: DiagReport): string {
   lines.push(`${ANSI.bold}【环境信息】${ANSI.reset}`);
   lines.push(`  Node.js:     ${report.environment.nodeVersion}`);
   lines.push(`  插件版本:    ${report.environment.pluginVersion}`);
-  lines.push(`  系统:        ${report.environment.platform} ${report.environment.arch}`);
+  lines.push(
+    `  系统:        ${report.environment.platform} ${report.environment.arch}`,
+  );
   lines.push('');
 
   // Global checks
@@ -924,9 +1003,13 @@ export function formatDiagReportCli(report: DiagReport): string {
 
   // Recent errors
   if (report.recentErrors.length > 0) {
-    lines.push(`${ANSI.bold}【最近错误】${ANSI.reset}(${report.recentErrors.length} 条)`);
+    lines.push(
+      `${ANSI.bold}【最近错误】${ANSI.reset}(${report.recentErrors.length} 条)`,
+    );
     for (let i = 0; i < report.recentErrors.length; i++) {
-      lines.push(`  ${ANSI.gray}${i + 1}. ${report.recentErrors[i]}${ANSI.reset}`);
+      lines.push(
+        `  ${ANSI.gray}${i + 1}. ${report.recentErrors[i]}${ANSI.reset}`,
+      );
     }
     lines.push('');
   }

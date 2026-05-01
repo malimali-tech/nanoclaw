@@ -209,7 +209,10 @@ export const TOOL_SCOPES: ToolScopeMapping = {
   'feishu_bitable_app_table_record.list': ['base:record:retrieve'],
   'feishu_bitable_app_table_field.create': ['base:field:create'],
   'feishu_bitable_app_table_field.list': ['base:field:read'],
-  'feishu_bitable_app_table_field.update': ['base:field:read', 'base:field:update'],
+  'feishu_bitable_app_table_field.update': [
+    'base:field:read',
+    'base:field:update',
+  ],
   'feishu_bitable_app_table_field.delete': ['base:field:delete'],
   'feishu_bitable_app_table_view.create': ['base:view:write_only'],
   'feishu_bitable_app_table_view.get': ['base:view:read'],
@@ -218,7 +221,10 @@ export const TOOL_SCOPES: ToolScopeMapping = {
   'feishu_calendar_calendar.list': ['calendar:calendar:read'],
   'feishu_calendar_calendar.get': ['calendar:calendar:read'],
   'feishu_calendar_calendar.primary': ['calendar:calendar:read'],
-  'feishu_calendar_event.create': ['calendar:calendar.event:create', 'calendar:calendar.event:update'],
+  'feishu_calendar_event.create': [
+    'calendar:calendar.event:create',
+    'calendar:calendar.event:update',
+  ],
   'feishu_calendar_event.list': ['calendar:calendar.event:read'],
   'feishu_calendar_event.get': ['calendar:calendar.event:read'],
   'feishu_calendar_event.patch': ['calendar:calendar.event:update'],
@@ -261,12 +267,27 @@ export const TOOL_SCOPES: ToolScopeMapping = {
   'feishu_drive_file.delete': ['space:document:delete'],
   'feishu_drive_file.upload': ['drive:file:upload'],
   'feishu_drive_file.download': ['drive:file:download'],
-  'feishu_doc_media.download': ['board:whiteboard:node:read', 'docs:document.media:download'],
-  'feishu_doc_media.insert': ['docx:document:write_only', 'docs:document.media:upload'],
+  'feishu_doc_media.download': [
+    'board:whiteboard:node:read',
+    'docs:document.media:download',
+  ],
+  'feishu_doc_media.insert': [
+    'docx:document:write_only',
+    'docs:document.media:upload',
+  ],
   'feishu_doc_comments.list': ['wiki:node:read', 'docs:document.comment:read'],
-  'feishu_doc_comments.list_replies': ['wiki:node:read', 'docs:document.comment:read'],
-  'feishu_doc_comments.create': ['wiki:node:read', 'docs:document.comment:create'],
-  'feishu_doc_comments.reply': ['wiki:node:read', 'docs:document.comment:create'],
+  'feishu_doc_comments.list_replies': [
+    'wiki:node:read',
+    'docs:document.comment:read',
+  ],
+  'feishu_doc_comments.create': [
+    'wiki:node:read',
+    'docs:document.comment:create',
+  ],
+  'feishu_doc_comments.reply': [
+    'wiki:node:read',
+    'docs:document.comment:create',
+  ],
   'feishu_doc_comments.patch': ['docs:document.comment:update'],
   'feishu_wiki_space.list': ['wiki:space:retrieve'],
   'feishu_wiki_space.get': ['wiki:space:read'],
@@ -302,7 +323,10 @@ export const TOOL_SCOPES: ToolScopeMapping = {
   ],
   'feishu_search_doc_wiki.search': ['search:docs:read'],
   'feishu_get_user.basic_batch': ['contact:user.basic_profile:readonly'],
-  'feishu_get_user.default': ['contact:contact.base:readonly', 'contact:user.base:readonly'],
+  'feishu_get_user.default': [
+    'contact:contact.base:readonly',
+    'contact:user.base:readonly',
+  ],
   'feishu_search_user.default': ['contact:user:search'],
   'feishu_create_doc.default': [
     'board:whiteboard:node:create',
@@ -320,8 +344,14 @@ export const TOOL_SCOPES: ToolScopeMapping = {
     'docx:document:readonly',
     'docx:document:write_only',
   ],
-  'feishu_sheet.info': ['sheets:spreadsheet.meta:read', 'sheets:spreadsheet:read'],
-  'feishu_sheet.read': ['sheets:spreadsheet.meta:read', 'sheets:spreadsheet:read'],
+  'feishu_sheet.info': [
+    'sheets:spreadsheet.meta:read',
+    'sheets:spreadsheet:read',
+  ],
+  'feishu_sheet.read': [
+    'sheets:spreadsheet.meta:read',
+    'sheets:spreadsheet:read',
+  ],
   'feishu_sheet.write': [
     'sheets:spreadsheet.meta:read',
     'sheets:spreadsheet:read',
@@ -334,7 +364,10 @@ export const TOOL_SCOPES: ToolScopeMapping = {
     'sheets:spreadsheet:create',
     'sheets:spreadsheet:write_only',
   ],
-  'feishu_sheet.find': ['sheets:spreadsheet.meta:read', 'sheets:spreadsheet:read'],
+  'feishu_sheet.find': [
+    'sheets:spreadsheet.meta:read',
+    'sheets:spreadsheet:read',
+  ],
   'feishu_sheet.create': [
     'sheets:spreadsheet.meta:read',
     'sheets:spreadsheet:read',

@@ -17,7 +17,13 @@ import * as path from 'node:path';
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { buildRandomTempFilePath } from 'openclaw/plugin-sdk/temp-path';
 import { Type } from '@sinclair/typebox';
-import { StringEnum, createToolContext, formatLarkError, json, registerTool } from '../../oapi/helpers';
+import {
+  StringEnum,
+  createToolContext,
+  formatLarkError,
+  json,
+  registerTool,
+} from '../../oapi/helpers';
 
 // ===========================================================================
 // Shared constants
@@ -44,11 +50,13 @@ const MIME_TO_EXT: Record<string, string> = {
   'audio/mp4': '.m4a',
   'application/pdf': '.pdf',
   'application/msword': '.doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    '.docx',
   'application/vnd.ms-excel': '.xls',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
   'application/vnd.ms-powerpoint': '.ppt',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+    '.pptx',
   'application/zip': '.zip',
   'application/x-rar-compressed': '.rar',
   'text/plain': '.txt',
@@ -91,7 +99,11 @@ async function extractBuffer(res: any): Promise<{
 /**
  * 将 buffer 保存到临时文件，返回路径。
  */
-async function saveToTempFile(buffer: Buffer, contentType: string, prefix: string): Promise<string> {
+async function saveToTempFile(
+  buffer: Buffer,
+  contentType: string,
+  prefix: string,
+): Promise<string> {
   const mimeType = contentType ? contentType.split(';')[0].trim() : '';
   const mimeExt = mimeType ? MIME_TO_EXT[mimeType] : undefined;
 
@@ -111,13 +123,16 @@ async function saveToTempFile(buffer: Buffer, contentType: string, prefix: strin
 
 const FeishuImBotImageSchema = Type.Object({
   message_id: Type.String({
-    description: '消息 ID（om_xxx 格式），引用消息可从上下文中的 [message_id=om_xxx] 提取',
+    description:
+      '消息 ID（om_xxx 格式），引用消息可从上下文中的 [message_id=om_xxx] 提取',
   }),
   file_key: Type.String({
-    description: '资源 Key，图片消息的 image_key（img_xxx）或文件消息的 file_key（file_xxx）',
+    description:
+      '资源 Key，图片消息的 image_key（img_xxx）或文件消息的 file_key（file_xxx）',
   }),
   type: StringEnum(['image', 'file'], {
-    description: '资源类型：image（图片消息中的图片）、file（文件/音频/视频消息中的文件）',
+    description:
+      '资源类型：image（图片消息中的图片）、file（文件/音频/视频消息中的文件）',
   }),
 });
 
@@ -150,7 +165,9 @@ export function registerFeishuImBotImageTool(api: OpenClawPluginApi): boolean {
         try {
           const client = getClient();
 
-          log.info(`download: message_id="${p.message_id}", file_key="${p.file_key}", type="${p.type}"`);
+          log.info(
+            `download: message_id="${p.message_id}", file_key="${p.file_key}", type="${p.type}"`,
+          );
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const res: any = await client.im.messageResource.get({
@@ -162,9 +179,15 @@ export function registerFeishuImBotImageTool(api: OpenClawPluginApi): boolean {
           });
 
           const { buffer, contentType } = await extractBuffer(res);
-          log.info(`download: ${buffer.length} bytes, content-type=${contentType}`);
+          log.info(
+            `download: ${buffer.length} bytes, content-type=${contentType}`,
+          );
 
-          const savedPath = await saveToTempFile(buffer, contentType, 'bot-resource');
+          const savedPath = await saveToTempFile(
+            buffer,
+            contentType,
+            'bot-resource',
+          );
           log.info(`download: saved to ${savedPath}`);
 
           return json({

@@ -38,8 +38,12 @@ export interface DispatchContext {
   feishuFrom: string;
   feishuTo: string;
   envelopeFrom: string;
-  envelopeOptions: ReturnType<typeof LarkClient.runtime.channel.reply.resolveEnvelopeFormatOptions>;
-  route: ReturnType<typeof LarkClient.runtime.channel.routing.resolveAgentRoute>;
+  envelopeOptions: ReturnType<
+    typeof LarkClient.runtime.channel.reply.resolveEnvelopeFormatOptions
+  >;
+  route: ReturnType<
+    typeof LarkClient.runtime.channel.routing.resolveAgentRoute
+  >;
   threadSessionKey?: string;
   commandAuthorized?: boolean;
 }
@@ -97,7 +101,8 @@ export function buildDispatchContext(params: {
 
   const envelopeFrom = isGroup ? `${ctx.chatId}:${ctx.senderId}` : ctx.senderId;
 
-  const envelopeOptions = core.channel.reply.resolveEnvelopeFormatOptions(accountScopedCfg);
+  const envelopeOptions =
+    core.channel.reply.resolveEnvelopeFormatOptions(accountScopedCfg);
 
   // ---- Route resolution ----
   // Comment targets use the comment target as the peer ID so each
@@ -115,8 +120,14 @@ export function buildDispatchContext(params: {
   });
 
   // ---- System event ----
-  const sender = ctx.senderName ? `${ctx.senderName} (${ctx.senderId})` : ctx.senderId;
-  const location = isComment ? `comment ${ctx.chatId}` : isGroup ? `group ${ctx.chatId}` : 'DM';
+  const sender = ctx.senderName
+    ? `${ctx.senderName} (${ctx.senderId})`
+    : ctx.senderId;
+  const location = isComment
+    ? `comment ${ctx.chatId}`
+    : isGroup
+      ? `group ${ctx.chatId}`
+      : 'DM';
 
   const tags: string[] = [];
   tags.push(`msg:${ctx.messageId}`);
@@ -129,10 +140,13 @@ export function buildDispatchContext(params: {
   }
   const tagStr = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
 
-  core.system.enqueueSystemEvent(`Feishu[${account.accountId}] ${location} | ${sender}${tagStr}`, {
-    sessionKey: route.sessionKey,
-    contextKey: `feishu:message:${ctx.chatId}:${ctx.messageId}`,
-  });
+  core.system.enqueueSystemEvent(
+    `Feishu[${account.accountId}] ${location} | ${sender}${tagStr}`,
+    {
+      sessionKey: route.sessionKey,
+      contextKey: `feishu:message:${ctx.chatId}:${ctx.messageId}`,
+    },
+  );
 
   return {
     ctx,
@@ -176,7 +190,8 @@ export async function resolveThreadSessionKey(params: {
   threadId: string;
   baseSessionKey: string;
 }): Promise<string | undefined> {
-  const { accountScopedCfg, account, chatId, threadId, baseSessionKey } = params;
+  const { accountScopedCfg, account, chatId, threadId, baseSessionKey } =
+    params;
 
   if (account.config?.threadSession !== true) return undefined;
 
@@ -186,7 +201,9 @@ export async function resolveThreadSessionKey(params: {
     accountId: account.accountId,
   });
   if (!threadCapable) {
-    log.info(`thread session skipped: group ${chatId} is not topic/thread mode`);
+    log.info(
+      `thread session skipped: group ${chatId} is not topic/thread mode`,
+    );
     return undefined;
   }
 

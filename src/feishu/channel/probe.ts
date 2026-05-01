@@ -13,7 +13,9 @@ import type { FeishuProbeResult } from './types';
  * basic identity (name, open_id).  Used by onboarding and status
  * checks to verify credentials before committing them to config.
  */
-export async function probeFeishu(credentials?: LarkClientCredentials): Promise<FeishuProbeResult> {
+export async function probeFeishu(
+  credentials?: LarkClientCredentials,
+): Promise<FeishuProbeResult> {
   if (!credentials?.appId || !credentials?.appSecret) {
     return {
       ok: false,

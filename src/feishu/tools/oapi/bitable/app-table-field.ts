@@ -16,7 +16,13 @@
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
 
-import { assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json , registerTool } from '../helpers';
+import {
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 import type { FieldData, PaginatedData } from '../sdk-types';
 
 // ---------------------------------------------------------------------------
@@ -49,7 +55,9 @@ const FeishuBitableAppTableFieldSchema = Type.Union([
     app_token: Type.String({ description: '多维表格 token' }),
     table_id: Type.String({ description: '数据表 ID' }),
     view_id: Type.Optional(Type.String({ description: '视图 ID（可选）' })),
-    page_size: Type.Optional(Type.Number({ description: '每页数量，默认 50，最大 100' })),
+    page_size: Type.Optional(
+      Type.Number({ description: '每页数量，默认 50，最大 100' }),
+    ),
     page_token: Type.Optional(Type.String({ description: '分页标记' })),
   }),
 
@@ -59,14 +67,18 @@ const FeishuBitableAppTableFieldSchema = Type.Union([
     app_token: Type.String({ description: '多维表格 token' }),
     table_id: Type.String({ description: '数据表 ID' }),
     field_id: Type.String({ description: '字段 ID' }),
-    field_name: Type.Optional(Type.String({ description: '字段名（可选，不传则不修改）' })),
+    field_name: Type.Optional(
+      Type.String({ description: '字段名（可选，不传则不修改）' }),
+    ),
     type: Type.Optional(
       Type.Number({
         description:
           '字段类型（可选，不传则自动查询）：1=文本, 2=数字, 3=单选, 4=多选, 5=日期, 7=复选框, 11=人员, 13=电话, 15=超链接, 17=附件等',
       }),
     ),
-    property: Type.Optional(Type.Any({ description: '字段属性配置（可选，不传则自动查询）' })),
+    property: Type.Optional(
+      Type.Any({ description: '字段属性配置（可选，不传则自动查询）' }),
+    ),
   }),
 
   // DELETE (P1)
@@ -121,12 +133,17 @@ type FeishuBitableAppTableFieldParams =
 // Registration
 // ---------------------------------------------------------------------------
 
-export function registerFeishuBitableAppTableFieldTool(api: OpenClawPluginApi): void {
+export function registerFeishuBitableAppTableFieldTool(
+  api: OpenClawPluginApi,
+): void {
   if (!api.config) return;
 
   const cfg = api.config;
 
-  const { toolClient, log } = createToolContext(api, 'feishu_bitable_app_table_field');
+  const { toolClient, log } = createToolContext(
+    api,
+    'feishu_bitable_app_table_field',
+  );
 
   registerTool(
     api,
@@ -186,7 +203,9 @@ export function registerFeishuBitableAppTableFieldTool(api: OpenClawPluginApi): 
 
               const data = res.data as FieldData | undefined;
 
-              log.info(`create: created field ${data?.field?.field_id ?? 'unknown'}`);
+              log.info(
+                `create: created field ${data?.field?.field_id ?? 'unknown'}`,
+              );
 
               return json({
                 field: data?.field ?? res.data,
@@ -197,7 +216,9 @@ export function registerFeishuBitableAppTableFieldTool(api: OpenClawPluginApi): 
             // LIST
             // -----------------------------------------------------------------
             case 'list': {
-              log.info(`list: app_token=${p.app_token}, table_id=${p.table_id}, view_id=${p.view_id ?? 'none'}`);
+              log.info(
+                `list: app_token=${p.app_token}, table_id=${p.table_id}, view_id=${p.view_id ?? 'none'}`,
+              );
 
               const res = await client.invoke(
                 'feishu_bitable_app_table_field.list',
@@ -235,7 +256,9 @@ export function registerFeishuBitableAppTableFieldTool(api: OpenClawPluginApi): 
             // UPDATE
             // -----------------------------------------------------------------
             case 'update': {
-              log.info(`update: app_token=${p.app_token}, table_id=${p.table_id}, field_id=${p.field_id}`);
+              log.info(
+                `update: app_token=${p.app_token}, table_id=${p.table_id}, field_id=${p.field_id}`,
+              );
 
               // 如果缺少 type 或 field_name，自动查询当前字段信息
               let finalFieldName = p.field_name;
@@ -243,7 +266,9 @@ export function registerFeishuBitableAppTableFieldTool(api: OpenClawPluginApi): 
               let finalProperty = p.property;
 
               if (!finalType || !finalFieldName) {
-                log.info(`update: missing type or field_name, auto-querying field info`);
+                log.info(
+                  `update: missing type or field_name, auto-querying field info`,
+                );
 
                 const listRes = await client.invoke(
                   'feishu_bitable_app_table_field.update',
@@ -264,12 +289,18 @@ export function registerFeishuBitableAppTableFieldTool(api: OpenClawPluginApi): 
                 );
                 assertLarkOk(listRes);
 
-                 
-                const listData = listRes.data as
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  | PaginatedData<{ field_id?: string; field_name?: string; type?: number; property?: any }>
-                  | undefined;
-                const currentField = listData?.items?.find((f) => f.field_id === p.field_id);
+                const listData =
+                  listRes.data as // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    | PaginatedData<{
+                        field_id?: string;
+                        field_name?: string;
+                        type?: number;
+                        property?: any;
+                      }>
+                    | undefined;
+                const currentField = listData?.items?.find(
+                  (f) => f.field_id === p.field_id,
+                );
 
                 if (!currentField) {
                   return json({
@@ -281,9 +312,12 @@ export function registerFeishuBitableAppTableFieldTool(api: OpenClawPluginApi): 
                 // 合并：用户传的优先，否则用查询到的
                 finalFieldName = p.field_name || currentField.field_name;
                 finalType = p.type ?? currentField.type;
-                finalProperty = p.property !== undefined ? p.property : currentField.property;
+                finalProperty =
+                  p.property !== undefined ? p.property : currentField.property;
 
-                log.info(`update: auto-filled type=${finalType}, field_name=${finalFieldName}`);
+                log.info(
+                  `update: auto-filled type=${finalType}, field_name=${finalFieldName}`,
+                );
               }
 
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -326,7 +360,9 @@ export function registerFeishuBitableAppTableFieldTool(api: OpenClawPluginApi): 
             // DELETE
             // -----------------------------------------------------------------
             case 'delete': {
-              log.info(`delete: app_token=${p.app_token}, table_id=${p.table_id}, field_id=${p.field_id}`);
+              log.info(
+                `delete: app_token=${p.app_token}, table_id=${p.table_id}, field_id=${p.field_id}`,
+              );
 
               const res = await client.invoke(
                 'feishu_bitable_app_table_field.delete',
@@ -359,5 +395,4 @@ export function registerFeishuBitableAppTableFieldTool(api: OpenClawPluginApi): 
     },
     { name: 'feishu_bitable_app_table_field' },
   );
-
 }

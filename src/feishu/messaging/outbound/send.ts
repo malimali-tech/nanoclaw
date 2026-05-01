@@ -6,13 +6,20 @@
  */
 
 import type { ClawdbotConfig } from 'openclaw/plugin-sdk';
-import type { FeishuSendResult, MentionInfo  } from '../types';
+import type { FeishuSendResult, MentionInfo } from '../types';
 import { createAccountScopedConfig } from '../../core/accounts';
 import { LarkClient } from '../../core/lark-client';
-import { normalizeFeishuTarget, normalizeMessageId, resolveReceiveIdType } from '../../core/targets';
+import {
+  normalizeFeishuTarget,
+  normalizeMessageId,
+  resolveReceiveIdType,
+} from '../../core/targets';
 import { runWithMessageUnavailableGuard } from '../../core/message-unavailable';
 import { optimizeMarkdownStyle } from '../../card/markdown-style';
-import { buildMentionedCardContent, buildMentionedMessage } from '../inbound/mention';
+import {
+  buildMentionedCardContent,
+  buildMentionedMessage,
+} from '../inbound/mention';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,11 +80,18 @@ export interface SendFeishuCardParams {
  * @param accountId - Optional account identifier for multi-account setups
  * @returns Converted text, or the original text when runtime helpers are unavailable
  */
-function convertMarkdownTablesForFeishu(cfg: ClawdbotConfig, text: string, accountId?: string): string {
+function convertMarkdownTablesForFeishu(
+  cfg: ClawdbotConfig,
+  text: string,
+  accountId?: string,
+): string {
   try {
     const accountScopedCfg = createAccountScopedConfig(cfg, accountId);
     const runtime = LarkClient.runtime;
-    if (runtime?.channel?.text?.convertMarkdownTables && runtime.channel.text.resolveMarkdownTableMode) {
+    if (
+      runtime?.channel?.text?.convertMarkdownTables &&
+      runtime.channel.text.resolveMarkdownTableMode
+    ) {
       const tableMode = runtime.channel.text.resolveMarkdownTableMode({
         cfg: accountScopedCfg,
         channel: 'feishu',
@@ -106,8 +120,19 @@ function convertMarkdownTablesForFeishu(cfg: ClawdbotConfig, text: string, accou
  * @param params - See {@link SendFeishuMessageParams}.
  * @returns The send result containing the new message ID.
  */
-export async function sendMessageFeishu(params: SendFeishuMessageParams): Promise<FeishuSendResult> {
-  const { cfg, to, text, replyToMessageId, mentions, accountId, replyInThread, i18nTexts } = params;
+export async function sendMessageFeishu(
+  params: SendFeishuMessageParams,
+): Promise<FeishuSendResult> {
+  const {
+    cfg,
+    to,
+    text,
+    replyToMessageId,
+    mentions,
+    accountId,
+    replyInThread,
+    i18nTexts,
+  } = params;
 
   const client = LarkClient.fromCfg(cfg, accountId).sdk;
 
@@ -116,7 +141,10 @@ export async function sendMessageFeishu(params: SendFeishuMessageParams): Promis
 
   if (i18nTexts && Object.keys(i18nTexts).length > 0) {
     // Multi-locale post: build each locale's content independently.
-    const postBody: Record<string, { content: Array<Array<{ tag: string; text: string }>> }> = {};
+    const postBody: Record<
+      string,
+      { content: Array<Array<{ tag: string; text: string }>> }
+    > = {};
     for (const [locale, localeText] of Object.entries(i18nTexts)) {
       let processed = localeText;
 
@@ -220,7 +248,9 @@ export async function sendMessageFeishu(params: SendFeishuMessageParams): Promis
  * @param params - See {@link SendFeishuCardParams}.
  * @returns The send result containing the new message ID.
  */
-export async function sendCardFeishu(params: SendFeishuCardParams): Promise<FeishuSendResult> {
+export async function sendCardFeishu(
+  params: SendFeishuCardParams,
+): Promise<FeishuSendResult> {
   const { cfg, to, card, replyToMessageId, accountId, replyInThread } = params;
 
   const client = LarkClient.fromCfg(cfg, accountId).sdk;
@@ -361,7 +391,9 @@ export function buildMarkdownCard(text: string): Record<string, unknown> {
  * @param i18nTexts - A map of locale to markdown text (e.g. { zh_cn: '...', en_us: '...' }).
  * @returns A card JSON object ready to be sent via {@link sendCardFeishu}.
  */
-export function buildI18nMarkdownCard(i18nTexts: Record<string, string>): Record<string, unknown> {
+export function buildI18nMarkdownCard(
+  i18nTexts: Record<string, string>,
+): Record<string, unknown> {
   const locales = Object.keys(i18nTexts);
 
   // Determine fallback content (prefer en_us, then first available locale).
@@ -418,7 +450,15 @@ export async function sendMarkdownCardFeishu(params: {
   accountId?: string;
   replyInThread?: boolean;
 }): Promise<FeishuSendResult> {
-  const { cfg, to, text, replyToMessageId, mentions, accountId, replyInThread } = params;
+  const {
+    cfg,
+    to,
+    text,
+    replyToMessageId,
+    mentions,
+    accountId,
+    replyInThread,
+  } = params;
 
   let cardText = text;
   if (mentions && mentions.length > 0) {

@@ -22,14 +22,18 @@ export function registerFeishuSearchTools(api: OpenClawPluginApi): void {
 
   const accounts = getEnabledLarkAccounts(api.config);
   if (accounts.length === 0) {
-    api.logger.debug?.('feishu_search: No Feishu accounts configured, skipping');
+    api.logger.debug?.(
+      'feishu_search: No Feishu accounts configured, skipping',
+    );
     return;
   }
 
   // search 工具使用 doc 配置项控制，因为搜索是文档相关功能
   const toolsCfg = resolveAnyEnabledToolsConfig(accounts);
   if (!toolsCfg.doc) {
-    api.logger.debug?.('feishu_search: search tool disabled in all accounts (controlled by doc config)');
+    api.logger.debug?.(
+      'feishu_search: search tool disabled in all accounts (controlled by doc config)',
+    );
     return;
   }
 

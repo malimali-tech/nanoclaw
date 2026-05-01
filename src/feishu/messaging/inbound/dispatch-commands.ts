@@ -79,7 +79,9 @@ export async function dispatchPermissionNotification(
     },
   });
 
-  dc.log(`feishu[${dc.account.accountId}]: dispatching permission error notification to agent`);
+  dc.log(
+    `feishu[${dc.account.accountId}]: dispatching permission error notification to agent`,
+  );
 
   await dc.core.channel.reply.dispatchReplyFromConfig({
     ctx: permCtx,
@@ -103,7 +105,9 @@ export async function dispatchPermissionNotification(
  */
 export async function dispatchSystemCommand(
   dc: DispatchContext,
-  ctxPayload: ReturnType<typeof LarkClient.runtime.channel.reply.finalizeInboundContext>,
+  ctxPayload: ReturnType<
+    typeof LarkClient.runtime.channel.reply.finalizeInboundContext
+  >,
   replyToMessageId?: string,
 ): Promise<void> {
   let delivered = false;
@@ -137,18 +141,26 @@ export async function dispatchSystemCommand(
       },
       onSkip: (_payload, info) => {
         if (info.reason !== 'silent') {
-          dc.log(`feishu[${dc.account.accountId}]: command reply skipped (reason=${info.reason})`);
+          dc.log(
+            `feishu[${dc.account.accountId}]: command reply skipped (reason=${info.reason})`,
+          );
         }
       },
       onError: (err, info) => {
-        dc.error(`feishu[${dc.account.accountId}]: command ${info.kind} reply failed: ${String(err)}`);
+        dc.error(
+          `feishu[${dc.account.accountId}]: command ${info.kind} reply failed: ${String(err)}`,
+        );
       },
     },
     replyOptions: {},
   });
 
-  dc.log(`feishu[${dc.account.accountId}]: system command dispatched (delivered=${delivered})`);
-  log.info(`system command dispatched (delivered=${delivered}, elapsed=${ticketElapsed()}ms)`);
+  dc.log(
+    `feishu[${dc.account.accountId}]: system command dispatched (delivered=${delivered})`,
+  );
+  log.info(
+    `system command dispatched (delivered=${delivered}, elapsed=${ticketElapsed()}ms)`,
+  );
 }
 
 function isLifecycleSessionCommand(text: string | undefined): boolean {

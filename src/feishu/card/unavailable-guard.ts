@@ -75,13 +75,15 @@ export class UnavailableGuard {
     const fromError = isMessageUnavailableError(err) ? err : undefined;
     const cardMessageId = this.getCardMessageId();
     const state =
-      getMessageUnavailableState(this.replyToMessageId) ?? getMessageUnavailableState(cardMessageId ?? undefined);
+      getMessageUnavailableState(this.replyToMessageId) ??
+      getMessageUnavailableState(cardMessageId ?? undefined);
     let apiCode = fromError?.apiCode ?? state?.apiCode;
 
     if (!apiCode && err) {
       const detectedCode = extractLarkApiCode(err);
       if (isTerminalMessageApiCode(detectedCode)) {
-        const fallbackMessageId = this.replyToMessageId ?? cardMessageId ?? undefined;
+        const fallbackMessageId =
+          this.replyToMessageId ?? cardMessageId ?? undefined;
         if (fallbackMessageId) {
           markMessageUnavailable({
             messageId: fallbackMessageId,
@@ -97,7 +99,11 @@ export class UnavailableGuard {
     this.terminated = true;
     this.onTerminate();
 
-    const affectedMessageId = fromError?.messageId ?? this.replyToMessageId ?? cardMessageId ?? 'unknown';
+    const affectedMessageId =
+      fromError?.messageId ??
+      this.replyToMessageId ??
+      cardMessageId ??
+      'unknown';
     log.warn('reply pipeline terminated by unavailable message', {
       source,
       apiCode,

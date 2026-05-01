@@ -17,10 +17,15 @@ import { addWildcardAllowFrom } from 'openclaw/plugin-sdk/setup';
 // Config mutation helpers
 // ---------------------------------------------------------------------------
 
-export function setFeishuDmPolicy(cfg: ClawdbotConfig, dmPolicy: DmPolicy): ClawdbotConfig {
+export function setFeishuDmPolicy(
+  cfg: ClawdbotConfig,
+  dmPolicy: DmPolicy,
+): ClawdbotConfig {
   const allowFrom =
     dmPolicy === 'open'
-      ? addWildcardAllowFrom(cfg.channels?.feishu?.allowFrom)?.map((entry) => String(entry))
+      ? addWildcardAllowFrom(cfg.channels?.feishu?.allowFrom)?.map((entry) =>
+          String(entry),
+        )
       : undefined;
 
   return {
@@ -36,7 +41,10 @@ export function setFeishuDmPolicy(cfg: ClawdbotConfig, dmPolicy: DmPolicy): Claw
   };
 }
 
-export function setFeishuAllowFrom(cfg: ClawdbotConfig, allowFrom: string[]): ClawdbotConfig {
+export function setFeishuAllowFrom(
+  cfg: ClawdbotConfig,
+  allowFrom: string[],
+): ClawdbotConfig {
   return {
     ...cfg,
     channels: {
@@ -66,7 +74,10 @@ export function setFeishuGroupPolicy(
   };
 }
 
-export function setFeishuGroupAllowFrom(cfg: ClawdbotConfig, groupAllowFrom: string[]): ClawdbotConfig {
+export function setFeishuGroupAllowFrom(
+  cfg: ClawdbotConfig,
+  groupAllowFrom: string[],
+): ClawdbotConfig {
   return {
     ...cfg,
     channels: {
@@ -79,7 +90,10 @@ export function setFeishuGroupAllowFrom(cfg: ClawdbotConfig, groupAllowFrom: str
   };
 }
 
-export function setFeishuGroups(cfg: ClawdbotConfig, groups: Record<string, object>): ClawdbotConfig {
+export function setFeishuGroups(
+  cfg: ClawdbotConfig,
+  groups: Record<string, object>,
+): ClawdbotConfig {
   return {
     ...cfg,
     channels: {

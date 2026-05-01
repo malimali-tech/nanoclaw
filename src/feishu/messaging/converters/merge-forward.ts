@@ -19,7 +19,11 @@
  */
 
 import { larkLogger } from '../../core/lark-logger';
-import type { ApiMessageItem, ContentConverterFn, ConvertContext } from './types';
+import type {
+  ApiMessageItem,
+  ContentConverterFn,
+  ConvertContext,
+} from './types';
 import { buildConvertContextFromItem } from './content-converter-helpers';
 
 const log = larkLogger('converters/merge-forward');
@@ -36,7 +40,14 @@ const log = larkLogger('converters/merge-forward');
  * ```
  */
 export const convertMergeForward: ContentConverterFn = async (_raw, ctx) => {
-  const { accountId, messageId, resolveUserName, batchResolveNames, fetchSubMessages, convertMessageContent } = ctx;
+  const {
+    accountId,
+    messageId,
+    resolveUserName,
+    batchResolveNames,
+    fetchSubMessages,
+    convertMessageContent,
+  } = ctx;
 
   if (!fetchSubMessages) {
     return { content: '<forwarded_messages/>', resources: [] };
@@ -97,7 +108,13 @@ async function expand(
   }
 
   // --- Phase 3: Format tree recursively ---
-  return formatSubTree(messageId, childrenMap, accountId, resolveUserName, convertContent);
+  return formatSubTree(
+    messageId,
+    childrenMap,
+    accountId,
+    resolveUserName,
+    convertContent,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +130,10 @@ async function expand(
  *
  * The root container message itself (matching `rootMessageId`) is skipped.
  */
-function buildChildrenMap(items: ApiMessageItem[], rootMessageId: string): Map<string, ApiMessageItem[]> {
+function buildChildrenMap(
+  items: ApiMessageItem[],
+  rootMessageId: string,
+): Map<string, ApiMessageItem[]> {
   const map = new Map<string, ApiMessageItem[]>();
 
   for (const item of items) {
@@ -150,7 +170,10 @@ function buildChildrenMap(items: ApiMessageItem[], rootMessageId: string): Map<s
 /**
  * Collect all unique sender IDs from non-root items for batch name resolution.
  */
-function collectSenderIds(items: ApiMessageItem[], rootMessageId: string): string[] {
+function collectSenderIds(
+  items: ApiMessageItem[],
+  rootMessageId: string,
+): string[] {
   const ids = new Set<string>();
   for (const item of items) {
     // Skip the root container
@@ -196,7 +219,9 @@ async function formatSubTree(
     try {
       const msgType: string = item.msg_type ?? 'text';
       const senderId: string = item.sender?.id ?? 'unknown';
-      const createTime: number | undefined = item.create_time ? parseInt(String(item.create_time), 10) : undefined;
+      const createTime: number | undefined = item.create_time
+        ? parseInt(String(item.create_time), 10)
+        : undefined;
       const timestamp = createTime ? formatTimestamp(createTime) : 'unknown';
       const rawContent: string = item.body?.content ?? '{}';
 
@@ -206,7 +231,13 @@ async function formatSubTree(
         // Recurse into nested merge_forward via the tree — no API call
         const nestedId: string | undefined = item.message_id;
         if (nestedId) {
-          content = await formatSubTree(nestedId, childrenMap, accountId, resolveUserName, convertContent);
+          content = await formatSubTree(
+            nestedId,
+            childrenMap,
+            accountId,
+            resolveUserName,
+            convertContent,
+          );
         } else {
           content = '<forwarded_messages/>';
         }

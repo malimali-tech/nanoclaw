@@ -15,7 +15,13 @@ import * as path from 'node:path';
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { buildRandomTempFilePath } from 'openclaw/plugin-sdk/temp-path';
 import { Type } from '@sinclair/typebox';
-import { StringEnum, createToolContext, handleInvokeErrorWithAutoAuth, json, registerTool } from '../helpers';
+import {
+  StringEnum,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 
 // ---------------------------------------------------------------------------
 // Helper: MIME type to extension mapping
@@ -45,11 +51,13 @@ const MIME_TO_EXT: Record<string, string> = {
   // Documents
   'application/pdf': '.pdf',
   'application/msword': '.doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    '.docx',
   'application/vnd.ms-excel': '.xls',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
   'application/vnd.ms-powerpoint': '.ppt',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+    '.pptx',
   // Others
   'application/zip': '.zip',
   'application/x-rar-compressed': '.rar',
@@ -66,10 +74,12 @@ const FetchResourceSchema = Type.Object({
     description: '消息 ID（om_xxx 格式），从消息事件或消息列表中获取',
   }),
   file_key: Type.String({
-    description: '资源 Key，从消息体中获取。图片消息的 image_key（img_xxx）或文件消息的 file_key（file_xxx）',
+    description:
+      '资源 Key，从消息体中获取。图片消息的 image_key（img_xxx）或文件消息的 file_key（file_xxx）',
   }),
   type: StringEnum(['image', 'file'], {
-    description: '资源类型：image（图片消息中的图片）、file（文件/音频/视频消息中的文件）',
+    description:
+      '资源类型：image（图片消息中的图片）、file（文件/音频/视频消息中的文件）',
   }),
 });
 
@@ -87,11 +97,16 @@ interface FetchResourceParams {
 // Registration
 // ---------------------------------------------------------------------------
 
-export function registerFeishuImUserFetchResourceTool(api: OpenClawPluginApi): boolean {
+export function registerFeishuImUserFetchResourceTool(
+  api: OpenClawPluginApi,
+): boolean {
   if (!api.config) return false;
   const cfg = api.config;
 
-  const { toolClient, log } = createToolContext(api, 'feishu_im_user_fetch_resource');
+  const { toolClient, log } = createToolContext(
+    api,
+    'feishu_im_user_fetch_resource',
+  );
 
   return registerTool(
     api,
@@ -116,7 +131,9 @@ export function registerFeishuImUserFetchResourceTool(api: OpenClawPluginApi): b
         try {
           const client = toolClient();
 
-          log.info(`fetch_resource: message_id="${p.message_id}", file_key="${p.file_key}", type="${p.type}"`);
+          log.info(
+            `fetch_resource: message_id="${p.message_id}", file_key="${p.file_key}", type="${p.type}"`,
+          );
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const res: any = await client.invoke(

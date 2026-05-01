@@ -11,7 +11,11 @@
 
 import type { ClawdbotConfig } from 'openclaw/plugin-sdk';
 import { resolveDefaultAgentId } from 'openclaw/plugin-sdk/agent-runtime';
-import { loadSessionStore, resolveSessionStoreEntry, resolveStorePath } from 'openclaw/plugin-sdk/config-runtime';
+import {
+  loadSessionStore,
+  resolveSessionStoreEntry,
+  resolveStorePath,
+} from 'openclaw/plugin-sdk/config-runtime';
 import type { FeishuConfig } from '../core/types';
 
 export type ToolUseMode = 'off' | 'on' | 'full';
@@ -53,16 +57,27 @@ function resolveEffectiveVerboseMode(params: {
   );
 }
 
-function resolveSessionVerboseMode(cfg: ClawdbotConfig, sessionKey: string, agentId: string): ToolUseMode | undefined {
+function resolveSessionVerboseMode(
+  cfg: ClawdbotConfig,
+  sessionKey: string,
+  agentId: string,
+): ToolUseMode | undefined {
   try {
-    const cfgWithSession = cfg as { session?: { store?: string }; sessions?: { store?: string } };
-    const sessionStorePath = cfgWithSession.session?.store ?? cfgWithSession.sessions?.store;
+    const cfgWithSession = cfg as {
+      session?: { store?: string };
+      sessions?: { store?: string };
+    };
+    const sessionStorePath =
+      cfgWithSession.session?.store ?? cfgWithSession.sessions?.store;
     const storePath = resolveStorePath(sessionStorePath, { agentId });
     const store = loadSessionStore(storePath);
     const candidateKeys = resolveCandidateSessionKeys(cfg, sessionKey);
 
     for (const candidateKey of candidateKeys) {
-      const resolved = resolveSessionStoreEntry({ store, sessionKey: candidateKey });
+      const resolved = resolveSessionStoreEntry({
+        store,
+        sessionKey: candidateKey,
+      });
       const mode = normalizeToolUseMode(resolved.existing?.verboseLevel);
       if (mode) return mode;
       if (resolved.existing) return undefined;
@@ -73,7 +88,10 @@ function resolveSessionVerboseMode(cfg: ClawdbotConfig, sessionKey: string, agen
   }
 }
 
-function resolveCandidateSessionKeys(cfg: ClawdbotConfig, sessionKey: string): string[] {
+function resolveCandidateSessionKeys(
+  cfg: ClawdbotConfig,
+  sessionKey: string,
+): string[] {
   const key = sessionKey.trim().toLowerCase();
   const defaultAgentId = resolveDefaultAgentId(cfg as Record<string, unknown>);
   const fallbackKey = key.replace(/^(agent):[^:]+:/, `$1:${defaultAgentId}:`);
@@ -82,7 +100,9 @@ function resolveCandidateSessionKeys(cfg: ClawdbotConfig, sessionKey: string): s
 
 function extractInlineVerboseMode(body?: string): ToolUseMode | undefined {
   if (!body) return undefined;
-  const matches = body.matchAll(/(?:^|\s)\/(?:verbose|v)(?::|\s+)(on|off|full)\b/gi);
+  const matches = body.matchAll(
+    /(?:^|\s)\/(?:verbose|v)(?::|\s+)(on|off|full)\b/gi,
+  );
   let last: ToolUseMode | undefined;
   for (const match of matches) {
     last = normalizeToolUseMode(match[1]);

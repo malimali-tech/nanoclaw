@@ -46,7 +46,12 @@ export const TERMINAL_PHASES: ReadonlySet<CardPhase> = new Set([
  * - `unavailable`     — source message was deleted/recalled (UnavailableGuard).
  * - `creation_failed` — card creation failed, falling back to static delivery.
  */
-export type TerminalReason = 'normal' | 'error' | 'abort' | 'unavailable' | 'creation_failed';
+export type TerminalReason =
+  | 'normal'
+  | 'error'
+  | 'abort'
+  | 'unavailable'
+  | 'creation_failed';
 
 export const PHASE_TRANSITIONS: Record<CardPhase, ReadonlySet<CardPhase>> = {
   idle: new Set(['creating', 'aborted', 'terminated']),

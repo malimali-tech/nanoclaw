@@ -6,7 +6,7 @@
  */
 
 import type { ContentConverterFn } from './types';
-import { formatDuration, safeParse  } from './utils';
+import { formatDuration, safeParse } from './utils';
 
 export const convertAudio: ContentConverterFn = (raw) => {
   const parsed = safeParse(raw) as
@@ -22,7 +22,8 @@ export const convertAudio: ContentConverterFn = (raw) => {
   }
 
   const duration = parsed?.duration;
-  const durationAttr = duration != null ? ` duration="${formatDuration(duration)}"` : '';
+  const durationAttr =
+    duration != null ? ` duration="${formatDuration(duration)}"` : '';
 
   return {
     content: `<audio key="${fileKey}"${durationAttr}/>`,

@@ -22,7 +22,10 @@ export function _resetShutdownHooks(): void {
  * @returns An unregister function — call it when the resource is
  *          released normally (e.g. card streaming completes).
  */
-export function registerShutdownHook(key: string, cleanup: () => Promise<void>): () => void {
+export function registerShutdownHook(
+  key: string,
+  cleanup: () => Promise<void>,
+): () => void {
   hooks.set(key, cleanup);
   return () => {
     hooks.delete(key);
@@ -64,5 +67,8 @@ export async function drainShutdownHooks(opts?: {
     timer = setTimeout(resolve, deadline);
   });
 
-  await Promise.race([Promise.allSettled(promises).then(() => clearTimeout(timer)), timeoutPromise]);
+  await Promise.race([
+    Promise.allSettled(promises).then(() => clearTimeout(timer)),
+    timeoutPromise,
+  ]);
 }

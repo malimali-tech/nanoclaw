@@ -15,7 +15,14 @@
 
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
-import { StringEnum, assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json, registerTool } from '../helpers';
+import {
+  StringEnum,
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  registerTool,
+} from '../helpers';
 import type { PaginatedData } from '../sdk-types';
 
 // ---------------------------------------------------------------------------
@@ -27,7 +34,9 @@ const FeishuChatSchema = Type.Union([
   Type.Object({
     action: Type.Literal('search'),
     query: Type.String({
-      description: '搜索关键词（必填）。支持匹配群名称、群成员名称。' + '支持多语种、拼音、前缀等模糊搜索。',
+      description:
+        '搜索关键词（必填）。支持匹配群名称、群成员名称。' +
+        '支持多语种、拼音、前缀等模糊搜索。',
     }),
     page_size: Type.Optional(
       Type.Integer({
@@ -107,7 +116,9 @@ export function registerChatSearchTool(api: OpenClawPluginApi): boolean {
             // SEARCH
             // -----------------------------------------------------------------
             case 'search': {
-              log.info(`search: query="${p.query}", page_size=${p.page_size ?? 20}`);
+              log.info(
+                `search: query="${p.query}", page_size=${p.page_size ?? 20}`,
+              );
 
               const res = await client.invoke(
                 'feishu_chat.search',
@@ -142,7 +153,9 @@ export function registerChatSearchTool(api: OpenClawPluginApi): boolean {
             // GET
             // -----------------------------------------------------------------
             case 'get': {
-              log.info(`get: chat_id=${p.chat_id}, user_id_type=${p.user_id_type ?? 'open_id'}`);
+              log.info(
+                `get: chat_id=${p.chat_id}, user_id_type=${p.user_id_type ?? 'open_id'}`,
+              );
 
               const res = await client.invoke(
                 'feishu_chat.get',
@@ -161,7 +174,8 @@ export function registerChatSearchTool(api: OpenClawPluginApi): boolean {
                       headers: {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         ...((opts as any)?.headers ?? {}),
-                        'X-Chat-Custom-Header': 'enable_chat_list_security_check',
+                        'X-Chat-Custom-Header':
+                          'enable_chat_list_security_check',
                       },
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     } as any,

@@ -36,7 +36,8 @@ const GLOBAL_LARK_USER_AGENT_KEY = 'LARK_USER_AGENT';
 
 function installGlobalUserAgent(): void {
   // node-sdk 内置拦截器最终会读取 global.LARK_USER_AGENT 并覆盖 User-Agent
-  (globalThis as Record<string, unknown>)[GLOBAL_LARK_USER_AGENT_KEY] = getUserAgent();
+  (globalThis as Record<string, unknown>)[GLOBAL_LARK_USER_AGENT_KEY] =
+    getUserAgent();
 }
 
 installGlobalUserAgent();
@@ -89,7 +90,10 @@ const cache = new Map<string, LarkClient>();
  * Compare two SecretRef-shaped objects by their identity fields.
  * Key-order independent, unlike JSON.stringify.
  */
-function secretRefsEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+function secretRefsEqual(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): boolean {
   return a.source === b.source && a.provider === b.provider && a.id === b.id;
 }
 
@@ -108,10 +112,16 @@ function credentialsEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (typeof a === 'string' && typeof b === 'string') return false;
   if (a && b && typeof a === 'object' && typeof b === 'object') {
-    return secretRefsEqual(a as Record<string, unknown>, b as Record<string, unknown>);
+    return secretRefsEqual(
+      a as Record<string, unknown>,
+      b as Record<string, unknown>,
+    );
   }
   // Mixed types: keep the cached instance that holds the working string.
-  if ((typeof a === 'string' && b && typeof b === 'object') || (typeof b === 'string' && a && typeof a === 'object')) {
+  if (
+    (typeof a === 'string' && b && typeof b === 'object') ||
+    (typeof b === 'string' && a && typeof a === 'object')
+  ) {
     return true;
   }
   return false;
@@ -194,7 +204,9 @@ export class LarkClient {
     }
     // Credentials changed — tear down the stale instance before replacing it.
     if (existing) {
-      log.info(`credentials changed, disposing stale instance`, { accountId: account.accountId });
+      log.info(`credentials changed, disposing stale instance`, {
+        accountId: account.accountId,
+      });
       existing.dispose();
     }
     const instance = new LarkClient(account);
@@ -217,8 +229,18 @@ export class LarkClient {
 
     const account: LarkAccount =
       credentials.appId && credentials.appSecret
-        ? { ...base, configured: true as const, appId: credentials.appId, appSecret: credentials.appSecret }
-        : { ...base, configured: false as const, appId: credentials.appId, appSecret: credentials.appSecret };
+        ? {
+            ...base,
+            configured: true as const,
+            appId: credentials.appId,
+            appSecret: credentials.appSecret,
+          }
+        : {
+            ...base,
+            configured: false as const,
+            appId: credentials.appId,
+            appSecret: credentials.appSecret,
+          };
 
     return new LarkClient(account);
   }
@@ -268,10 +290,17 @@ export class LarkClient {
    * Results are cached on the instance for subsequent access via
    * `botOpenId` / `botName`.
    */
-  async probe(opts?: { maxAgeMs?: number; needBotInfo?: boolean }): Promise<FeishuProbeResult> {
+  async probe(opts?: {
+    maxAgeMs?: number;
+    needBotInfo?: boolean;
+  }): Promise<FeishuProbeResult> {
     const maxAge = opts?.maxAgeMs ?? 0;
 
-    if (maxAge > 0 && this._lastProbeResult && Date.now() - this._lastProbeAt < maxAge) {
+    if (
+      maxAge > 0 &&
+      this._lastProbeResult &&
+      Date.now() - this._lastProbeAt < maxAge
+    ) {
       return this._lastProbeResult;
     }
 
@@ -360,7 +389,9 @@ export class LarkClient {
     // Close any existing WSClient before creating a new one to prevent
     // orphaned connections when startWS is called multiple times.
     if (this._wsClient) {
-      log.warn(`closing previous WSClient before reconnect`, { accountId: this.accountId });
+      log.warn(`closing previous WSClient before reconnect`, {
+        accountId: this.accountId,
+      });
       try {
         this._wsClient.close({ force: true });
       } catch {
@@ -385,7 +416,9 @@ export class LarkClient {
       if (msgType === 'card') {
         const patchedData = {
           ...data,
-          headers: data.headers.map((h: any) => (h.key === 'type' ? { ...h, value: 'event' } : h)),
+          headers: data.headers.map((h: any) =>
+            h.key === 'type' ? { ...h, value: 'event' } : h,
+          ),
         };
         return origHandleEventData(patchedData);
       }
@@ -412,7 +445,10 @@ export class LarkClient {
     }
     this._wsClient = null;
     if (this.messageDedup) {
-      log.info(`disposing message dedup`, { accountId: this.accountId, size: this.messageDedup.size });
+      log.info(`disposing message dedup`, {
+        accountId: this.accountId,
+        size: this.messageDedup.size,
+      });
       this.messageDedup.dispose();
       this.messageDedup = null;
     }
@@ -431,7 +467,9 @@ export class LarkClient {
     const appId = this.account.appId;
     const appSecret = this.account.appSecret;
     if (!appId || !appSecret) {
-      throw new Error(`LarkClient[${this.accountId}]: appId and appSecret are required`);
+      throw new Error(
+        `LarkClient[${this.accountId}]: appId and appSecret are required`,
+      );
     }
     return { appId, appSecret };
   }
@@ -440,7 +478,10 @@ export class LarkClient {
    * Start the WSClient and return a promise that resolves when the
    * abort signal fires (or immediately if already aborted).
    */
-  private waitForAbort(dispatcher: Lark.EventDispatcher, signal?: AbortSignal): Promise<void> {
+  private waitForAbort(
+    dispatcher: Lark.EventDispatcher,
+    signal?: AbortSignal,
+  ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       if (signal?.aborted) {
         this.disconnect();
@@ -500,7 +541,9 @@ export function getResolvedConfig(fallback: ClawdbotConfig): ClawdbotConfig {
     // the closure-captured fallback still holds a valid resolved config.
     if (live?.channels?.feishu) return live;
     if (fallback?.channels?.feishu) {
-      log.debug(`loadConfig() returned config without channels.feishu, using fallback`);
+      log.debug(
+        `loadConfig() returned config without channels.feishu, using fallback`,
+      );
       return fallback;
     }
     return live;

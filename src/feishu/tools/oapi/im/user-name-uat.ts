@@ -49,7 +49,10 @@ function evict(cache: Map<string, CacheEntry>): void {
 }
 
 /** 从 UAT 缓存中获取用户名 */
-export function getUATUserName(accountId: string, openId: string): string | undefined {
+export function getUATUserName(
+  accountId: string,
+  openId: string,
+): string | undefined {
   const cache = uatRegistry.get(accountId);
   if (!cache) return undefined;
   const entry = cache.get(openId);
@@ -65,7 +68,10 @@ export function getUATUserName(accountId: string, openId: string): string | unde
 }
 
 /** 批量写入 UAT 缓存 */
-export function setUATUserNames(accountId: string, entries: Map<string, string>): void {
+export function setUATUserNames(
+  accountId: string,
+  entries: Map<string, string>,
+): void {
   const cache = getOrCreateCache(accountId);
   const now = Date.now();
   for (const [openId, name] of entries) {
@@ -112,20 +118,32 @@ export async function batchResolveUserNamesAsUser(params: {
 
   // 2. 分批通过 SDK 调用 contact/v3/users/basic_batch（UAT）
   const totalBatches = Math.ceil(uniqueMissing.length / BATCH_SIZE);
-  log(`batchResolveUserNamesAsUser: resolving ${uniqueMissing.length} user(s) in ${totalBatches} batch(es), ${result.size} cache hit(s)`);
+  log(
+    `batchResolveUserNamesAsUser: resolving ${uniqueMissing.length} user(s) in ${totalBatches} batch(es), ${result.size} cache hit(s)`,
+  );
 
   for (let i = 0; i < uniqueMissing.length; i += BATCH_SIZE) {
     const chunk = uniqueMissing.slice(i, i + BATCH_SIZE);
     const batchIndex = Math.floor(i / BATCH_SIZE) + 1;
     try {
       interface BatchUserRes {
-        data?: { users?: Array<{ user_id?: string; name?: string | { value?: string } }> };
+        data?: {
+          users?: Array<{
+            user_id?: string;
+            name?: string | { value?: string };
+          }>;
+        };
       }
       const res = await client.invoke<BatchUserRes>(
         'feishu_get_user.basic_batch',
         (sdk, opts) =>
           (
-            sdk as unknown as { request: (config: Record<string, unknown>, opts?: unknown) => Promise<BatchUserRes> }
+            sdk as unknown as {
+              request: (
+                config: Record<string, unknown>,
+                opts?: unknown,
+              ) => Promise<BatchUserRes>;
+            }
           ).request(
             {
               method: 'POST',
@@ -157,7 +175,9 @@ export async function batchResolveUserNamesAsUser(params: {
       }
       const unresolvedCount = chunk.length - resolved;
       if (unresolvedCount > 0) {
-        log(`batchResolveUserNamesAsUser: batch ${batchIndex}/${totalBatches}: ${resolved} resolved, ${unresolvedCount} missing name`);
+        log(
+          `batchResolveUserNamesAsUser: batch ${batchIndex}/${totalBatches}: ${resolved} resolved, ${unresolvedCount} missing name`,
+        );
       }
     } catch (err) {
       // 授权/权限错误向上冒泡，由上层 handleInvokeErrorWithAutoAuth 处理自动授权

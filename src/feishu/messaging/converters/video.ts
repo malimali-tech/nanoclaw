@@ -6,7 +6,7 @@
  */
 
 import type { ContentConverterFn } from './types';
-import { formatDuration, safeParse  } from './utils';
+import { formatDuration, safeParse } from './utils';
 
 export const convertVideo: ContentConverterFn = (raw) => {
   const parsed = safeParse(raw) as
@@ -28,7 +28,8 @@ export const convertVideo: ContentConverterFn = (raw) => {
   const coverKey = parsed?.image_key;
 
   const nameAttr = fileName ? ` name="${fileName}"` : '';
-  const durationAttr = duration != null ? ` duration="${formatDuration(duration)}"` : '';
+  const durationAttr =
+    duration != null ? ` duration="${formatDuration(duration)}"` : '';
 
   return {
     content: `<video key="${fileKey}"${nameAttr}${durationAttr}/>`,

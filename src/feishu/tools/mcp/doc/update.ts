@@ -27,13 +27,23 @@ const UpdateDocSchema = Type.Object({
     { description: '更新模式（必填）' },
   ),
   selection_with_ellipsis: Type.Optional(
-    Type.String({ description: '定位表达式：开头内容...结尾内容（与 selection_by_title 二选一）' }),
+    Type.String({
+      description:
+        '定位表达式：开头内容...结尾内容（与 selection_by_title 二选一）',
+    }),
   ),
   selection_by_title: Type.Optional(
-    Type.String({ description: '标题定位：例如 ## 章节标题（与 selection_with_ellipsis 二选一）' }),
+    Type.String({
+      description:
+        '标题定位：例如 ## 章节标题（与 selection_with_ellipsis 二选一）',
+    }),
   ),
-  new_title: Type.Optional(Type.String({ description: '新的文档标题（可选）' })),
-  task_id: Type.Optional(Type.String({ description: '异步任务 ID，用于查询任务状态' })),
+  new_title: Type.Optional(
+    Type.String({ description: '新的文档标题（可选）' }),
+  ),
+  task_id: Type.Optional(
+    Type.String({ description: '异步任务 ID，用于查询任务状态' }),
+  ),
 });
 
 type UpdateDocParams = Static<typeof UpdateDocSchema>;
@@ -45,7 +55,10 @@ function validateUpdateDocParams(p: UpdateDocParams): void {
     throw new Error('update-doc：未提供 task_id 时必须提供 doc_id');
   }
   const needSelection =
-    p.mode === 'replace_range' || p.mode === 'insert_before' || p.mode === 'insert_after' || p.mode === 'delete_range';
+    p.mode === 'replace_range' ||
+    p.mode === 'insert_before' ||
+    p.mode === 'insert_after' ||
+    p.mode === 'delete_range';
 
   if (needSelection) {
     const hasEllipsis = Boolean(p.selection_with_ellipsis);

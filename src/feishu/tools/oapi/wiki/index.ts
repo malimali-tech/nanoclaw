@@ -36,7 +36,8 @@ export function registerFeishuWikiTools(api: OpenClawPluginApi): void {
   // 注册所有工具
   const registered: string[] = [];
   if (registerFeishuWikiSpaceTool(api)) registered.push('feishu_wiki_space');
-  if (registerFeishuWikiSpaceNodeTool(api)) registered.push('feishu_wiki_space_node');
+  if (registerFeishuWikiSpaceNodeTool(api))
+    registered.push('feishu_wiki_space_node');
   if (registered.length > 0) {
     api.logger.debug?.(`feishu_wiki: Registered ${registered.join(', ')}`);
   }

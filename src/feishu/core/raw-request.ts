@@ -43,7 +43,9 @@ export interface RawLarkRequestOptions {
  *
  * 飞书 API 统一错误模式：返回 JSON 中 `code !== 0` 表示失败。
  */
-export async function rawLarkRequest<T>(options: RawLarkRequestOptions): Promise<T> {
+export async function rawLarkRequest<T>(
+  options: RawLarkRequestOptions,
+): Promise<T> {
   const baseUrl = resolveDomainUrl(options.brand);
   const url = new URL(options.path, baseUrl);
   if (options.query) {
@@ -66,7 +68,9 @@ export async function rawLarkRequest<T>(options: RawLarkRequestOptions): Promise
   const resp = await feishuFetch(url.toString(), {
     method: options.method ?? 'GET',
     headers,
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    ...(options.body !== undefined
+      ? { body: JSON.stringify(options.body) }
+      : {}),
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

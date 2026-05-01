@@ -10,7 +10,10 @@
  */
 
 import type { ClawdbotConfig } from 'openclaw/plugin-sdk';
-import { fetchRemoteImageBuffer, uploadImageLark } from '../messaging/outbound/media';
+import {
+  fetchRemoteImageBuffer,
+  uploadImageLark,
+} from '../messaging/outbound/media';
 import { larkLogger } from '../core/lark-logger';
 
 const log = larkLogger('card/image-resolver');
@@ -59,7 +62,8 @@ export class ImageResolver {
       if (value.startsWith('img_')) return fullMatch;
 
       // Not a remote URL — strip (local paths, data URIs, etc.).
-      if (!value.startsWith('http://') && !value.startsWith('https://')) return '';
+      if (!value.startsWith('http://') && !value.startsWith('https://'))
+        return '';
 
       // Cached — replace with image key.
       const cached = this.resolved.get(value);
@@ -86,10 +90,15 @@ export class ImageResolver {
     this.resolveImages(text);
 
     if (this.pending.size > 0) {
-      log.info('resolveImagesAwait: waiting for uploads', { count: this.pending.size, timeoutMs });
+      log.info('resolveImagesAwait: waiting for uploads', {
+        count: this.pending.size,
+        timeoutMs,
+      });
 
       const allUploads = Promise.all(this.pending.values());
-      const timeout = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
+      const timeout = new Promise<void>((resolve) =>
+        setTimeout(resolve, timeoutMs),
+      );
       await Promise.race([allUploads, timeout]);
 
       if (this.pending.size > 0) {

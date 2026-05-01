@@ -165,7 +165,8 @@ export async function getChatInfo(params: {
   if (cached) return cached;
 
   try {
-    if (!_LarkClient) throw new Error('LarkClient not injected — circular dependency broken?');
+    if (!_LarkClient)
+      throw new Error('LarkClient not injected — circular dependency broken?');
     const sdk = _LarkClient.fromCfg(cfg, accountId).sdk;
     const response = await sdk.im.chat.get({
       path: { chat_id: chatId },
@@ -181,7 +182,9 @@ export async function getChatInfo(params: {
     };
 
     cache.set(chatId, info);
-    log.info(`resolved ${chatId} → chat_mode=${chatMode}, group_message_type=${groupMessageType ?? 'N/A'}`);
+    log.info(
+      `resolved ${chatId} → chat_mode=${chatMode}, group_message_type=${groupMessageType ?? 'N/A'}`,
+    );
     return info;
   } catch (err) {
     log.error(`failed to get chat info for ${chatId}: ${String(err)}`);
@@ -210,5 +213,7 @@ export async function getChatTypeFeishu(params: {
   const { cfg, chatId, accountId } = params;
   const info = await getChatInfo({ cfg, chatId, accountId });
   if (!info) return 'p2p';
-  return info.chatMode === 'group' || info.chatMode === 'topic' ? 'group' : 'p2p';
+  return info.chatMode === 'group' || info.chatMode === 'topic'
+    ? 'group'
+    : 'p2p';
 }

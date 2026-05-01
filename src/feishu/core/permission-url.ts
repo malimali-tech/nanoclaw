@@ -34,7 +34,12 @@ function getPermissionPriority(scope: string): number {
  * Returns the permission with the lowest priority number (read > write > other).
  */
 function extractHighestPriorityScope(scopeList: string): string {
-  return scopeList.split(',').sort((a, b) => getPermissionPriority(a) - getPermissionPriority(b))[0] ?? '';
+  return (
+    scopeList
+      .split(',')
+      .sort((a, b) => getPermissionPriority(a) - getPermissionPriority(b))[0] ??
+    ''
+  );
 }
 
 // ---------------------------------------------------------------------------

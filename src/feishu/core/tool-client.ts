@@ -36,7 +36,11 @@ import { LarkClient, getResolvedConfig } from './lark-client';
 import { getTicket } from './lark-ticket';
 import { callWithUAT } from './uat-client';
 import { getStoredToken } from './token-store';
-import { getAppGrantedScopes, invalidateAppScopeCache, missingScopes } from './app-scope-checker';
+import {
+  getAppGrantedScopes,
+  invalidateAppScopeCache,
+  missingScopes,
+} from './app-scope-checker';
 import { getAppOwnerFallback } from './app-owner-fallback';
 import { larkLogger } from './lark-logger';
 import { type ToolActionKey, getRequiredScopes } from './scope-manager';
@@ -76,7 +80,10 @@ type LarkRequestOptions = ReturnType<typeof Lark.withUserAccessToken>;
  * @deprecated 使用 `InvokeFn` 代替。
  * Callback that receives the SDK client and per-request UAT options.
  */
-export type ApiFn<T> = (sdk: Lark.Client, opts: LarkRequestOptions) => Promise<T>;
+export type ApiFn<T> = (
+  sdk: Lark.Client,
+  opts: LarkRequestOptions,
+) => Promise<T>;
 
 /**
  * invoke() 的回调签名。
@@ -84,7 +91,11 @@ export type ApiFn<T> = (sdk: Lark.Client, opts: LarkRequestOptions) => Promise<T
  * - UAT 模式：`opts` 为 `Lark.withUserAccessToken(token)`，需传给 SDK 方法；`uat` 为 User Access Token 原始字符串
  * - TAT 模式：`opts` 为 `undefined`，SDK 默认走应用身份；`uat` 也为 `undefined`
  */
-export type InvokeFn<T> = (sdk: Lark.Client, opts?: LarkRequestOptions, uat?: string) => Promise<T>;
+export type InvokeFn<T> = (
+  sdk: Lark.Client,
+  opts?: LarkRequestOptions,
+  uat?: string,
+) => Promise<T>;
 
 /** invoke() 的选项。 */
 export interface InvokeOptions {
@@ -172,14 +183,22 @@ export class ToolClient {
    * );
    *
    */
-  async invoke<T>(toolAction: ToolActionKey, fn: InvokeFn<T>, options?: InvokeOptions): Promise<T> {
+  async invoke<T>(
+    toolAction: ToolActionKey,
+    fn: InvokeFn<T>,
+    options?: InvokeOptions,
+  ): Promise<T> {
     return this._invokeInternal(toolAction, fn, options);
   }
 
   /**
    * 内部 invoke 实现，只支持 ToolActionKey（严格类型检查）
    */
-  private async _invokeInternal<T>(toolAction: ToolActionKey, fn: InvokeFn<T>, options?: InvokeOptions): Promise<T> {
+  private async _invokeInternal<T>(
+    toolAction: ToolActionKey,
+    fn: InvokeFn<T>,
+    options?: InvokeOptions,
+  ): Promise<T> {
     // 检查旧版插件是否已禁用 (error)
     const feishuEntry = this.config.plugins?.entries?.feishu;
     if (feishuEntry && feishuEntry.enabled !== false) {
@@ -202,18 +221,32 @@ export class ToolClient {
     // ---- App Granted Scopes 检查（应用已开通的权限）----
     // UAT 调用额外检查 offline_access（OAuth Device Flow 的前提权限），
     // 但不加入 requiredScopes（避免阻断业务 scope 进入用户授权流程）。
-    const appCheckScopes = tokenType === 'user' ? [...new Set([...requiredScopes, 'offline_access'])] : requiredScopes;
+    const appCheckScopes =
+      tokenType === 'user'
+        ? [...new Set([...requiredScopes, 'offline_access'])]
+        : requiredScopes;
 
     let appScopeVerified = true;
     if (appCheckScopes.length > 0) {
-      const appGrantedScopes = await getAppGrantedScopes(this.sdk, this.account.appId, tokenType);
+      const appGrantedScopes = await getAppGrantedScopes(
+        this.sdk,
+        this.account.appId,
+        tokenType,
+      );
 
       if (appGrantedScopes.length > 0) {
         // 严格模式：应用必须开通所有 Required Scopes（+ offline_access）
-        const missingAppScopes = missingScopes(appGrantedScopes, appCheckScopes);
+        const missingAppScopes = missingScopes(
+          appGrantedScopes,
+          appCheckScopes,
+        );
         if (missingAppScopes.length > 0) {
           throw new AppScopeMissingError(
-            { apiName: toolAction, scopes: missingAppScopes, appId: this.account.appId },
+            {
+              apiName: toolAction,
+              scopes: missingAppScopes,
+              appId: this.account.appId,
+            },
             'all',
             tokenType,
             requiredScopes,
@@ -247,7 +280,13 @@ export class ToolClient {
       }
     }
 
-    return this.invokeAsUser(toolAction, fn, requiredScopes, userOpenId, appScopeVerified);
+    return this.invokeAsUser(
+      toolAction,
+      fn,
+      requiredScopes,
+      userOpenId,
+      appScopeVerified,
+    );
   }
 
   /**
@@ -284,7 +323,11 @@ export class ToolClient {
    * ```
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async invokeByPath<T = any>(toolAction: ToolActionKey, path: string, options?: InvokeByPathOptions): Promise<T> {
+  async invokeByPath<T = any>(
+    toolAction: ToolActionKey,
+    path: string,
+    options?: InvokeByPathOptions,
+  ): Promise<T> {
     const fn: InvokeFn<T> = async (_sdk, _opts, uat) => {
       return this.rawRequest<T>(path, {
         method: options?.method,
@@ -301,11 +344,21 @@ export class ToolClient {
   // Private: TAT path
   // -------------------------------------------------------------------------
 
-  private async invokeAsTenant<T>(toolAction: ToolActionKey, fn: InvokeFn<T>, requiredScopes: string[]): Promise<T> {
+  private async invokeAsTenant<T>(
+    toolAction: ToolActionKey,
+    fn: InvokeFn<T>,
+    requiredScopes: string[],
+  ): Promise<T> {
     try {
       return await fn(this.sdk);
     } catch (err) {
-      this.rethrowStructuredError(err, toolAction, requiredScopes, undefined, 'tenant');
+      this.rethrowStructuredError(
+        err,
+        toolAction,
+        requiredScopes,
+        undefined,
+        'tenant',
+      );
       throw err;
     }
   }
@@ -353,8 +406,12 @@ export class ToolClient {
     //   LARK_ERROR.USER_SCOPE_INSUFFICIENT (99991679) → User Granted Scopes 缺失（需引导用户 OAuth 授权）
     if (appScopeVerified && stored.scope && requiredScopes.length > 0) {
       // 检查用户是否授权了所有 Required Scopes
-      const userGrantedScopes = new Set(stored.scope.split(/\s+/).filter(Boolean));
-      const missingUserScopes = requiredScopes.filter((s) => !userGrantedScopes.has(s));
+      const userGrantedScopes = new Set(
+        stored.scope.split(/\s+/).filter(Boolean),
+      );
+      const missingUserScopes = requiredScopes.filter(
+        (s) => !userGrantedScopes.has(s),
+      );
       if (missingUserScopes.length > 0) {
         throw new UserAuthRequiredError(userOpenId, {
           apiName: toolAction,
@@ -374,7 +431,8 @@ export class ToolClient {
           appSecret: this.account.appSecret,
           domain: this.account.brand,
         },
-        (accessToken) => fn(this.sdk, Lark.withUserAccessToken(accessToken), accessToken),
+        (accessToken) =>
+          fn(this.sdk, Lark.withUserAccessToken(accessToken), accessToken),
       );
     } catch (err) {
       if (err instanceof NeedAuthorizationError) {
@@ -384,7 +442,13 @@ export class ToolClient {
           appScopeVerified,
         });
       }
-      this.rethrowStructuredError(err, toolAction, requiredScopes, userOpenId, 'user');
+      this.rethrowStructuredError(
+        err,
+        toolAction,
+        requiredScopes,
+        userOpenId,
+        'user',
+      );
       throw err;
     }
   }
@@ -471,7 +535,10 @@ export class ToolClient {
  * @param config - OpenClaw 配置对象
  * @param accountIndex - 回退账号索引（默认 0）
  */
-export function createToolClient(config: ClawdbotConfig, accountIndex = 0): ToolClient {
+export function createToolClient(
+  config: ClawdbotConfig,
+  accountIndex = 0,
+): ToolClient {
   const ticket = getTicket();
 
   // 1. 解析账号
@@ -503,15 +570,20 @@ export function createToolClient(config: ClawdbotConfig, accountIndex = 0): Tool
     const accounts = getEnabledLarkAccounts(resolveConfig);
     if (accounts.length === 0) {
       throw new Error(
-        'No enabled Feishu accounts configured. ' + 'Please add appId and appSecret in config under channels.feishu',
+        'No enabled Feishu accounts configured. ' +
+          'Please add appId and appSecret in config under channels.feishu',
       );
     }
     if (accountIndex >= accounts.length) {
-      throw new Error(`Requested account index ${accountIndex} but only ${accounts.length} accounts available`);
+      throw new Error(
+        `Requested account index ${accountIndex} but only ${accounts.length} accounts available`,
+      );
     }
     const fallback = accounts[accountIndex];
     if (!fallback.configured) {
-      throw new Error(`Account at index ${accountIndex} is not fully configured (missing appId or appSecret)`);
+      throw new Error(
+        `Account at index ${accountIndex} is not fully configured (missing appId or appSecret)`,
+      );
     }
     account = fallback;
   }

@@ -17,7 +17,15 @@
 
 import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { Type } from '@sinclair/typebox';
-import { StringEnum, assertLarkOk, createToolContext, handleInvokeErrorWithAutoAuth, json, parseTimeToTimestampMs, registerTool } from '../helpers';
+import {
+  StringEnum,
+  assertLarkOk,
+  createToolContext,
+  handleInvokeErrorWithAutoAuth,
+  json,
+  parseTimeToTimestampMs,
+  registerTool,
+} from '../helpers';
 import type { PaginatedData } from '../sdk-types';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +34,8 @@ import type { PaginatedData } from '../sdk-types';
 
 const FeishuTaskSectionAuthType = Type.Optional(
   StringEnum(['tenant', 'user'], {
-    description: '调用 API 时使用的 Token 类型。可选值："tenant"（应用身份） 或 "user"（用户身份）。默认使用 "user"。',
+    description:
+      '调用 API 时使用的 Token 类型。可选值："tenant"（应用身份） 或 "user"（用户身份）。默认使用 "user"。',
   }),
 );
 
@@ -41,7 +50,8 @@ const FeishuTaskSectionSchema = Type.Union([
     resource_type: StringEnum(['tasklist', 'my_tasks']),
     resource_id: Type.Optional(
       Type.String({
-        description: '自定义分组要归属的资源id。当resource_type为"tasklist"时这里需要填写清单的GUID；当resource_type为"my_tasks"时，无需填写。',
+        description:
+          '自定义分组要归属的资源id。当resource_type为"tasklist"时这里需要填写清单的GUID；当resource_type为"my_tasks"时，无需填写。',
       }),
     ),
     insert_before: Type.Optional(
@@ -81,12 +91,14 @@ const FeishuTaskSectionSchema = Type.Union([
     ),
     insert_before: Type.Optional(
       Type.String({
-        description: '要让当前自定义分组放到某个自定义分组前面的secion_guid，用于改变当前自定义分组的位置。',
+        description:
+          '要让当前自定义分组放到某个自定义分组前面的secion_guid，用于改变当前自定义分组的位置。',
       }),
     ),
     insert_after: Type.Optional(
       Type.String({
-        description: '要让当前自定义分组放到某个自定义分组后面的secion_guid，用于改变当前自定义分组的位置。',
+        description:
+          '要让当前自定义分组放到某个自定义分组后面的secion_guid，用于改变当前自定义分组的位置。',
       }),
     ),
     user_id_type: Type.Optional(StringEnum(['open_id', 'union_id', 'user_id'])),
@@ -99,7 +111,8 @@ const FeishuTaskSectionSchema = Type.Union([
     resource_type: StringEnum(['tasklist', 'my_tasks']),
     resource_id: Type.Optional(
       Type.String({
-        description: '如resource_type为"tasklist"，这里需要填写要列取自定义分组的清单的GUID。',
+        description:
+          '如resource_type为"tasklist"，这里需要填写要列取自定义分组的清单的GUID。',
       }),
     ),
     page_size: Type.Optional(
@@ -195,7 +208,7 @@ type FeishuTaskSectionParams = { auth_type?: 'tenant' | 'user' } & (
       created_from?: string;
       created_to?: string;
       user_id_type?: 'open_id' | 'union_id' | 'user_id';
-      }
+    }
 );
 
 // ---------------------------------------------------------------------------
@@ -226,7 +239,9 @@ export function registerFeishuTaskSectionTool(api: OpenClawPluginApi): void {
             // CREATE SECTION
             // -----------------------------------------------------------------
             case 'create': {
-              log.info(`create: name=${p.name}, resource_type=${p.resource_type}`);
+              log.info(
+                `create: name=${p.name}, resource_type=${p.resource_type}`,
+              );
 
               const data: any = {
                 name: p.name,
@@ -253,7 +268,9 @@ export function registerFeishuTaskSectionTool(api: OpenClawPluginApi): void {
               );
               assertLarkOk(res);
 
-              log.info(`create: section created: section_guid=${res.data?.section?.guid}`);
+              log.info(
+                `create: section created: section_guid=${res.data?.section?.guid}`,
+              );
 
               return json({
                 section: res.data?.section,
@@ -348,7 +365,9 @@ export function registerFeishuTaskSectionTool(api: OpenClawPluginApi): void {
             // LIST SECTIONS
             // -----------------------------------------------------------------
             case 'list': {
-              log.info(`list: resource_type=${p.resource_type}, page_size=${p.page_size ?? 50}`);
+              log.info(
+                `list: resource_type=${p.resource_type}, page_size=${p.page_size ?? 50}`,
+              );
 
               const paramsData: any = {
                 resource_type: p.resource_type,
@@ -357,7 +376,8 @@ export function registerFeishuTaskSectionTool(api: OpenClawPluginApi): void {
 
               if (p.resource_id) paramsData.resource_id = p.resource_id;
               if (p.page_size !== undefined) paramsData.page_size = p.page_size;
-              if (p.page_token !== undefined) paramsData.page_token = p.page_token;
+              if (p.page_token !== undefined)
+                paramsData.page_token = p.page_token;
 
               const res = await client.invoke(
                 'feishu_task_section.list',
@@ -393,9 +413,10 @@ export function registerFeishuTaskSectionTool(api: OpenClawPluginApi): void {
               };
 
               if (p.page_size !== undefined) paramsData.page_size = p.page_size;
-              if (p.page_token !== undefined) paramsData.page_token = p.page_token;
+              if (p.page_token !== undefined)
+                paramsData.page_token = p.page_token;
               if (p.completed !== undefined) paramsData.completed = p.completed;
-              
+
               if (p.created_from) {
                 const ts = parseTimeToTimestampMs(p.created_from);
                 if (ts) paramsData.created_from = ts;

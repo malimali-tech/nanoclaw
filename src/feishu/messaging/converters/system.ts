@@ -29,8 +29,12 @@ export const convertSystem: ContentConverterFn = (raw) => {
   let content = parsed.template;
 
   const replacements: Record<string, string | undefined> = {
-    '{from_user}': parsed.from_user?.length ? parsed.from_user.filter(Boolean).join(', ') : undefined,
-    '{to_chatters}': parsed.to_chatters?.length ? parsed.to_chatters.filter(Boolean).join(', ') : undefined,
+    '{from_user}': parsed.from_user?.length
+      ? parsed.from_user.filter(Boolean).join(', ')
+      : undefined,
+    '{to_chatters}': parsed.to_chatters?.length
+      ? parsed.to_chatters.filter(Boolean).join(', ')
+      : undefined,
     '{divider_text}': parsed.divider_text?.text,
   };
 

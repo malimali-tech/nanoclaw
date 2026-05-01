@@ -9,9 +9,16 @@
  * dependencies needed to process the event.
  */
 
-import type { FeishuBotAddedEvent, FeishuMessageEvent, FeishuReactionCreatedEvent } from '../messaging/types';
+import type {
+  FeishuBotAddedEvent,
+  FeishuMessageEvent,
+  FeishuReactionCreatedEvent,
+} from '../messaging/types';
 import { handleFeishuMessage } from '../messaging/inbound/handler';
-import { handleFeishuReaction, resolveReactionContext } from '../messaging/inbound/reaction-handler';
+import {
+  handleFeishuReaction,
+  resolveReactionContext,
+} from '../messaging/inbound/reaction-handler';
 import { handleFeishuCommentEvent } from '../messaging/inbound/comment-handler';
 import { parseFeishuDriveCommentNoticeEventPayload } from '../messaging/inbound/comment-context';
 import { isMessageExpired } from '../messaging/inbound/dedup';
@@ -19,7 +26,12 @@ import { withTicket } from '../core/lark-ticket';
 import { larkLogger } from '../core/lark-logger';
 import { handleCardAction } from '../tools/auto-auth';
 import { handleAskUserAction } from '../tools/ask-user-question';
-import { buildQueueKey, enqueueFeishuChatTask, getActiveDispatcher, hasActiveTask } from './chat-queue';
+import {
+  buildQueueKey,
+  enqueueFeishuChatTask,
+  getActiveDispatcher,
+  hasActiveTask,
+} from './chat-queue';
 import { extractRawTextFromEvent, isLikelyAbortText } from './abort-detect';
 import type { MonitorContext } from './types';
 import { dispatchFeishuPluginInteractiveHandler } from './interactive-dispatch';
@@ -61,7 +73,10 @@ function isEventOwnershipValid(ctx: MonitorContext, data: unknown): boolean {
 // Message handler
 // ---------------------------------------------------------------------------
 
-export async function handleMessageEvent(ctx: MonitorContext, data: unknown): Promise<void> {
+export async function handleMessageEvent(
+  ctx: MonitorContext,
+  data: unknown,
+): Promise<void> {
   if (!isEventOwnershipValid(ctx, data)) return;
   const { accountId, log, error } = ctx;
   try {
@@ -71,7 +86,8 @@ export async function handleMessageEvent(ctx: MonitorContext, data: unknown): Pr
     // In topic groups, reply events carry root_id but not thread_id.
     // Use root_id as fallback so different topics get separate queue keys
     // and can be processed in parallel.
-    const threadId = event.message?.thread_id || event.message?.root_id || undefined;
+    const threadId =
+      event.message?.thread_id || event.message?.root_id || undefined;
 
     // Dedup — skip duplicate messages (e.g. from WebSocket reconnects).
     if (!ctx.messageDedup.tryRecord(msgId, accountId)) {
@@ -96,10 +112,14 @@ export async function handleMessageEvent(ctx: MonitorContext, data: unknown): Pr
       if (hasActiveTask(queueKey)) {
         const active = getActiveDispatcher(queueKey);
         if (active) {
-          log(`feishu[${accountId}]: abort fast-path triggered for chat ${chatId} (text="${abortText}")`);
+          log(
+            `feishu[${accountId}]: abort fast-path triggered for chat ${chatId} (text="${abortText}")`,
+          );
           active.abortController?.abort();
           active.abortCard().catch((err) => {
-            error(`feishu[${accountId}]: abort fast-path abortCard failed: ${String(err)}`);
+            error(
+              `feishu[${accountId}]: abort fast-path abortCard failed: ${String(err)}`,
+            );
           });
         }
       }
@@ -118,7 +138,8 @@ export async function handleMessageEvent(ctx: MonitorContext, data: unknown): Pr
               accountId,
               startTime: Date.now(),
               senderOpenId: event.sender?.sender_id?.open_id || '',
-              chatType: (event.message?.chat_type as 'p2p' | 'group') || undefined,
+              chatType:
+                (event.message?.chat_type as 'p2p' | 'group') || undefined,
               threadId,
             },
             () =>
@@ -136,7 +157,9 @@ export async function handleMessageEvent(ctx: MonitorContext, data: unknown): Pr
         }
       },
     });
-    log(`feishu[${accountId}]: message ${msgId} in chat ${chatId}${threadId ? ` thread ${threadId}` : ''} — ${status}`);
+    log(
+      `feishu[${accountId}]: message ${msgId} in chat ${chatId}${threadId ? ` thread ${threadId}` : ''} — ${status}`,
+    );
   } catch (err) {
     error(`feishu[${accountId}]: error handling message: ${String(err)}`);
   }
@@ -146,7 +169,10 @@ export async function handleMessageEvent(ctx: MonitorContext, data: unknown): Pr
 // Reaction handler
 // ---------------------------------------------------------------------------
 
-export async function handleReactionEvent(ctx: MonitorContext, data: unknown): Promise<void> {
+export async function handleReactionEvent(
+  ctx: MonitorContext,
+  data: unknown,
+): Promise<void> {
   if (!isEventOwnershipValid(ctx, data)) return;
   const { accountId, log, error } = ctx;
   try {
@@ -211,13 +237,19 @@ export async function handleReactionEvent(ctx: MonitorContext, data: unknown): P
               }),
           );
         } catch (err) {
-          error(`feishu[${accountId}]: error handling reaction: ${String(err)}`);
+          error(
+            `feishu[${accountId}]: error handling reaction: ${String(err)}`,
+          );
         }
       },
     });
-    log(`feishu[${accountId}]: reaction on ${msgId} (chatId=${preResolved.chatId}) — ${status}`);
+    log(
+      `feishu[${accountId}]: reaction on ${msgId} (chatId=${preResolved.chatId}) — ${status}`,
+    );
   } catch (err) {
-    error(`feishu[${accountId}]: error handling reaction event: ${String(err)}`);
+    error(
+      `feishu[${accountId}]: error handling reaction event: ${String(err)}`,
+    );
   }
 }
 
@@ -234,9 +266,13 @@ export async function handleBotMembershipEvent(
   const { accountId, log, error } = ctx;
   try {
     const event = data as FeishuBotAddedEvent;
-    log(`feishu[${accountId}]: bot ${action} ${action === 'removed' ? 'from' : 'to'} chat ${event.chat_id}`);
+    log(
+      `feishu[${accountId}]: bot ${action} ${action === 'removed' ? 'from' : 'to'} chat ${event.chat_id}`,
+    );
   } catch (err) {
-    error(`feishu[${accountId}]: error handling bot ${action} event: ${String(err)}`);
+    error(
+      `feishu[${accountId}]: error handling bot ${action} event: ${String(err)}`,
+    );
   }
 }
 
@@ -244,7 +280,10 @@ export async function handleBotMembershipEvent(
 // Drive comment handler
 // ---------------------------------------------------------------------------
 
-export async function handleCommentEvent(ctx: MonitorContext, data: unknown): Promise<void> {
+export async function handleCommentEvent(
+  ctx: MonitorContext,
+  data: unknown,
+): Promise<void> {
   if (!isEventOwnershipValid(ctx, data)) return;
   const { accountId, log, error } = ctx;
   try {
@@ -269,9 +308,13 @@ export async function handleCommentEvent(ctx: MonitorContext, data: unknown): Pr
     );
 
     // Dedup: build a deterministic key from the comment/reply IDs
-    const dedupKey = replyId ? `comment:${commentId}:reply:${replyId}` : `comment:${commentId}`;
+    const dedupKey = replyId
+      ? `comment:${commentId}:reply:${replyId}`
+      : `comment:${commentId}`;
     if (!ctx.messageDedup.tryRecord(dedupKey, accountId)) {
-      log(`feishu[${accountId}]: duplicate comment event ${dedupKey}, skipping`);
+      log(
+        `feishu[${accountId}]: duplicate comment event ${dedupKey}, skipping`,
+      );
       return;
     }
 
@@ -299,7 +342,10 @@ export async function handleCommentEvent(ctx: MonitorContext, data: unknown): Pr
 // Card action handler
 // ---------------------------------------------------------------------------
 
-export async function handleCardActionEvent(ctx: MonitorContext, data: unknown): Promise<unknown> {
+export async function handleCardActionEvent(
+  ctx: MonitorContext,
+  data: unknown,
+): Promise<unknown> {
   try {
     // AskUserQuestion：表单卡片交互（宿主内建能力优先）
     const askResult = handleAskUserAction(data, ctx.cfg, ctx.accountId);
@@ -310,7 +356,11 @@ export async function handleCardActionEvent(ctx: MonitorContext, data: unknown):
     if (authResult !== undefined) return authResult;
 
     // 业务自定义卡片交互：使用 SDK 标准 interactive dispatch 管道转发给业务插件。
-    return await dispatchFeishuPluginInteractiveHandler({ cfg: ctx.cfg, accountId: ctx.accountId, data });
+    return await dispatchFeishuPluginInteractiveHandler({
+      cfg: ctx.cfg,
+      accountId: ctx.accountId,
+      data,
+    });
   } catch (err) {
     elog.warn(`card.action.trigger handler error: ${err}`);
   }

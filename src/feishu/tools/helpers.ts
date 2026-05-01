@@ -97,7 +97,10 @@ export { getResolvedConfig } from '../core/lark-client';
  * }
  * ```
  */
-export function createClientGetter(config: ClawdbotConfig, accountIndex = 0): ClientGetter {
+export function createClientGetter(
+  config: ClawdbotConfig,
+  accountIndex = 0,
+): ClientGetter {
   return () => {
     // `config` may be stale after a hot-reload; use live config for account resolution.
     const resolveConfig = getResolvedConfig(config);
@@ -116,12 +119,15 @@ export function createClientGetter(config: ClawdbotConfig, accountIndex = 0): Cl
 
     if (accounts.length === 0) {
       throw new Error(
-        'No enabled Feishu accounts configured. ' + 'Please add appId and appSecret in config under channels.feishu',
+        'No enabled Feishu accounts configured. ' +
+          'Please add appId and appSecret in config under channels.feishu',
       );
     }
 
     if (accountIndex >= accounts.length) {
-      throw new Error(`Requested account index ${accountIndex} but only ${accounts.length} accounts available`);
+      throw new Error(
+        `Requested account index ${accountIndex} but only ${accounts.length} accounts available`,
+      );
     }
 
     const account = accounts[accountIndex];
@@ -163,7 +169,8 @@ export function getFirstAccount(config: ClawdbotConfig): LarkAccount {
 
   if (accounts.length === 0) {
     throw new Error(
-      'No enabled Feishu accounts configured. ' + 'Please add appId and appSecret in config under channels.feishu',
+      'No enabled Feishu accounts configured. ' +
+        'Please add appId and appSecret in config under channels.feishu',
     );
   }
 
@@ -246,7 +253,10 @@ export function createToolContext(
  * }
  * ```
  */
-export function checkToolRegistration(api: OpenClawPluginApi, toolName: string): boolean {
+export function checkToolRegistration(
+  api: OpenClawPluginApi,
+  toolName: string,
+): boolean {
   if (!api.config) return false;
 
   if (!shouldRegisterTool(api.config, toolName)) {
@@ -281,7 +291,8 @@ export function registerTool(
   opts?: Parameters<OpenClawPluginApi['registerTool']>[1],
 ): boolean {
   // 提取工具名称
-  const toolName = typeof tool === 'function' ? tool.name : (tool as { name?: string }).name;
+  const toolName =
+    typeof tool === 'function' ? tool.name : (tool as { name?: string }).name;
 
   if (!toolName) {
     // 如果无法提取工具名，直接注册（不拦截）
@@ -356,7 +367,10 @@ export function formatToolResult(
  * }
  * ```
  */
-export function formatToolError(error: unknown, context?: Record<string, unknown>): ToolResult {
+export function formatToolError(
+  error: unknown,
+  context?: Record<string, unknown>,
+): ToolResult {
   const errorMsg = error instanceof Error ? error.message : String(error);
 
   return formatToolResult({
@@ -388,7 +402,10 @@ export function formatToolError(error: unknown, context?: Record<string, unknown
  * }
  * ```
  */
-export function createToolLogger(api: OpenClawPluginApi, toolName: string): ToolLogger {
+export function createToolLogger(
+  api: OpenClawPluginApi,
+  toolName: string,
+): ToolLogger {
   const prefix = `${toolName}:`;
 
   return {

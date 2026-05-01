@@ -38,10 +38,22 @@ import { larkLogger } from '../core/lark-logger';
 const log = larkLogger('tools/auto-auth');
 import { formatLarkError } from '../core/api-error';
 import { getLarkAccount } from '../core/accounts';
-import { AppScopeMissingError, UserAuthRequiredError, UserScopeInsufficientError } from '../core/tool-client';
-import { getAppGrantedScopes, invalidateAppScopeCache, isAppScopeSatisfied } from '../core/app-scope-checker';
+import {
+  AppScopeMissingError,
+  UserAuthRequiredError,
+  UserScopeInsufficientError,
+} from '../core/tool-client';
+import {
+  getAppGrantedScopes,
+  invalidateAppScopeCache,
+  isAppScopeSatisfied,
+} from '../core/app-scope-checker';
 import { LarkClient } from '../core/lark-client';
-import { createCardEntity, sendCardByCardId, updateCardKitCardForAuth } from '../card/cardkit';
+import {
+  createCardEntity,
+  sendCardByCardId,
+  updateCardKitCardForAuth,
+} from '../card/cardkit';
 import { OwnerAccessDeniedError } from '../core/owner-policy';
 import { dispatchSyntheticTextMessage } from '../messaging/inbound/synthetic-message';
 import { executeAuthorize } from './oauth';
@@ -69,7 +81,10 @@ type JsonResult = ReturnType<typeof json>;
 interface AuthBatchEntry {
   phase: 'collecting' | 'executing';
   scopes: Set<string>;
-  waiters: Array<{ resolve: (v: JsonResult) => void; reject: (e: unknown) => void }>;
+  waiters: Array<{
+    resolve: (v: JsonResult) => void;
+    reject: (e: unknown) => void;
+  }>;
   timer: ReturnType<typeof setTimeout> | null;
   /** flushFn 执行中的 Promise（executing 阶段有值） */
   resultPromise: Promise<JsonResult> | null;
@@ -131,7 +146,11 @@ const AUTH_COOLDOWN_MS = 30_000;
 function enqueueAuthRequest(
   bufferKey: string,
   scopes: string[],
-  ctx: { account: ConfiguredLarkAccount; cfg: ClawdbotConfig; ticket: LarkTicket },
+  ctx: {
+    account: ConfiguredLarkAccount;
+    cfg: ClawdbotConfig;
+    ticket: LarkTicket;
+  },
   flushFn: (mergedScopes: string[]) => Promise<JsonResult>,
   debounceMs: number = AUTH_DEBOUNCE_MS,
 ): Promise<JsonResult> {
@@ -144,7 +163,9 @@ function enqueueAuthRequest(
     if (existing.phase === 'executing') {
       // flushFn 已在执行或已完成（卡片已发出），复用结果
       // 同时触发延迟刷新：用合并后的 scope 重新调用 flushFn 更新卡片
-      log.info(`auth in-flight, piggyback → key=${bufferKey}, scopes=[${[...existing.scopes].join(', ')}]`);
+      log.info(
+        `auth in-flight, piggyback → key=${bufferKey}, scopes=[${[...existing.scopes].join(', ')}]`,
+      );
 
       // 防抖 + 互斥：多个快速到达的请求只触发一次卡片更新
       if (existing.updateTimer) clearTimeout(existing.updateTimer);
@@ -154,14 +175,18 @@ function enqueueAuthRequest(
         // 互斥：如果上一轮更新还在执行，标记 pendingReupdate 等它结束后重跑
         if (existing.isUpdating) {
           existing.pendingReupdate = true;
-          log.info(`scope update deferred (previous update still running) → key=${bufferKey}`);
+          log.info(
+            `scope update deferred (previous update still running) → key=${bufferKey}`,
+          );
           return;
         }
 
         existing.isUpdating = true;
         try {
           const mergedScopes = [...existing.scopes];
-          log.info(`scope update flush → key=${bufferKey}, scopes=[${mergedScopes.join(', ')}]`);
+          log.info(
+            `scope update flush → key=${bufferKey}, scopes=[${mergedScopes.join(', ')}]`,
+          );
           // 重新调用 flushFn（executeAuthorize 会检测到 pendingFlow，
           // 原地更新旧卡片内容 + 重启 Device Flow）
           await existing.flushFn!(mergedScopes);
@@ -173,7 +198,9 @@ function enqueueAuthRequest(
           if (existing.pendingReupdate) {
             existing.pendingReupdate = false;
             const finalScopes = [...existing.scopes];
-            log.info(`scope reupdate → key=${bufferKey}, scopes=[${finalScopes.join(', ')}]`);
+            log.info(
+              `scope reupdate → key=${bufferKey}, scopes=[${finalScopes.join(', ')}]`,
+            );
             try {
               await existing.flushFn!(finalScopes);
             } catch (err) {
@@ -187,7 +214,9 @@ function enqueueAuthRequest(
     }
 
     // collecting 阶段：正常合并
-    log.info(`debounce merge → key=${bufferKey}, scopes=[${[...existing.scopes].join(', ')}]`);
+    log.info(
+      `debounce merge → key=${bufferKey}, scopes=[${[...existing.scopes].join(', ')}]`,
+    );
     return new Promise<JsonResult>((resolve, reject) => {
       existing.waiters.push({ resolve, reject });
     });
@@ -221,7 +250,8 @@ function enqueueAuthRequest(
     const mergedScopes = [...entry.scopes];
 
     log.info(
-      `debounce flush → key=${bufferKey}, ` + `waiters=${entry.waiters.length}, scopes=[${mergedScopes.join(', ')}]`,
+      `debounce flush → key=${bufferKey}, ` +
+        `waiters=${entry.waiters.length}, scopes=[${mergedScopes.join(', ')}]`,
     );
 
     // 将 flushFn 的 Promise 存入 entry，供 executing 阶段的后来者复用
@@ -266,7 +296,11 @@ interface PendingAppAuthFlow {
 const PENDING_FLOW_TTL_MS = 15 * 60 * 1000;
 
 /** 计算去重 key（chatId + messageId + 有序 scopes）。 */
-function makeDedupKey(chatId: string, messageId: string, scopes: string[]): string {
+function makeDedupKey(
+  chatId: string,
+  messageId: string,
+  scopes: string[],
+): string {
   return chatId + '\0' + messageId + '\0' + [...scopes].sort().join(',');
 }
 
@@ -288,7 +322,12 @@ class AppAuthFlowManager {
   private readonly activeCardIndex = new Map<string, string>();
 
   /** 原子注册新流程（同时写入 3 个索引 + 设置统一 TTL） */
-  register(operationId: string, flow: PendingAppAuthFlow, dedupKey: string, activeCardKey: string): void {
+  register(
+    operationId: string,
+    flow: PendingAppAuthFlow,
+    dedupKey: string,
+    activeCardKey: string,
+  ): void {
     const registered: RegisteredFlow = { ...flow, dedupKey, activeCardKey };
     this.flows.set(operationId, registered);
     this.dedupIndex.set(dedupKey, operationId);
@@ -331,7 +370,11 @@ class AppAuthFlowManager {
   migrateToNewOperationId(
     oldOperationId: string,
     newOperationId: string,
-    updates?: { dedupKey?: string; requiredScopes?: string[]; scopeNeedType?: 'one' | 'all' },
+    updates?: {
+      dedupKey?: string;
+      requiredScopes?: string[];
+      scopeNeedType?: 'one' | 'all';
+    },
   ): RegisteredFlow | undefined {
     const flow = this.flows.get(oldOperationId);
     if (!flow) return undefined;
@@ -367,7 +410,9 @@ class AppAuthFlowManager {
   }
 
   /** 通过去重键查询（避免发送重复卡片） */
-  getByDedupKey(key: string): { operationId: string; flow: PendingAppAuthFlow } | undefined {
+  getByDedupKey(
+    key: string,
+  ): { operationId: string; flow: PendingAppAuthFlow } | undefined {
     const opId = this.dedupIndex.get(key);
     if (!opId) return undefined;
     const flow = this.flows.get(opId);
@@ -375,7 +420,9 @@ class AppAuthFlowManager {
   }
 
   /** 通过活跃卡片键查询（同消息卡片复用） */
-  getByActiveCardKey(key: string): { operationId: string; flow: RegisteredFlow } | undefined {
+  getByActiveCardKey(
+    key: string,
+  ): { operationId: string; flow: RegisteredFlow } | undefined {
     const opId = this.activeCardIndex.get(key);
     if (!opId) return undefined;
     const flow = this.flows.get(opId);
@@ -411,7 +458,10 @@ const deferredUserAuth = new Map<string, DeferredUserAuthEntry>();
 function hasActiveAppAuthForMessage(ticket: LarkTicket): boolean {
   const appKey = `app:${ticket.accountId}:${ticket.chatId}:${ticket.messageId}`;
   const appEntry = authBatches.get(appKey);
-  if (appEntry && (appEntry.phase === 'collecting' || appEntry.phase === 'executing')) {
+  if (
+    appEntry &&
+    (appEntry.phase === 'collecting' || appEntry.phase === 'executing')
+  ) {
     return true;
   }
   const activeCardKey = `${ticket.chatId}:${ticket.messageId}`;
@@ -432,10 +482,19 @@ function addToDeferredUserAuth(
   const existing = deferredUserAuth.get(key);
   if (existing) {
     for (const s of scopes) existing.scopes.add(s);
-    log.info(`deferred user auth scope merge → key=${key}, scopes=[${[...existing.scopes].join(', ')}]`);
+    log.info(
+      `deferred user auth scope merge → key=${key}, scopes=[${[...existing.scopes].join(', ')}]`,
+    );
   } else {
-    deferredUserAuth.set(key, { scopes: new Set(scopes), account, cfg, ticket });
-    log.info(`deferred user auth created → key=${key}, scopes=[${scopes.join(', ')}]`);
+    deferredUserAuth.set(key, {
+      scopes: new Set(scopes),
+      account,
+      cfg,
+      ticket,
+    });
+    log.info(
+      `deferred user auth created → key=${key}, scopes=[${scopes.join(', ')}]`,
+    );
   }
 }
 
@@ -461,7 +520,8 @@ function buildAppScopeMissingCard(params: {
   brand?: LarkBrand;
 }): Record<string, unknown> {
   const { missingScopes, appId, operationId, brand } = params;
-  const openDomain = brand === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
+  const openDomain =
+    brand === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
   const authUrl = appId
     ? `${openDomain}/app/${appId}/auth?q=${encodeURIComponent(missingScopes.join(','))}&op_from=feishu-openclaw&token_type=user`
     : `${openDomain}/`;
@@ -592,7 +652,15 @@ async function sendAppScopeCard(params: {
   cfg: ClawdbotConfig;
   ticket: LarkTicket;
 }): Promise<ReturnType<typeof json>> {
-  const { account, missingScopes, appId, scopeNeedType, tokenType, cfg, ticket } = params;
+  const {
+    account,
+    missingScopes,
+    appId,
+    scopeNeedType,
+    tokenType,
+    cfg,
+    ticket,
+  } = params;
   const { accountId, chatId, messageId } = ticket;
   const activeCardKey = `${chatId}:${messageId}`;
 
@@ -620,17 +688,27 @@ async function sendAppScopeCard(params: {
   if (activeEntry) {
     const { operationId: activeOpId, flow: activeFlow } = activeEntry;
     // 更新已有卡片的内容（合并后的 scope）
-    const newOperationId = Date.now().toString(36) + Math.random().toString(36).slice(2);
-    const card = buildAppScopeMissingCard({ missingScopes, appId, operationId: newOperationId, brand: account.brand });
+    const newOperationId =
+      Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const card = buildAppScopeMissingCard({
+      missingScopes,
+      appId,
+      operationId: newOperationId,
+      brand: account.brand,
+    });
     const newSeq = activeFlow.sequence + 1;
 
     // TOCTOU 修复：先原子迁移（同步操作），再 await 更新卡片
     const newDedup = makeDedupKey(chatId, messageId, missingScopes);
-    const migrated = appAuthFlows.migrateToNewOperationId(activeOpId, newOperationId, {
-      dedupKey: newDedup,
-      requiredScopes: missingScopes,
-      scopeNeedType,
-    });
+    const migrated = appAuthFlows.migrateToNewOperationId(
+      activeOpId,
+      newOperationId,
+      {
+        dedupKey: newDedup,
+        requiredScopes: missingScopes,
+        scopeNeedType,
+      },
+    );
     if (!migrated) {
       // 被其他并发请求抢先迁移了，降级到新建卡片
       log.info(`migrate raced, falling through to new card creation`);
@@ -662,15 +740,23 @@ async function sendAppScopeCard(params: {
       } catch (err) {
         // 回滚：删除已迁移的 flow
         appAuthFlows.remove(newOperationId);
-        log.warn(`failed to update existing app-scope card, creating new one: ${err}`);
+        log.warn(
+          `failed to update existing app-scope card, creating new one: ${err}`,
+        );
         // 降级：走下面的新建卡片路径
       }
     }
   }
 
-  const operationId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const operationId =
+    Date.now().toString(36) + Math.random().toString(36).slice(2);
 
-  const card = buildAppScopeMissingCard({ missingScopes, appId, operationId, brand: account.brand });
+  const card = buildAppScopeMissingCard({
+    missingScopes,
+    appId,
+    operationId,
+    brand: account.brand,
+  });
 
   // 创建 CardKit 卡片实体
   const cardId = await createCardEntity({ cfg, card, accountId });
@@ -689,7 +775,9 @@ async function sendAppScopeCard(params: {
   }
 
   // 发送到当前会话
-  const replyToMsgId = ticket.messageId?.startsWith('om_') ? ticket.messageId : undefined;
+  const replyToMsgId = ticket.messageId?.startsWith('om_')
+    ? ticket.messageId
+    : undefined;
 
   await sendCardByCardId({
     cfg,
@@ -714,7 +802,9 @@ async function sendAppScopeCard(params: {
   };
   appAuthFlows.register(operationId, flow, dedup, activeCardKey);
 
-  log.info(`app-scope card sent, operationId=${operationId}, scopes=[${missingScopes.join(', ')}]`);
+  log.info(
+    `app-scope card sent, operationId=${operationId}, scopes=[${missingScopes.join(', ')}]`,
+  );
 
   return json({
     awaiting_app_authorization: true,
@@ -742,7 +832,11 @@ async function sendAppScopeCard(params: {
  * 注意：函数体内的主要逻辑通过 setImmediate + fire-and-forget 异步执行，
  * 确保 Feishu card.action.trigger 回调在 3 秒内返回。
  */
-export async function handleCardAction(data: unknown, cfg: ClawdbotConfig, accountId: string): Promise<unknown> {
+export async function handleCardAction(
+  data: unknown,
+  cfg: ClawdbotConfig,
+  accountId: string,
+): Promise<unknown> {
   let action: string | undefined;
   let operationId: string | undefined;
   let senderOpenId: string | undefined;
@@ -763,11 +857,15 @@ export async function handleCardAction(data: unknown, cfg: ClawdbotConfig, accou
 
   const flow = appAuthFlows.getByOperationId(operationId);
   if (!flow) {
-    log.warn(`card action ${operationId} not found (expired or already handled)`);
+    log.warn(
+      `card action ${operationId} not found (expired or already handled)`,
+    );
     return;
   }
 
-  log.info(`app_auth_done clicked by ${senderOpenId}, operationId=${operationId}`);
+  log.info(
+    `app_auth_done clicked by ${senderOpenId}, operationId=${operationId}`,
+  );
 
   // scope 校验在同步路径完成（3 秒内返回 toast response）
   invalidateAppScopeCache(flow.appId);
@@ -791,8 +889,12 @@ export async function handleCardAction(data: unknown, cfg: ClawdbotConfig, accou
   //   - scopeNeedType "all" → 全部必须有
   //   - 默认"one" → 交集非空即可
   //   - grantedScopes 为空 → 视为满足（API 失败退回服务端判断）
-  if (!isAppScopeSatisfied(grantedScopes, flow.requiredScopes, flow.scopeNeedType)) {
-    log.warn(`app scopes still missing after user confirmation: [${flow.requiredScopes.join(', ')}]`);
+  if (
+    !isAppScopeSatisfied(grantedScopes, flow.requiredScopes, flow.scopeNeedType)
+  ) {
+    log.warn(
+      `app scopes still missing after user confirmation: [${flow.requiredScopes.join(', ')}]`,
+    );
     return {
       toast: {
         type: 'error',
@@ -807,10 +909,14 @@ export async function handleCardAction(data: unknown, cfg: ClawdbotConfig, accou
   const deferKey = flow.ticket.senderOpenId
     ? `${flow.accountId}:${flow.ticket.senderOpenId}:${flow.ticket.messageId}`
     : undefined;
-  const consumedDeferred = deferKey ? deferredUserAuth.get(deferKey) : undefined;
+  const consumedDeferred = deferKey
+    ? deferredUserAuth.get(deferKey)
+    : undefined;
   if (consumedDeferred && deferKey) {
     deferredUserAuth.delete(deferKey);
-    log.info(`consumed deferred user auth scopes: [${[...consumedDeferred.scopes].join(', ')}]`);
+    log.info(
+      `consumed deferred user auth scopes: [${[...consumedDeferred.scopes].join(', ')}]`,
+    );
   }
 
   // 校验通过才删除，防止用户在权限通过前多次点击无法重试
@@ -846,7 +952,9 @@ export async function handleCardAction(data: unknown, cfg: ClawdbotConfig, accou
       }
 
       // 收集所有来源的 scope（过滤 offline_access：仅 app 级需要，device-flow 自动追加）
-      const mergedScopes = new Set(flow.requiredScopes.filter((s) => s !== 'offline_access'));
+      const mergedScopes = new Set(
+        flow.requiredScopes.filter((s) => s !== 'offline_access'),
+      );
 
       // 来源 1: 延迟用户授权队列（已在同步路径中提前取出，见 consumedDeferred）
       if (consumedDeferred) {
@@ -858,14 +966,18 @@ export async function handleCardAction(data: unknown, cfg: ClawdbotConfig, accou
       const userBatch = authBatches.get(userBatchKey);
       if (userBatch) {
         for (const s of userBatch.scopes) mergedScopes.add(s);
-        log.info(`merged user batch scopes into app auth completion: [${[...mergedScopes].join(', ')}]`);
+        log.info(
+          `merged user batch scopes into app auth completion: [${[...mergedScopes].join(', ')}]`,
+        );
       }
 
       if (mergedScopes.size === 0) {
         // 无业务 scope 需要用户授权（例如 offline_access 是唯一缺失的应用权限，
         // 且没有其他工具产生用户授权需求）。跳过 OAuth，直接发合成消息触发 AI 重试，
         // 重试时工具会自然发现需要用户授权并发起正确的 OAuth 流程。
-        log.info('no business scopes to authorize after app auth, sending synthetic message for retry');
+        log.info(
+          'no business scopes to authorize after app auth, sending synthetic message for retry',
+        );
         const syntheticMsgId = `${flow.ticket.messageId}:app-auth-complete`;
         const syntheticRuntime = {
           log: (msg: string) => log.info(msg),
@@ -928,7 +1040,10 @@ export async function handleCardAction(data: unknown, cfg: ClawdbotConfig, accou
  * @param err - invoke() 或其他逻辑抛出的错误
  * @param cfg - OpenClaw 配置对象（从工具注册函数的闭包中获取）
  */
-export async function handleInvokeErrorWithAutoAuth(err: unknown, cfg: ClawdbotConfig): Promise<ToolResult> {
+export async function handleInvokeErrorWithAutoAuth(
+  err: unknown,
+  cfg: ClawdbotConfig,
+): Promise<ToolResult> {
   // `cfg` is the closure-captured snapshot from plugin registration and may be
   // stale after a hot-reload.  Use getResolvedConfig() to always get the live config.
   cfg = getResolvedConfig(cfg);
@@ -961,7 +1076,9 @@ export async function handleInvokeErrorWithAutoAuth(err: unknown, cfg: ClawdbotC
             //   将用户授权 scope 收集到延迟队列，等应用授权完成后统一发起 OAuth
             if (hasActiveAppAuthForMessage(ticket)) {
               addToDeferredUserAuth(ticket, scopes, acct, cfg);
-              log.info(`UserAuthRequiredError deferred (app auth pending), scopes=[${scopes.join(', ')}]`);
+              log.info(
+                `UserAuthRequiredError deferred (app auth pending), scopes=[${scopes.join(', ')}]`,
+              );
               return json({
                 awaiting_app_authorization: true,
                 user_auth_deferred: true,
@@ -974,7 +1091,9 @@ export async function handleInvokeErrorWithAutoAuth(err: unknown, cfg: ClawdbotC
             }
 
             const bufferKey = `user:${ticket.accountId}:${senderOpenId}:${ticket.messageId}`;
-            log.info(`UserAuthRequiredError → enqueue, key=${bufferKey}, scopes=[${scopes.join(', ')}]`);
+            log.info(
+              `UserAuthRequiredError → enqueue, key=${bufferKey}, scopes=[${scopes.join(', ')}]`,
+            );
             return await enqueueAuthRequest(
               bufferKey,
               scopes,
@@ -1012,7 +1131,9 @@ export async function handleInvokeErrorWithAutoAuth(err: unknown, cfg: ClawdbotC
             // ★ 延迟检查：同 Path 1a
             if (hasActiveAppAuthForMessage(ticket)) {
               addToDeferredUserAuth(ticket, scopes, acct, cfg);
-              log.info(`UserScopeInsufficientError deferred (app auth pending), scopes=[${scopes.join(', ')}]`);
+              log.info(
+                `UserScopeInsufficientError deferred (app auth pending), scopes=[${scopes.join(', ')}]`,
+              );
               return json({
                 awaiting_app_authorization: true,
                 user_auth_deferred: true,
@@ -1025,7 +1146,9 @@ export async function handleInvokeErrorWithAutoAuth(err: unknown, cfg: ClawdbotC
             }
 
             const bufferKey = `user:${ticket.accountId}:${senderOpenId}:${ticket.messageId}`;
-            log.info(`UserScopeInsufficientError → enqueue, key=${bufferKey}, scopes=[${scopes.join(', ')}]`);
+            log.info(
+              `UserScopeInsufficientError → enqueue, key=${bufferKey}, scopes=[${scopes.join(', ')}]`,
+            );
             return await enqueueAuthRequest(
               bufferKey,
               scopes,
@@ -1069,13 +1192,21 @@ export async function handleInvokeErrorWithAutoAuth(err: unknown, cfg: ClawdbotC
           // 应用权限完成后 handleCardAction 会消费这些 scope，
           // 与 flow.requiredScopes（仅 app 缺失的）合并，一次性发起 OAuth。
           if (senderOpenId && appScopeErr.allRequiredScopes?.length) {
-            addToDeferredUserAuth(ticket, appScopeErr.allRequiredScopes, acct, cfg);
-            log.info(`AppScopeMissingError → deferred allRequiredScopes=[${appScopeErr.allRequiredScopes.join(', ')}]`);
+            addToDeferredUserAuth(
+              ticket,
+              appScopeErr.allRequiredScopes,
+              acct,
+              cfg,
+            );
+            log.info(
+              `AppScopeMissingError → deferred allRequiredScopes=[${appScopeErr.allRequiredScopes.join(', ')}]`,
+            );
           }
 
           const bufferKey = `app:${ticket.accountId}:${ticket.chatId}:${ticket.messageId}`;
           log.info(
-            `AppScopeMissingError → enqueue, key=${bufferKey}, ` + `scopes=[${appScopeErr.missingScopes.join(', ')}]`,
+            `AppScopeMissingError → enqueue, key=${bufferKey}, ` +
+              `scopes=[${appScopeErr.missingScopes.join(', ')}]`,
           );
           return await enqueueAuthRequest(
             bufferKey,

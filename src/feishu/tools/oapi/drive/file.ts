@@ -29,7 +29,11 @@ import {
   json,
   registerTool,
 } from '../helpers';
-import type { DriveFileData, DriveFileListData, DriveTaskData } from '../sdk-types';
+import type {
+  DriveFileData,
+  DriveFileListData,
+  DriveTaskData,
+} from '../sdk-types';
 
 // 分片上传配置
 const SMALL_FILE_THRESHOLD = 15 * 1024 * 1024; // 15MB，小于此大小使用一次上传
@@ -62,7 +66,8 @@ const FeishuDriveFileSchema = Type.Union([
     ),
     order_by: Type.Optional(
       StringEnum(['EditedTime', 'CreatedTime'], {
-        description: '排序方式：EditedTime（编辑时间）、CreatedTime（创建时间）',
+        description:
+          '排序方式：EditedTime（编辑时间）、CreatedTime（创建时间）',
       }),
     ),
     direction: Type.Optional(
@@ -78,7 +83,8 @@ const FeishuDriveFileSchema = Type.Union([
     request_docs: Type.Array(
       Type.Object({
         doc_token: Type.String({
-          description: '文档 token（从浏览器 URL 中获取，如 spreadsheet_token、doc_token 等）',
+          description:
+            '文档 token（从浏览器 URL 中获取，如 spreadsheet_token、doc_token 等）',
         }),
         doc_type: Type.Union(
           [
@@ -92,7 +98,8 @@ const FeishuDriveFileSchema = Type.Union([
             Type.Literal('slides'),
           ],
           {
-            description: '文档类型：doc、sheet、file、bitable、docx、folder、mindnote、slides',
+            description:
+              '文档类型：doc、sheet、file、bitable、docx、folder、mindnote、slides',
           },
         ),
       }),
@@ -136,7 +143,8 @@ const FeishuDriveFileSchema = Type.Union([
     ),
     parent_node: Type.Optional(
       Type.String({
-        description: '【folder_token 的别名】目标文件夹 token（为兼容性保留，建议使用 folder_token）',
+        description:
+          '【folder_token 的别名】目标文件夹 token（为兼容性保留，建议使用 folder_token）',
       }),
     ),
   }),
@@ -207,7 +215,8 @@ const FeishuDriveFileSchema = Type.Union([
     ),
     file_content_base64: Type.Optional(
       Type.String({
-        description: '文件内容的 Base64 编码（与 file_path 二选一）。当不提供 file_path 时使用。',
+        description:
+          '文件内容的 Base64 编码（与 file_path 二选一）。当不提供 file_path 时使用。',
       }),
     ),
     file_name: Type.Optional(
@@ -331,7 +340,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
             // LIST FILES
             // -----------------------------------------------------------------
             case 'list': {
-              log.info(`list: folder_token=${p.folder_token || '(root)'}, page_size=${p.page_size ?? 200}`);
+              log.info(
+                `list: folder_token=${p.folder_token || '(root)'}, page_size=${p.page_size ?? 200}`,
+              );
 
               const res = await client.invoke(
                 'feishu_drive_file.list',
@@ -366,7 +377,11 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
             // GET META
             // -----------------------------------------------------------------
             case 'get_meta': {
-              if (!p.request_docs || !Array.isArray(p.request_docs) || p.request_docs.length === 0) {
+              if (
+                !p.request_docs ||
+                !Array.isArray(p.request_docs) ||
+                p.request_docs.length === 0
+              ) {
                 return json({
                   error:
                     "request_docs must be a non-empty array. Correct format: {action: 'get_meta', request_docs: [{doc_token: '...', doc_type: 'sheet'}]}",
@@ -390,7 +405,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
               );
               assertLarkOk(res);
 
-              log.info(`get_meta: returned ${res.data?.metas?.length ?? 0} metas`);
+              log.info(
+                `get_meta: returned ${res.data?.metas?.length ?? 0} metas`,
+              );
 
               return json({
                 metas: res.data?.metas ?? [],
@@ -427,7 +444,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
               assertLarkOk(res);
 
               const data = res.data as DriveFileData | undefined;
-              log.info(`copy: new file_token=${data?.file?.token ?? 'unknown'}`);
+              log.info(
+                `copy: new file_token=${data?.file?.token ?? 'unknown'}`,
+              );
 
               return json({
                 file: data?.file,
@@ -438,7 +457,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
             // MOVE FILE
             // -----------------------------------------------------------------
             case 'move': {
-              log.info(`move: file_token=${p.file_token}, type=${p.type}, folder_token=${p.folder_token}`);
+              log.info(
+                `move: file_token=${p.file_token}, type=${p.type}, folder_token=${p.folder_token}`,
+              );
 
               const res = await client.invoke(
                 'feishu_drive_file.move',
@@ -458,7 +479,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
               assertLarkOk(res);
 
               const data = res.data as DriveTaskData | undefined;
-              log.info(`move: success${data?.task_id ? `, task_id=${data.task_id}` : ''}`);
+              log.info(
+                `move: success${data?.task_id ? `, task_id=${data.task_id}` : ''}`,
+              );
 
               return json({
                 success: true,
@@ -491,7 +514,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
               assertLarkOk(res);
 
               const data = res.data as DriveTaskData | undefined;
-              log.info(`delete: success${data?.task_id ? `, task_id=${data.task_id}` : ''}`);
+              log.info(
+                `delete: success${data?.task_id ? `, task_id=${data.task_id}` : ''}`,
+              );
 
               return json({
                 success: true,
@@ -522,7 +547,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
                   // 计算文件大小（如果未提供）
                   fileSize = p.size || fileBuffer.length;
 
-                  log.info(`upload: file_name=${fileName}, size=${fileSize}, parent=${p.parent_node || '(root)'}`);
+                  log.info(
+                    `upload: file_name=${fileName}, size=${fileSize}, parent=${p.parent_node || '(root)'}`,
+                  );
                 } catch (err) {
                   return json({
                     error: `failed to read local file: ${err instanceof Error ? err.message : String(err)}`,
@@ -532,7 +559,8 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
                 // 使用 base64 内容
                 if (!p.file_name || !p.size) {
                   return json({
-                    error: 'file_name and size are required when using file_content_base64',
+                    error:
+                      'file_name and size are required when using file_content_base64',
                   });
                 }
 
@@ -553,7 +581,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
               // 根据文件大小选择上传方式
               if (fileSize <= SMALL_FILE_THRESHOLD) {
                 // 小文件：使用一次上传
-                log.info(`upload: using upload_all (file size ${fileSize} <= 15MB)`);
+                log.info(
+                  `upload: using upload_all (file size ${fileSize} <= 15MB)`,
+                );
 
                 const res: any = await client.invoke(
                   'feishu_drive_file.upload',
@@ -583,7 +613,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
                 });
               } else {
                 // 大文件：使用分片上传
-                log.info(`upload: using chunked upload (file size ${fileSize} > 15MB)`);
+                log.info(
+                  `upload: using chunked upload (file size ${fileSize} > 15MB)`,
+                );
 
                 // 1. 预上传
                 log.info(`upload: step 1 - prepare upload`);
@@ -613,7 +645,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
                 assertLarkOk(prepareRes);
 
                 const { upload_id, block_size, block_num } = prepareRes.data;
-                log.info(`upload: got upload_id=${upload_id}, block_num=${block_num}, block_size=${block_size}`);
+                log.info(
+                  `upload: got upload_id=${upload_id}, block_num=${block_num}, block_size=${block_size}`,
+                );
 
                 // 2. 上传分片
                 log.info(`upload: step 2 - uploading ${block_num} chunks`);
@@ -622,7 +656,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
                   const end = Math.min(start + block_size, fileSize);
                   const chunkBuffer = fileBuffer.subarray(start, end);
 
-                  log.info(`upload: uploading chunk ${seq + 1}/${block_num} (${chunkBuffer.length} bytes)`);
+                  log.info(
+                    `upload: uploading chunk ${seq + 1}/${block_num} (${chunkBuffer.length} bytes)`,
+                  );
 
                   await client.invoke(
                     'feishu_drive_file.upload',
@@ -641,7 +677,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
                     { as: 'user' },
                   );
 
-                  log.info(`upload: chunk ${seq + 1}/${block_num} uploaded successfully`);
+                  log.info(
+                    `upload: chunk ${seq + 1}/${block_num} uploaded successfully`,
+                  );
                 }
 
                 // 3. 完成上传
@@ -709,7 +747,9 @@ export function registerFeishuDriveFileTool(api: OpenClawPluginApi): boolean {
                 try {
                   // output_path 必须是完整文件路径
                   // 确保父目录存在
-                  await fs.mkdir(path.dirname(p.output_path), { recursive: true });
+                  await fs.mkdir(path.dirname(p.output_path), {
+                    recursive: true,
+                  });
 
                   // 写入文件
                   await fs.writeFile(p.output_path, fileBuffer);

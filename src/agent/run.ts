@@ -13,6 +13,8 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import { GROUPS_DIR } from '../config.js';
 import { logger } from '../logger.js';
+import { openStream as openChannelStream } from '../router.js';
+import type { StreamHandle } from '../types.js';
 import { globalSkillsDirs } from './global-skills.js';
 import { SessionPool, type DisposableSession } from './session-pool.js';
 import {
@@ -36,7 +38,18 @@ const log = (m: string) => logger.info(`[agent] ${m}`);
 
 interface PooledSession extends DisposableSession {
   session: AgentSession;
+  /** Buffer used when the owning channel has no `openStream` support. Emitted
+   *  as a single `router.send` on `turn_end`/`agent_end`. */
   routerBuffer: string;
+  /** Per-turn streaming handle, opened lazily on first event of a turn when
+   *  the owning channel implements `Channel.openStream`. Null otherwise. */
+  currentStream: StreamHandle | null;
+  /** Memoized "did we try to open a stream for this turn?" — avoids re-asking
+   *  the channel on every event when streaming isn't supported. Reset on
+   *  finalize. */
+  streamProbed: boolean;
+  /** Serializes outbound writes (stream appends + finalize + buffer flush) so
+   *  ordering matches the order events arrive in. */
   sendChain: Promise<void>;
 }
 
@@ -125,10 +138,12 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
   const pooled: PooledSession = {
     session,
     routerBuffer: '',
+    currentStream: null,
+    streamProbed: false,
     sendChain: Promise.resolve(),
     dispose: async () => {
       await pooled.sendChain;
-      await flushBuffer(pooled, ctx);
+      await endTurn(pooled, ctx, 'aborted');
       session.dispose();
       // Tear down the chat's container (no-op in non-docker modes). Done
       // after session.dispose so any final tool calls have already settled.
@@ -137,17 +152,119 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
   };
 
   session.subscribe((event) => {
-    if (
-      event.type === 'message_update' &&
-      event.assistantMessageEvent.type === 'text_delta'
-    ) {
-      pooled.routerBuffer += event.assistantMessageEvent.delta;
+    if (event.type === 'message_update') {
+      const ame = event.assistantMessageEvent;
+      if (ame.type === 'text_delta') {
+        pooled.sendChain = pooled.sendChain.then(async () => {
+          const stream = await ensureStream(pooled, ctx);
+          if (stream) {
+            await stream.appendText(ame.delta).catch((err) =>
+              log(
+                `stream.appendText failed: ${err instanceof Error ? err.message : String(err)}`,
+              ),
+            );
+          } else {
+            pooled.routerBuffer += ame.delta;
+          }
+        });
+      } else if (ame.type === 'thinking_delta') {
+        pooled.sendChain = pooled.sendChain.then(async () => {
+          const stream = await ensureStream(pooled, ctx);
+          if (!stream) return; // no streaming → reasoning is dropped (matches old behaviour)
+          await stream.appendReasoning(ame.delta).catch((err) =>
+            log(
+              `stream.appendReasoning failed: ${err instanceof Error ? err.message : String(err)}`,
+            ),
+          );
+        });
+      }
+    } else if (event.type === 'tool_execution_start') {
+      const { toolCallId, toolName, args } = event;
+      pooled.sendChain = pooled.sendChain.then(async () => {
+        const stream = await ensureStream(pooled, ctx);
+        if (!stream) return;
+        await stream.appendToolUse(toolCallId, toolName, args).catch((err) =>
+          log(
+            `stream.appendToolUse failed: ${err instanceof Error ? err.message : String(err)}`,
+          ),
+        );
+      });
+    } else if (event.type === 'tool_execution_end') {
+      const { toolCallId, toolName, result, isError } = event;
+      pooled.sendChain = pooled.sendChain.then(async () => {
+        const stream = await ensureStream(pooled, ctx);
+        if (!stream) return;
+        await stream
+          .appendToolResult(toolCallId, toolName, result, isError)
+          .catch((err) =>
+            log(
+              `stream.appendToolResult failed: ${err instanceof Error ? err.message : String(err)}`,
+            ),
+          );
+      });
     } else if (event.type === 'turn_end' || event.type === 'agent_end') {
-      pooled.sendChain = pooled.sendChain.then(() => flushBuffer(pooled, ctx));
+      pooled.sendChain = pooled.sendChain.then(() =>
+        endTurn(pooled, ctx, 'normal'),
+      );
     }
   });
 
   return pooled;
+}
+
+/**
+ * Lazily open the per-turn stream the first time we see an event that wants
+ * one. Returns null and memoizes "no stream" if the owning channel doesn't
+ * implement `openStream` so subsequent events fall through to the buffer
+ * fast-path without re-probing.
+ */
+async function ensureStream(
+  p: PooledSession,
+  ctx: ExtensionCtx,
+): Promise<StreamHandle | null> {
+  if (p.currentStream) return p.currentStream;
+  if (p.streamProbed) return null;
+  p.streamProbed = true;
+  try {
+    const handle = await openChannelStream(ctx.channels, ctx.chatJid);
+    p.currentStream = handle;
+    return handle;
+  } catch (err) {
+    log(
+      `openStream failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
+
+/**
+ * End-of-turn cleanup: finalize the stream if we opened one, otherwise flush
+ * any buffered text via the legacy single-shot router. Resets streaming state
+ * so the next turn starts fresh.
+ */
+async function endTurn(
+  p: PooledSession,
+  ctx: ExtensionCtx,
+  reason: 'normal' | 'aborted' | 'error',
+): Promise<void> {
+  if (p.currentStream) {
+    const stream = p.currentStream;
+    p.currentStream = null;
+    p.streamProbed = false;
+    try {
+      await stream.finalize({ reason });
+    } catch (err) {
+      log(
+        `stream.finalize failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    // Streamed turns own their full output — drop any stray buffered text
+    // (shouldn't accumulate, but be defensive).
+    p.routerBuffer = '';
+    return;
+  }
+  p.streamProbed = false;
+  await flushBuffer(p, ctx);
 }
 
 async function flushBuffer(p: PooledSession, ctx: ExtensionCtx): Promise<void> {

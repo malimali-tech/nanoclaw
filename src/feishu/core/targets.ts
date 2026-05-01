@@ -98,8 +98,11 @@ export function parseFeishuRouteTarget(raw: string): FeishuRouteTarget {
   if (!fragment) return { target };
 
   const params = new URLSearchParams(fragment);
-  const replyToMessageId = normalizeMessageId(params.get(ROUTE_META_FRAGMENT_REPLY_TO)?.trim() || undefined);
-  const threadId = params.get(ROUTE_META_FRAGMENT_THREAD_ID)?.trim() || undefined;
+  const replyToMessageId = normalizeMessageId(
+    params.get(ROUTE_META_FRAGMENT_REPLY_TO)?.trim() || undefined,
+  );
+  const threadId =
+    params.get(ROUTE_META_FRAGMENT_THREAD_ID)?.trim() || undefined;
   return {
     target,
     ...(replyToMessageId ? { replyToMessageId } : {}),
@@ -115,13 +118,18 @@ export function encodeFeishuRouteTarget(params: {
   const target = params.target.trim();
   if (!target) return target;
 
-  const replyToMessageId = normalizeMessageId(params.replyToMessageId?.trim() || undefined);
+  const replyToMessageId = normalizeMessageId(
+    params.replyToMessageId?.trim() || undefined,
+  );
   const threadId =
-    params.threadId != null && String(params.threadId).trim() !== '' ? String(params.threadId).trim() : undefined;
+    params.threadId != null && String(params.threadId).trim() !== ''
+      ? String(params.threadId).trim()
+      : undefined;
   if (!replyToMessageId && !threadId) return target;
 
   const fragment = new URLSearchParams();
-  if (replyToMessageId) fragment.set(ROUTE_META_FRAGMENT_REPLY_TO, replyToMessageId);
+  if (replyToMessageId)
+    fragment.set(ROUTE_META_FRAGMENT_REPLY_TO, replyToMessageId);
   if (threadId) fragment.set(ROUTE_META_FRAGMENT_THREAD_ID, threadId);
   return `${target}#${fragment.toString()}`;
 }
@@ -150,7 +158,9 @@ export function formatFeishuTarget(id: string, type?: FeishuIdType): string {
  * Determine the `receive_id_type` query parameter for the Feishu send-message
  * API based on the target identifier.
  */
-export function resolveReceiveIdType(id: string): 'chat_id' | 'open_id' | 'user_id' {
+export function resolveReceiveIdType(
+  id: string,
+): 'chat_id' | 'open_id' | 'user_id' {
   if (id.startsWith(CHAT_PREFIX)) return 'chat_id';
   if (id.startsWith(OPEN_ID_PREFIX)) return 'open_id';
   // Default to open_id for any other pattern (safer for outbound API calls).
@@ -165,8 +175,12 @@ export function resolveReceiveIdType(id: string): 'chat_id' | 'open_id' | 'user_
  * 规范化 message_id，去除合成后缀（如 `om_xxx:auth-complete` → `om_xxx`）。
  */
 export function normalizeMessageId(messageId: string): string;
-export function normalizeMessageId(messageId: string | undefined): string | undefined;
-export function normalizeMessageId(messageId: string | undefined): string | undefined {
+export function normalizeMessageId(
+  messageId: string | undefined,
+): string | undefined;
+export function normalizeMessageId(
+  messageId: string | undefined,
+): string | undefined {
   if (!messageId) return undefined;
   const colonIndex = messageId.indexOf(':');
   if (colonIndex >= 0) return messageId.slice(0, colonIndex);
