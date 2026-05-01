@@ -27,7 +27,11 @@ export class CardKitApiError extends Error {
   }
 }
 
-function checkResponse(api: string, context: string, resp: CardKitResponse): void {
+function checkResponse(
+  api: string,
+  context: string,
+  resp: CardKitResponse,
+): void {
   const { code, msg } = resp;
   if (code && code !== 0) {
     throw new CardKitApiError(api, code, msg ?? '', context);

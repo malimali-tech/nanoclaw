@@ -190,7 +190,11 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
       onStream('appendToolResult', (s) =>
         s.appendToolResult(toolCallId, toolName, result, isError),
       );
-    } else if (event.type === 'turn_end' || event.type === 'agent_end') {
+    } else if (event.type === 'agent_end') {
+      // Finalize on agent_end (prompt boundary), NOT turn_end. A single user
+      // prompt can produce multiple turns when the model takes a tool-call
+      // loop; finalizing per turn would close the card mid-conversation and
+      // open a fresh one for the next turn — the "two cards per reply" bug.
       pooled.sendChain = pooled.sendChain.then(() => endTurn(pooled, 'normal'));
     }
   });

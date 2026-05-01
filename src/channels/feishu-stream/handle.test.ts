@@ -19,11 +19,15 @@ function buildClient(overrides: Partial<Mocks> = {}): {
     vi.fn(async () => ({ code: 0, data: { card_id: 'card_1' } }));
   const messageCreate =
     overrides.messageCreate ??
-    vi.fn(async () => ({ code: 0, data: { message_id: 'om_1', chat_id: 'oc_1' } }));
+    vi.fn(async () => ({
+      code: 0,
+      data: { message_id: 'om_1', chat_id: 'oc_1' },
+    }));
   const cardElementContent =
     overrides.cardElementContent ?? vi.fn(async () => ({ code: 0 }));
   const cardUpdate = overrides.cardUpdate ?? vi.fn(async () => ({ code: 0 }));
-  const cardSettings = overrides.cardSettings ?? vi.fn(async () => ({ code: 0 }));
+  const cardSettings =
+    overrides.cardSettings ?? vi.fn(async () => ({ code: 0 }));
 
   const client = {
     im: { message: { create: messageCreate } },
@@ -86,7 +90,9 @@ describe('FeishuStreamHandle', () => {
 
     // finalize sends one card.update flipping streaming_mode false.
     expect(mocks.cardUpdate).toHaveBeenCalledTimes(1);
-    const finalCard = JSON.parse(mocks.cardUpdate.mock.calls[0][0].data.card.data);
+    const finalCard = JSON.parse(
+      mocks.cardUpdate.mock.calls[0][0].data.card.data,
+    );
     expect(finalCard.config.streaming_mode).toBe(false);
     expect(finalCard.body.elements[0].content).toBe('Hello world');
   });
@@ -95,7 +101,11 @@ describe('FeishuStreamHandle', () => {
     const cardCreate = vi.fn(async () => ({ code: 99, msg: 'boom' }));
     const { client, mocks } = buildClient({ cardCreate });
     const fallback = vi.fn(async () => {});
-    const handle = new FeishuStreamHandle({ client, chatId: 'oc_1', fallbackSend: fallback });
+    const handle = new FeishuStreamHandle({
+      client,
+      chatId: 'oc_1',
+      fallbackSend: fallback,
+    });
 
     await handle.appendText('Hello');
     await handle.appendText(' world');
