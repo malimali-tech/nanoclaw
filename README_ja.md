@@ -61,7 +61,7 @@ claude
 - 監視ダッシュボードなし。Claude に何が起きているか聞く。
 - デバッグツールなし。問題を説明すれば Claude が直す。
 
-**機能追加ではなくスキル。** コードベースに新しい統合を追加する代わりに、コントリビューターは [Claude Code スキル](https://code.claude.com/docs/en/skills)（例：`/add-karpathy-llm-wiki`、`/add-parallel`）を提出してフォークを変換します。Feishu は本フォークでは `main` に直接組み込まれており、スキルではありません。
+**機能追加ではなくスキル。** コードベースに新しい統合を追加する代わりに、コントリビューターは [Claude Code スキル](https://code.claude.com/docs/en/skills)（例：`/add-macos-statusbar`、`/customize`）を提出してフォークを変換します。Feishu は本フォークでは `main` に直接組み込まれており、スキルではありません。
 
 **Pi-coding-agent をプロセス内で実行。** NanoClaw は [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) を直接埋め込みます — サブプロセスもコンテナビルドもありません。Provider は標準の環境変数（`ANTHROPIC_API_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、…）または `~/.pi/agent/auth.json` で選択します。
 

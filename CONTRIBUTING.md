@@ -35,12 +35,12 @@ Add capabilities to NanoClaw by merging a git branch. The SKILL.md contains setu
 
 **Location:** `.claude/skills/` on `main` (instructions only), code on `skill/*` branch
 
-**Examples:** `/add-karpathy-llm-wiki`, `/add-parallel`, `/add-ollama-tool`, `/add-macos-statusbar` (Feishu is baked into `main` here, not a skill — this fork is feishu-only).
+**Examples:** `/add-macos-statusbar` (Feishu is baked into `main` here, not a skill — this fork is feishu-only).
 
 **How they work:**
-1. User runs `/add-karpathy-llm-wiki`
-2. Claude follows the SKILL.md: fetches and merges the `skill/karpathy-llm-wiki` branch
-3. Claude walks through interactive setup (env vars, app creation on the platform, etc.)
+1. User runs `/add-macos-statusbar`
+2. Claude follows the SKILL.md: fetches and merges the `skill/macos-statusbar` branch
+3. Claude walks through interactive setup (launchctl plist, etc.)
 
 **Contributing a feature skill:**
 1. Fork the repo and branch from `main`

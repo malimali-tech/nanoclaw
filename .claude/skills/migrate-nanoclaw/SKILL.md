@@ -209,7 +209,7 @@ Upstream: <upstream HEAD hash>
 
 List each skill with its branch name. These are reapplied by merging the upstream skill branch.
 
-- `add-karpathy-llm-wiki` — branch `skill/karpathy-llm-wiki`
+- `add-macos-statusbar` — branch `skill/macos-statusbar` (if applied)
 
 (Feishu isn't a skill in this fork — it's baked into `main`, no branch to reapply.)
 

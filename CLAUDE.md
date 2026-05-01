@@ -52,7 +52,7 @@ Build the image once before first run in docker mode: `./container/build.sh`.
 
 Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full taxonomy and guidelines.
 
-- **Feature skills** — merge a `skill/*` branch to add capabilities (e.g. `/add-karpathy-llm-wiki`). Feishu itself is baked into `main` here, not a skill.
+- **Feature skills** — merge a `skill/*` branch to add capabilities (e.g. `/add-macos-statusbar`). Feishu itself is baked into `main` here, not a skill.
 - **Utility skills** — ship code files alongside SKILL.md (e.g. `/claw`)
 - **Operational skills** — instruction-only workflows, always on `main` (e.g. `/setup`, `/debug`)
 

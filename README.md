@@ -76,7 +76,7 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 - No monitoring dashboard; ask Claude what's happening.
 - No debugging tools; describe the problem and Claude fixes it.
 
-**Skills over features.** Instead of adding new integrations to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) (e.g. `/add-karpathy-llm-wiki`, `/add-parallel`, `/add-ollama-tool`) that transform your fork. You end up with clean code that does exactly what you need. Feishu itself isn't a skill in this fork — it's baked into `main`.
+**Skills over features.** Instead of adding new integrations to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) (e.g. `/add-macos-statusbar`, `/customize`) that transform your fork. You end up with clean code that does exactly what you need. Feishu itself isn't a skill in this fork — it's baked into `main`.
 
 **Pi-coding-agent in-process.** NanoClaw embeds [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) directly — no subprocess, no container build. The provider is selected via standard environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …) or `~/.pi/agent/auth.json`.
 

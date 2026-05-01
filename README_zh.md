@@ -61,7 +61,7 @@ claude
 - 没有监控面板，问 Claude 当前在跑什么。
 - 没有调试工具，描述问题让 Claude 修。
 
-**技能优于功能。** 与其往代码库里加新集成，不如以 [Claude Code 技能](https://code.claude.com/docs/en/skills) 形式贡献（例如 `/add-karpathy-llm-wiki`、`/add-parallel`）来改造你的 fork。Feishu 在这个 fork 里直接 baked into `main`，不再走技能路径。
+**技能优于功能。** 与其往代码库里加新集成，不如以 [Claude Code 技能](https://code.claude.com/docs/en/skills) 形式贡献（例如 `/add-macos-statusbar`、`/customize`）来改造你的 fork。Feishu 在这个 fork 里直接 baked into `main`，不再走技能路径。
 
 **Pi-coding-agent 进程内运行。** NanoClaw 直接嵌入 [`@mariozechner/pi-coding-agent`](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent)——没有子进程、没有容器构建。Provider 通过标准环境变量选择（`ANTHROPIC_API_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`DEEPSEEK_API_KEY`…）或 `~/.pi/agent/auth.json`。
 

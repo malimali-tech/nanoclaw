@@ -1,6 +1,6 @@
 # Skills as Branches
 
-> **Note for this fork:** This document explains the upstream NanoClaw "skill = branch" mechanism in general terms. Channel skills (`skill/discord`, `skill/telegram`, `skill/slack`, `skill/whatsapp`) and their dependents (telegram-swarm, voice-transcription, image-vision, pdf-reader) are **upstream-only** — this fork ships only Feishu / Lark and does not consume those branches. Feishu itself is **baked into `main`** here, not a skill. The branch-merge mechanism still applies to non-channel skills (e.g. `add-karpathy-llm-wiki`, `add-parallel`, `add-ollama-tool`, `add-macos-statusbar`).
+> **Note for this fork:** This document explains the upstream NanoClaw "skill = branch" mechanism in general terms. Channel skills (`skill/discord`, `skill/telegram`, `skill/slack`, `skill/whatsapp`) and their dependents (telegram-swarm, voice-transcription, image-vision, pdf-reader) are **upstream-only** — this fork ships only Feishu / Lark and does not consume those branches. Feishu itself is **baked into `main`** here, not a skill. The branch-merge mechanism still applies to non-channel skills currently shipped (`add-macos-statusbar`).
 
 ## Overview
 

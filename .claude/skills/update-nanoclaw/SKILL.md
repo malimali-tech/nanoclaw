@@ -203,7 +203,7 @@ If one or more `[BREAKING]` lines are found:
 - For each breaking change, display the full description.
 - Collect all skill names referenced in the breaking change entries (the `/<skill-name>` part).
 - Use AskUserQuestion to ask the user which migration skills they want to run now. Options:
-  - One option per referenced skill (e.g., "Run /add-karpathy-llm-wiki to re-apply the wiki skill")
+  - One option per referenced skill (e.g., "Run /add-macos-statusbar to re-apply the menu bar agent")
   - "Skip — I'll handle these manually"
 - Set `multiSelect: true` so the user can pick multiple skills if there are several breaking changes.
 - For each skill the user selects, invoke it using the Skill tool.
