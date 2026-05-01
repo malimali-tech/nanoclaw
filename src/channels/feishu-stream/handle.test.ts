@@ -94,7 +94,11 @@ describe('FeishuStreamHandle', () => {
       mocks.cardUpdate.mock.calls[0][0].data.card.data,
     );
     expect(finalCard.config.streaming_mode).toBe(false);
-    expect(finalCard.body.elements[0].content).toBe('Hello world');
+    // Final card uses buildCompleteCard's structure (tool-use panel +
+    // reasoning + main markdown + footer). We just assert that the
+    // accumulated text appears somewhere in the body.
+    const dump = JSON.stringify(finalCard.body.elements);
+    expect(dump).toContain('Hello world');
   });
 
   it('falls back to plain sendMessage when card creation fails', async () => {

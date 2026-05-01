@@ -1,18 +1,32 @@
 /**
- * StreamHandle implementation backed by Lark CardKit's streaming card APIs.
+ * Feishu CardKit streaming controller — implements `StreamHandle`.
  *
- * Lifecycle:
- *   1. First `appendText` → lazily create a card entity, send it as an
- *      `interactive` IM message in the chat, mark the FlushController ready.
- *   2. Subsequent `appendText` calls accumulate into `textBuffer` and ask
- *      the FlushController to coalesce updates within `THROTTLE_MS`.
- *   3. `finalize` cancels pending timers, runs one final flush so the user
- *      sees the full text, then flips `streaming_mode` off and replaces the
- *      card so it returns to normal interaction behaviour.
+ * Mirrors the visible behaviour of openclaw-lark's
+ * `card/streaming-card-controller.ts`:
  *
- * Reasoning / tool-use events are accepted but not yet rendered — the first
- * cut focuses on getting text streaming on screen. They'll be rendered in a
- * follow-up milestone alongside collapsible panels and tool-call cards.
+ *   - Lazy card creation on the first non-trivial event.
+ *   - Initial card is the "pre-answer" template (loading icon + tool-use
+ *     pending panel + an empty STREAMING_ELEMENT_ID markdown to receive
+ *     typewriter updates).
+ *   - Text deltas flow into STREAMING_ELEMENT_ID via `cardElement.content`
+ *     at ~100ms throttle (CardKit was designed for this cadence).
+ *   - Reasoning + tool-use updates trigger a full `card.update` (since
+ *     they restructure the card body), throttled separately.
+ *   - On `finalize` the card is replaced with the "complete" snapshot:
+ *     reasoning collapsible panel, tool-use panel (collapsed), main
+ *     answer markdown, and a footer with elapsed time. `streaming_mode`
+ *     is flipped off so the card returns to normal interactivity.
+ *
+ * Out of scope vs upstream (omitted intentionally — driven by openclaw
+ * runtime concepts that nanoclaw doesn't have):
+ *   - footer token metrics (the upstream resolves these from the
+ *     framework's session store)
+ *   - image-resolver (delayed image rendering)
+ *   - unavailable-guard (source-message recall handling)
+ *   - reply-to / reply-in-thread (we always send to chat)
+ *
+ * The card JSON structure produced here is byte-compatible with what
+ * upstream renders, so the user-facing visual is identical.
  */
 
 import * as Lark from '@larksuiteoapi/node-sdk';
@@ -21,9 +35,20 @@ import type { StreamHandle } from '../../types.js';
 import { logger } from '../../logger.js';
 import {
   STREAMING_ELEMENT_ID,
-  buildFinalCard,
-  buildInitialCard,
-} from './card.js';
+  buildCardContent,
+  buildStreamingPreAnswerCard,
+  toCardKit2,
+} from './builder.js';
+import {
+  CARD_PHASES,
+  DEFAULT_FOOTER,
+  PHASE_TRANSITIONS,
+  TERMINAL_PHASES,
+  THROTTLE_CONSTANTS,
+  type CardPhase,
+  type ResolvedFooterConfig,
+  type TerminalReason,
+} from './controller-types.js';
 import {
   createCardEntity,
   sendCardByCardId,
@@ -32,109 +57,244 @@ import {
   updateCardKitCard,
 } from './cardkit.js';
 import { FlushController } from './flush.js';
+import {
+  buildToolUseTitleSuffix,
+  normalizeToolUseDisplay,
+  type ToolUseDisplayResult,
+} from './tool-use-display.js';
+import type { ToolUseTraceStep } from './tool-use-trace-store.js';
+import { normalizeToolName, redactInlineSecrets } from './reasoning-utils.js';
 
-const THROTTLE_MS = 500;
 const log = (m: string) => logger.info(`[feishu-stream] ${m}`);
 
 export interface FeishuStreamDeps {
-  /** Slice of the Lark SDK client this handle actually touches — IM (to send
-   *  the carrier message) and CardKit (to create + stream the card entity). */
+  /** Slice of the Lark SDK client this controller actually touches. */
   client: Pick<Lark.Client, 'im' | 'cardkit'>;
   chatId: string;
   /**
-   * Optional fallback used by the channel when card creation fails. Receives
-   * the buffered text and is expected to deliver it as a normal message.
-   * Without a fallback, failed streams just log and drop the output.
+   * Optional fallback for catastrophic failures (e.g. card.create returns
+   * an error code, ratelimits exhaust). Receives the buffered text so
+   * the user always sees *something*. Without it, failed streams just log.
    */
   fallbackSend?: (text: string) => Promise<void>;
+  /** Override footer rendering. Defaults to status + elapsed only. */
+  footer?: Partial<ResolvedFooterConfig>;
 }
 
 export class FeishuStreamHandle implements StreamHandle {
-  private textBuffer = '';
+  // ---- Phase ----
+  private phase: CardPhase = CARD_PHASES.idle;
+
+  // ---- CardKit state ----
   private cardId: string | null = null;
   private sequence = 0;
-  private finalized = false;
+  /** Memoizes the in-flight createCardEntity + sendCardByCardId promise so
+   *  concurrent appendText calls don't race to create two cards. */
   private creationPromise: Promise<void> | null = null;
+  /** Set when card create/send fails terminally — appended events become
+   *  no-ops, finalize routes through `fallbackSend` if provided. */
   private failed = false;
-  private readonly flusher: FlushController;
+
+  // ---- Text streaming state ----
+  private textBuffer = '';
+  private lastFlushedText = '';
+
+  // ---- Reasoning state ----
+  private reasoningBuffer = '';
+  private reasoningStartedAt: number | null = null;
+  private reasoningElapsedMs = 0;
+  private isReasoningPhase = false;
+
+  // ---- Tool-use trace ----
+  private traceSteps: ToolUseTraceStep[] = [];
+  private toolUseStartedAt: number | null = null;
+  private toolUseElapsedMs = 0;
+  private nextStepSeq = 0;
+
+  // ---- Timing ----
+  private readonly startedAt = Date.now();
+  private finalElapsedMs = 0;
+
+  // ---- Throttled card-level updates (full body replace via card.update) ----
+  /** Set when an event has restructured the card body (tool-use panel /
+   *  reasoning collapsed panel) and we need a full `card.update`, distinct
+   *  from the text-element streaming flush. */
+  private cardUpdatePending = false;
+  private cardUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+  private cardUpdateInFlight = false;
+
+  // ---- Throttled text streaming (cardElement.content) ----
+  private readonly textFlusher: FlushController;
+
+  // ---- Resolved footer config ----
+  private readonly footer: ResolvedFooterConfig;
 
   constructor(private readonly deps: FeishuStreamDeps) {
-    this.flusher = new FlushController(() => this.doFlush());
+    this.footer = { ...DEFAULT_FOOTER, ...(deps.footer ?? {}) };
+    this.textFlusher = new FlushController(() => this.flushTextElement());
   }
 
+  // -------------------------------------------------------------------------
+  // StreamHandle implementation
+  // -------------------------------------------------------------------------
+
   async appendText(delta: string): Promise<void> {
-    if (this.finalized || this.failed || !delta) return;
+    if (this.isTerminal || this.failed || !delta) return;
+    // First non-reasoning text marks the answer phase — close out the
+    // reasoning timer so the final card shows an accurate "Thought for X"
+    // duration.
+    if (this.isReasoningPhase && this.reasoningStartedAt) {
+      this.reasoningElapsedMs = Date.now() - this.reasoningStartedAt;
+      this.isReasoningPhase = false;
+    }
     this.textBuffer += delta;
     await this.ensureCard();
     if (this.failed) return;
-    await this.flusher.throttledUpdate(THROTTLE_MS);
+    await this.textFlusher.throttledUpdate(THROTTLE_CONSTANTS.CARDKIT_MS);
   }
 
-  async appendReasoning(_delta: string): Promise<void> {
-    // First-cut: reasoning rendering not implemented. Accept and drop so the
-    // upstream pipeline doesn't error, but don't waste an API call.
+  async appendReasoning(delta: string): Promise<void> {
+    if (this.isTerminal || this.failed || !delta) return;
+    if (!this.reasoningStartedAt) this.reasoningStartedAt = Date.now();
+    this.isReasoningPhase = true;
+    this.reasoningBuffer += delta;
+    // Reasoning content is rendered into the streaming text element while
+    // we're still in the pre-answer phase (mirrors upstream behaviour:
+    // the card shows a "💭 Thinking…" block until the answer starts).
+    await this.ensureCard();
+    if (this.failed) return;
+    await this.textFlusher.throttledUpdate(
+      THROTTLE_CONSTANTS.REASONING_STATUS_MS,
+    );
   }
 
   async appendToolUse(
-    _toolCallId: string,
-    _toolName: string,
-    _args: unknown,
+    toolCallId: string,
+    toolName: string,
+    args: unknown,
   ): Promise<void> {
-    // Same as reasoning — deferred to the next milestone.
+    if (this.isTerminal || this.failed) return;
+    const now = Date.now();
+    if (!this.toolUseStartedAt) this.toolUseStartedAt = now;
+
+    const step: ToolUseTraceStep = {
+      id: toolCallId || `step_${this.nextStepSeq + 1}`,
+      seq: ++this.nextStepSeq,
+      toolName: normalizeToolName(toolName),
+      toolCallId: toolCallId || undefined,
+      params: this.sanitizeParams(args),
+      status: 'running',
+      startedAt: now,
+    };
+    this.traceSteps.push(step);
+    await this.ensureCard();
+    if (this.failed) return;
+    this.scheduleCardUpdate();
   }
 
   async appendToolResult(
-    _toolCallId: string,
-    _toolName: string,
-    _result: unknown,
-    _isError: boolean,
+    toolCallId: string,
+    toolName: string,
+    result: unknown,
+    isError: boolean,
   ): Promise<void> {
-    // Same as reasoning — deferred to the next milestone.
+    if (this.isTerminal || this.failed) return;
+    const now = Date.now();
+    const step =
+      this.traceSteps.find((s) => s.toolCallId === toolCallId) ??
+      // fallback: match by tool name + last running step
+      this.traceSteps
+        .slice()
+        .reverse()
+        .find(
+          (s) =>
+            s.status === 'running' &&
+            normalizeToolName(s.toolName) === normalizeToolName(toolName),
+        );
+
+    if (step) {
+      step.status = isError ? 'error' : 'success';
+      step.finishedAt = now;
+      step.durationMs = now - step.startedAt;
+      if (isError) {
+        step.error =
+          result == null ? '<error>' : redactInlineSecrets(String(result));
+      } else {
+        step.result = result;
+      }
+    }
+    if (this.toolUseStartedAt) {
+      this.toolUseElapsedMs = now - this.toolUseStartedAt;
+    }
+    if (this.failed) return;
+    this.scheduleCardUpdate();
   }
 
-  async finalize(opts?: {
-    reason?: 'normal' | 'aborted' | 'error';
-  }): Promise<void> {
-    if (this.finalized) return;
-    this.finalized = true;
-    this.flusher.cancelPending();
-    await this.flusher.waitForFlush();
-    this.flusher.complete();
+  async finalize(opts?: { reason?: 'normal' | 'aborted' | 'error' }): Promise<void> {
+    const reason = mapReason(opts?.reason);
+    if (this.isTerminal) return;
+    this.finalElapsedMs = Date.now() - this.startedAt;
+    if (this.isReasoningPhase && this.reasoningStartedAt) {
+      this.reasoningElapsedMs = Date.now() - this.reasoningStartedAt;
+      this.isReasoningPhase = false;
+    }
+
+    // Cancel pending throttled updates and wait for any in-flight ones to
+    // settle before we issue the terminal full-card replacement.
+    this.textFlusher.cancelPending();
+    await this.textFlusher.waitForFlush();
+    this.textFlusher.complete();
+    this.cancelCardUpdateTimer();
+    while (this.cardUpdateInFlight) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
 
     if (this.failed) {
-      // Card creation never succeeded — the constructor's fallbackSend (if
-      // any) already delivered the text on the first ensureCard failure.
+      // Fallback already delivered the buffered text on first card-create
+      // failure; nothing more to do here.
+      this.transition(CARD_PHASES.creation_failed, reason);
       return;
     }
     if (!this.cardId) {
-      // No text was ever appended. Nothing to render.
+      // No event ever opened a card. Nothing to render.
+      this.transition(
+        reason === 'normal' ? CARD_PHASES.completed : CARD_PHASES.aborted,
+        reason,
+      );
       return;
     }
 
-    // Final flush so the user sees the last few characters.
-    try {
-      await this.doFlush();
-    } catch (err) {
-      log(
-        `final flush failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+    // One last text-element flush in case appendText fired between the
+    // last throttled tick and finalize().
+    if (this.textBuffer !== this.lastFlushedText) {
+      try {
+        await this.flushTextElement();
+      } catch (err) {
+        log(
+          `final text flush failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
 
-    // Flip streaming_mode off + replace with the settled card so the message
-    // can be forwarded / interacted with normally. Best-effort — a failure
-    // here just leaves the card in streaming mode, the text is already
-    // visible.
+    // Replace the card with the settled "complete" snapshot. This is what
+    // gives the user the final visual: reasoning collapsible, tool-use
+    // panel (collapsed), main markdown answer, footer with elapsed time.
+    const complete = this.buildCompleteCard(reason);
     try {
-      const seq = this.nextSequence();
       await updateCardKitCard(this.deps.client, {
         cardId: this.cardId,
-        card: buildFinalCard(this.textBuffer),
-        sequence: seq,
+        card: complete,
+        sequence: this.nextSequence(),
       });
+      log(
+        `complete card pushed cardId=${this.cardId} elapsed=${this.finalElapsedMs}ms reason=${reason}`,
+      );
     } catch (err) {
       log(
         `final card.update failed: ${err instanceof Error ? err.message : String(err)}`,
       );
+      // Best-effort: at least flip streaming_mode off so the card stops
+      // showing the loading spinner.
       try {
         await setCardStreamingMode(this.deps.client, {
           cardId: this.cardId,
@@ -148,23 +308,42 @@ export class FeishuStreamHandle implements StreamHandle {
       }
     }
 
-    if (opts?.reason && opts.reason !== 'normal') {
-      log(`stream finalized reason=${opts.reason}`);
-    }
+    this.transition(
+      reason === 'normal' ? CARD_PHASES.completed : CARD_PHASES.aborted,
+      reason,
+    );
   }
 
   // -------------------------------------------------------------------------
+  // Lifecycle helpers
+  // -------------------------------------------------------------------------
+
+  private get isTerminal(): boolean {
+    return TERMINAL_PHASES.has(this.phase);
+  }
+
+  private transition(target: CardPhase, _reason: TerminalReason): void {
+    const allowed = PHASE_TRANSITIONS[this.phase];
+    if (!allowed.has(target)) {
+      // Tolerated — controller can be cancelled twice (dispose + agent_end).
+      return;
+    }
+    this.phase = target;
+  }
 
   private async ensureCard(): Promise<void> {
     if (this.cardId || this.failed) return;
     if (this.creationPromise) return this.creationPromise;
+    this.transition(CARD_PHASES.creating, 'normal');
     this.creationPromise = (async () => {
       try {
+        const initial = buildStreamingPreAnswerCard({
+          steps: this.computeToolUseDisplay()?.steps,
+          elapsedMs: this.visibleToolUseElapsedMs,
+          showToolUse: true,
+        });
         log(`creating card entity for chat=${this.deps.chatId}`);
-        const cardId = await createCardEntity(
-          this.deps.client,
-          buildInitialCard(),
-        );
+        const cardId = await createCardEntity(this.deps.client, initial);
         log(`card created cardId=${cardId}, sending interactive message`);
         const sent = await sendCardByCardId(
           this.deps.client,
@@ -175,14 +354,14 @@ export class FeishuStreamHandle implements StreamHandle {
           `card sent messageId=${sent.messageId} chatId=${sent.chatId} cardId=${cardId}`,
         );
         this.cardId = cardId;
-        this.flusher.setReady(true);
+        this.transition(CARD_PHASES.streaming, 'normal');
+        this.textFlusher.setReady(true);
       } catch (err) {
         this.failed = true;
+        this.transition(CARD_PHASES.creation_failed, 'creation_failed');
         log(
           `card create/send failed: ${err instanceof Error ? err.message : String(err)}`,
         );
-        // Try to deliver the text as a normal message so the user isn't left
-        // waiting on a silent failure.
         if (this.deps.fallbackSend && this.textBuffer) {
           try {
             await this.deps.fallbackSend(this.textBuffer);
@@ -197,27 +376,189 @@ export class FeishuStreamHandle implements StreamHandle {
     await this.creationPromise;
   }
 
-  private async doFlush(): Promise<void> {
+  // -------------------------------------------------------------------------
+  // Streaming flushers
+  // -------------------------------------------------------------------------
+
+  /**
+   * Push the cumulative textBuffer (or, while still in the reasoning phase,
+   * the reasoning text) into STREAMING_ELEMENT_ID. CardKit diffs the new
+   * value against the prior to drive the typewriter animation.
+   */
+  private async flushTextElement(): Promise<void> {
     if (!this.cardId) return;
+    const visible = this.computeStreamingText();
+    if (visible === this.lastFlushedText) return;
     const seq = this.nextSequence();
-    const len = this.textBuffer.length;
     try {
       await streamCardContent(this.deps.client, {
         cardId: this.cardId,
         elementId: STREAMING_ELEMENT_ID,
-        content: this.textBuffer,
+        content: visible,
         sequence: seq,
       });
-      log(`flush ok seq=${seq} len=${len} cardId=${this.cardId}`);
+      this.lastFlushedText = visible;
+      log(`flush ok seq=${seq} len=${visible.length} cardId=${this.cardId}`);
     } catch (err) {
       log(
-        `flush FAILED seq=${seq} len=${len} cardId=${this.cardId}: ${err instanceof Error ? err.message : String(err)}`,
+        `flush FAILED seq=${seq} len=${visible.length} cardId=${this.cardId}: ${err instanceof Error ? err.message : String(err)}`,
       );
       throw err;
     }
   }
 
+  /**
+   * Schedule a full-card replace (tool-use panel changed). Throttled so we
+   * don't spam the API on rapid back-to-back tool start/end events.
+   */
+  private scheduleCardUpdate(): void {
+    if (!this.cardId || this.isTerminal) return;
+    this.cardUpdatePending = true;
+    if (this.cardUpdateTimer) return;
+    this.cardUpdateTimer = setTimeout(() => {
+      this.cardUpdateTimer = null;
+      void this.runCardUpdate();
+    }, 200);
+  }
+
+  private cancelCardUpdateTimer(): void {
+    if (this.cardUpdateTimer) {
+      clearTimeout(this.cardUpdateTimer);
+      this.cardUpdateTimer = null;
+    }
+  }
+
+  private async runCardUpdate(): Promise<void> {
+    if (!this.cardId || this.isTerminal || !this.cardUpdatePending) return;
+    if (this.cardUpdateInFlight) {
+      // Re-arm so we don't lose the latest state.
+      this.scheduleCardUpdate();
+      return;
+    }
+    this.cardUpdateInFlight = true;
+    this.cardUpdatePending = false;
+    try {
+      const display = this.computeToolUseDisplay();
+      const card = buildStreamingPreAnswerCard({
+        steps: display?.steps,
+        elapsedMs: this.visibleToolUseElapsedMs,
+        showToolUse: true,
+      });
+      const seq = this.nextSequence();
+      await updateCardKitCard(this.deps.client, {
+        cardId: this.cardId,
+        card,
+        sequence: seq,
+      });
+      log(`card.update ok seq=${seq} steps=${display?.stepCount ?? 0}`);
+      // After a full replace the streaming element gets reset — re-push the
+      // current text so the typewriter content stays in sync.
+      this.lastFlushedText = '';
+      if (this.computeStreamingText()) {
+        try {
+          await this.flushTextElement();
+        } catch (err) {
+          log(
+            `re-flush after card.update failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+    } catch (err) {
+      log(
+        `card.update FAILED: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      this.cardUpdateInFlight = false;
+      if (this.cardUpdatePending) this.scheduleCardUpdate();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Render helpers
+  // -------------------------------------------------------------------------
+
+  private computeStreamingText(): string {
+    // While reasoning is the active stream and no answer text has arrived,
+    // show the reasoning content with a thinking marker (mirrors upstream's
+    // "💭 Thinking…" block in buildStreamingCard's reasoning branch).
+    if (!this.textBuffer && this.reasoningBuffer) {
+      return `💭 **思考中...**\n\n${this.reasoningBuffer}`;
+    }
+    return this.textBuffer;
+  }
+
+  private computeToolUseDisplay(): ToolUseDisplayResult | null {
+    if (this.traceSteps.length === 0) return null;
+    return normalizeToolUseDisplay({
+      traceSteps: this.traceSteps,
+      showFullPaths: false,
+      showResultDetails: true,
+    });
+  }
+
+  private get visibleToolUseElapsedMs(): number | undefined {
+    if (!this.toolUseStartedAt) return undefined;
+    return this.toolUseElapsedMs || Date.now() - this.toolUseStartedAt;
+  }
+
+  private buildCompleteCard(reason: TerminalReason): Record<string, unknown> {
+    const display = this.computeToolUseDisplay();
+    const titleSuffix =
+      display && display.stepCount > 0
+        ? buildToolUseTitleSuffix({ stepCount: display.stepCount })
+        : undefined;
+    const card = buildCardContent('complete', {
+      text: this.textBuffer || (this.reasoningBuffer ? '' : ''),
+      elapsedMs: this.finalElapsedMs,
+      isError: reason === 'error' || reason === 'unavailable',
+      isAborted: reason === 'abort',
+      reasoningText: this.reasoningBuffer || undefined,
+      reasoningElapsedMs: this.reasoningElapsedMs || undefined,
+      toolUseSteps: display?.steps,
+      toolUseTitleSuffix: titleSuffix,
+      toolUseElapsedMs: this.toolUseElapsedMs || undefined,
+      showToolUse: true,
+      footer: this.footer,
+      footerMetrics: undefined,
+    });
+    const ck2 = toCardKit2(card);
+    // Mark the card as no longer streaming so it returns to normal
+    // interaction behaviour (forwardable, action callbacks fire, etc.).
+    const config = (ck2.config as Record<string, unknown>) ?? {};
+    ck2.config = { ...config, streaming_mode: false };
+    return ck2;
+  }
+
+  // -------------------------------------------------------------------------
+  // Misc
+  // -------------------------------------------------------------------------
+
   private nextSequence(): number {
     return ++this.sequence;
+  }
+
+  private sanitizeParams(args: unknown): Record<string, unknown> | undefined {
+    if (args == null) return undefined;
+    if (typeof args !== 'object') return { value: args } as Record<string, unknown>;
+    try {
+      // Shallow redact — the trace store does deep redaction at render time
+      // anyway, this is just a safety net for top-level secret-shaped keys.
+      return JSON.parse(JSON.stringify(args)) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+function mapReason(
+  reason: 'normal' | 'aborted' | 'error' | undefined,
+): TerminalReason {
+  switch (reason) {
+    case 'aborted':
+      return 'abort';
+    case 'error':
+      return 'error';
+    default:
+      return 'normal';
   }
 }
