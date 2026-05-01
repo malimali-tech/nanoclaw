@@ -41,6 +41,13 @@ export function formatOutbound(rawText: string): string {
   return text;
 }
 
+/**
+ * Send a one-shot message via the channel that owns `jid`. Used by paths that
+ * are NOT inside an agent turn (e.g. the task scheduler firing a reminder),
+ * where there is no active stream to append to.
+ *
+ * Agent turn output goes through `Channel.openStream` instead.
+ */
 export function routeOutbound(
   channels: Channel[],
   jid: string,
@@ -59,16 +66,21 @@ export function findChannel(
 }
 
 /**
- * Open a streaming handle for `jid` if the owning channel implements
- * `openStream`. Returns null when no connected channel owns the JID, or when
- * the owning channel hasn't opted into streaming — callers fall back to the
- * buffered `routeOutbound` path in that case.
+ * Open a streaming handle for `jid`. Throws if no connected channel owns
+ * the JID or the owning channel doesn't implement `openStream` — by design
+ * agent output is streaming-only, so a missing handle is a configuration
+ * error worth surfacing rather than silently dropping.
  */
 export async function openStream(
   channels: Channel[],
   jid: string,
-): Promise<StreamHandle | null> {
+): Promise<StreamHandle> {
   const channel = channels.find((c) => c.ownsJid(jid) && c.isConnected());
-  if (!channel || !channel.openStream) return null;
+  if (!channel) throw new Error(`No connected channel for JID: ${jid}`);
+  if (!channel.openStream) {
+    throw new Error(
+      `Channel "${channel.name}" does not implement openStream — streaming output is required`,
+    );
+  }
   return channel.openStream(jid);
 }

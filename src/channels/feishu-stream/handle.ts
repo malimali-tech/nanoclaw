@@ -160,11 +160,20 @@ export class FeishuStreamHandle implements StreamHandle {
     if (this.creationPromise) return this.creationPromise;
     this.creationPromise = (async () => {
       try {
+        log(`creating card entity for chat=${this.deps.chatId}`);
         const cardId = await createCardEntity(
           this.deps.client,
           buildInitialCard(),
         );
-        await sendCardByCardId(this.deps.client, this.deps.chatId, cardId);
+        log(`card created cardId=${cardId}, sending interactive message`);
+        const sent = await sendCardByCardId(
+          this.deps.client,
+          this.deps.chatId,
+          cardId,
+        );
+        log(
+          `card sent messageId=${sent.messageId} chatId=${sent.chatId} cardId=${cardId}`,
+        );
         this.cardId = cardId;
         this.flusher.setReady(true);
       } catch (err) {
@@ -191,12 +200,21 @@ export class FeishuStreamHandle implements StreamHandle {
   private async doFlush(): Promise<void> {
     if (!this.cardId) return;
     const seq = this.nextSequence();
-    await streamCardContent(this.deps.client, {
-      cardId: this.cardId,
-      elementId: STREAMING_ELEMENT_ID,
-      content: this.textBuffer,
-      sequence: seq,
-    });
+    const len = this.textBuffer.length;
+    try {
+      await streamCardContent(this.deps.client, {
+        cardId: this.cardId,
+        elementId: STREAMING_ELEMENT_ID,
+        content: this.textBuffer,
+        sequence: seq,
+      });
+      log(`flush ok seq=${seq} len=${len} cardId=${this.cardId}`);
+    } catch (err) {
+      log(
+        `flush FAILED seq=${seq} len=${len} cardId=${this.cardId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw err;
+    }
   }
 
   private nextSequence(): number {

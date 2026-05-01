@@ -184,11 +184,16 @@ async function runTask(
   let buffer = '';
   let sendChain: Promise<void> = Promise.resolve();
 
+  // Scheduled-task agents don't run inside an interactive turn, so they have
+  // no active stream — `send_message` (and other tools that consult
+  // ctx.streamRef) will fall through to `router.send`, which is what we want
+  // for scheduler-triggered output.
   const ctx: ExtensionCtx = {
     ...deps.ports,
     groupFolder: task.group_folder,
     chatJid: task.chat_jid,
     isMain,
+    streamRef: { current: null },
   };
 
   const flush = async () => {

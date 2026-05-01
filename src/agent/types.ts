@@ -1,5 +1,5 @@
 // src/agent/types.ts
-import type { Channel } from '../types.js';
+import type { Channel, StreamHandle } from '../types.js';
 
 export interface RouterPort {
   /** Send a message immediately to the given chat. */
@@ -58,6 +58,15 @@ export interface RegisterGroupRequest {
   requiresTrigger: boolean;
 }
 
+/**
+ * Mutable per-session reference to the currently open stream handle.
+ * Shared between `run.ts` (which opens / finalizes it on the turn boundary)
+ * and `extension.ts` tools (which append into it). Null between turns.
+ */
+export interface StreamRef {
+  current: StreamHandle | null;
+}
+
 /** Runtime context injected into the pi extension. */
 export interface ExtensionCtx {
   router: RouterPort;
@@ -67,4 +76,5 @@ export interface ExtensionCtx {
   chatJid: string;
   isMain: boolean;
   channels: Channel[];
+  streamRef: StreamRef;
 }
