@@ -122,22 +122,47 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
   fs.mkdirSync(path.join(groupDir, 'logs'), { recursive: true });
 
   // Copy CLAUDE.md template into the new group folder so agents have
-  // identity and instructions from the first run.  (Fixes #1391)
+  // identity and instructions from the first run.
+  //
+  // Source priority:
+  //   1. The user's own template at `groups/{main,global}/CLAUDE.md` if it
+  //      exists — lets operators tailor onboarding without forking the
+  //      project.
+  //   2. The shipped default at `defaults/group-claude.md` — checked into
+  //      git so a fresh fork works out of the box. The legacy path #1
+  //      depended on `groups/` being seeded, but groups/ is gitignored,
+  //      so a fresh clone would silently skip the copy.
   const groupMdFile = path.join(groupDir, 'CLAUDE.md');
   if (!fs.existsSync(groupMdFile)) {
-    const templateFile = path.join(
+    const userTemplate = path.join(
       GROUPS_DIR,
       group.isMain ? 'main' : 'global',
       'CLAUDE.md',
     );
-    if (fs.existsSync(templateFile)) {
+    const defaultTemplate = path.join(
+      process.cwd(),
+      'defaults',
+      'group-claude.md',
+    );
+    const templateFile = fs.existsSync(userTemplate)
+      ? userTemplate
+      : fs.existsSync(defaultTemplate)
+        ? defaultTemplate
+        : null;
+    if (templateFile) {
       let content = fs.readFileSync(templateFile, 'utf-8');
       if (ASSISTANT_NAME !== 'Andy') {
         content = content.replace(/^# Andy$/m, `# ${ASSISTANT_NAME}`);
         content = content.replace(/You are Andy/g, `You are ${ASSISTANT_NAME}`);
       }
       fs.writeFileSync(groupMdFile, content);
-      logger.info({ folder: group.folder }, 'Created CLAUDE.md from template');
+      logger.info(
+        {
+          folder: group.folder,
+          source: templateFile === defaultTemplate ? 'defaults' : 'user',
+        },
+        'Created CLAUDE.md from template',
+      );
     }
   }
 
