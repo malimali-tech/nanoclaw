@@ -812,35 +812,23 @@ export function buildStreamingPreAnswerCard(params: {
  * Build the collapsible panel for the active pre-answer phase.
  * Used by buildStreamingPreAnswerCard when at least one step exists.
  */
-function buildStreamingToolUseActivePanel(params: {
-  steps: ToolUseDisplayStep[];
-  elapsedMs?: number;
+function buildToolUseCollapsiblePanel(params: {
+  expanded: boolean;
+  titleZh: string;
+  titleEn: string;
+  elements: CardElement[];
 }): CardElement {
-  const { steps, elapsedMs } = params;
-  const enParts = ['Tool use'];
-  const zhParts = ['工具执行'];
-
-  if (steps.length > 0) {
-    enParts.push(`${steps.length} step${steps.length === 1 ? '' : 's'}`);
-    zhParts.push(`${steps.length} 步`);
-  }
-
-  if (elapsedMs != null && elapsedMs > 0) {
-    const d = formatElapsed(elapsedMs);
-    enParts.push(`(${d})`);
-    zhParts.push(`(${d})`);
-  }
-
+  const { expanded, titleZh, titleEn, elements } = params;
   return {
     tag: 'collapsible_panel',
-    expanded: true,
+    expanded,
     header: {
       title: {
         tag: 'plain_text',
-        content: `🛠️ ${enParts.join(' · ')}`,
+        content: `🛠️ ${titleEn}`,
         i18n_content: {
-          zh_cn: `🛠️ ${zhParts.join(' · ')}`,
-          en_us: `🛠️ ${enParts.join(' · ')}`,
+          zh_cn: `🛠️ ${titleZh}`,
+          en_us: `🛠️ ${titleEn}`,
         },
         text_color: 'grey',
         text_size: 'notation',
@@ -858,8 +846,32 @@ function buildStreamingToolUseActivePanel(params: {
     border: { color: 'grey', corner_radius: '5px' },
     vertical_spacing: '4px',
     padding: '8px 8px 8px 8px',
-    elements: steps.flatMap((step) => buildToolUseStepElements(step)),
+    elements,
   };
+}
+
+function buildStreamingToolUseActivePanel(params: {
+  steps: ToolUseDisplayStep[];
+  elapsedMs?: number;
+}): CardElement {
+  const { steps, elapsedMs } = params;
+  const enParts = ['Tool use'];
+  const zhParts = ['工具执行'];
+  if (steps.length > 0) {
+    enParts.push(`${steps.length} step${steps.length === 1 ? '' : 's'}`);
+    zhParts.push(`${steps.length} 步`);
+  }
+  if (elapsedMs != null && elapsedMs > 0) {
+    const d = formatElapsed(elapsedMs);
+    enParts.push(`(${d})`);
+    zhParts.push(`(${d})`);
+  }
+  return buildToolUseCollapsiblePanel({
+    expanded: true,
+    titleZh: zhParts.join(' · '),
+    titleEn: enParts.join(' · '),
+    elements: steps.flatMap((step) => buildToolUseStepElements(step)),
+  });
 }
 
 export function toCardKit2(card: FeishuCard): Record<string, unknown> {
@@ -873,35 +885,12 @@ export function toCardKit2(card: FeishuCard): Record<string, unknown> {
 }
 
 function buildStreamingToolUsePendingPanel(): CardElement {
-  return {
-    tag: 'collapsible_panel',
+  return buildToolUseCollapsiblePanel({
     expanded: false,
-    header: {
-      title: {
-        tag: 'plain_text',
-        content: '🛠️ Tool use pending',
-        i18n_content: {
-          zh_cn: '🛠️ 等待工具执行',
-          en_us: '🛠️ Tool use pending',
-        },
-        text_color: 'grey',
-        text_size: 'notation',
-      },
-      vertical_align: 'center',
-      icon: {
-        tag: 'standard_icon',
-        token: 'down-small-ccm_outlined',
-        color: 'grey',
-        size: '16px 16px',
-      },
-      icon_position: 'right',
-      icon_expanded_angle: -180,
-    },
-    border: { color: 'grey', corner_radius: '5px' },
-    vertical_spacing: '4px',
-    padding: '8px 8px 8px 8px',
+    titleZh: '等待工具执行',
+    titleEn: 'Tool use pending',
     elements: [],
-  };
+  });
 }
 
 function buildToolUsePanel(params: {
@@ -919,41 +908,16 @@ function buildToolUsePanel(params: {
     zhTitleParts.push(titleSuffix.zh);
     enTitleParts.push(titleSuffix.en);
   }
-
-  const stepElements =
+  const elements =
     toolUseSteps.length > 0
       ? toolUseSteps.flatMap((step) => buildToolUseStepElements(step))
       : [buildToolUsePlaceholder()];
-
-  return {
-    tag: 'collapsible_panel',
+  return buildToolUseCollapsiblePanel({
     expanded: false,
-    header: {
-      title: {
-        tag: 'plain_text',
-        content: `🛠️ ${enTitleParts.join(' · ')}`,
-        i18n_content: {
-          zh_cn: `🛠️ ${zhTitleParts.join(' · ')}`,
-          en_us: `🛠️ ${enTitleParts.join(' · ')}`,
-        },
-        text_color: 'grey',
-        text_size: 'notation',
-      },
-      vertical_align: 'center',
-      icon: {
-        tag: 'standard_icon',
-        token: 'down-small-ccm_outlined',
-        color: 'grey',
-        size: '16px 16px',
-      },
-      icon_position: 'right',
-      icon_expanded_angle: -180,
-    },
-    border: { color: 'grey', corner_radius: '5px' },
-    vertical_spacing: '4px',
-    padding: '8px 8px 8px 8px',
-    elements: stepElements,
-  };
+    titleZh: zhTitleParts.join(' · '),
+    titleEn: enTitleParts.join(' · '),
+    elements,
+  });
 }
 
 function buildToolUseStepElements(step: ToolUseDisplayStep): CardElement[] {

@@ -8,6 +8,8 @@
 
 import * as Lark from '@larksuiteoapi/node-sdk';
 
+import { errMsg } from '../../logger.js';
+
 interface CardKitResponse {
   code?: number;
   msg?: string;
@@ -97,7 +99,7 @@ async function withRetry<T>(api: string, fn: () => Promise<T>): Promise<T> {
       if (attempt === delaysMs.length || !isRetryable(err)) throw err;
       // eslint-disable-next-line no-console -- low-volume, only logs on actual transient
       console.warn(
-        `[cardkit:${api}] transient failure (${err instanceof Error ? err.message : String(err)}), retry ${attempt + 1}/${delaysMs.length} in ${delaysMs[attempt]}ms`,
+        `[cardkit:${api}] transient failure (${errMsg(err)}), retry ${attempt + 1}/${delaysMs.length} in ${delaysMs[attempt]}ms`,
       );
       await new Promise<void>((resolve) =>
         setTimeout(resolve, delaysMs[attempt]),

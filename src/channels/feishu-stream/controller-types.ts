@@ -48,50 +48,13 @@ export const PHASE_TRANSITIONS: Record<CardPhase, ReadonlySet<CardPhase>> = {
 };
 
 // ---------------------------------------------------------------------------
-// Structured state aggregates
-// ---------------------------------------------------------------------------
-
-export interface ReasoningState {
-  accumulatedReasoningText: string;
-  reasoningStartTime: number | null;
-  reasoningElapsedMs: number;
-  isReasoningPhase: boolean;
-}
-
-export interface ToolUseState {
-  startedAt: number | null;
-  elapsedMs: number;
-  isActive: boolean;
-}
-
-export interface StreamingTextState {
-  accumulatedText: string;
-  completedText: string;
-  streamingPrefix: string;
-  lastPartialText: string;
-  lastFlushedText: string;
-}
-
-export interface CardKitState {
-  cardKitCardId: string | null;
-  originalCardKitCardId: string | null;
-  cardKitSequence: number;
-  cardMessageId: string | null;
-}
-
-// ---------------------------------------------------------------------------
 // Throttle constants
 // ---------------------------------------------------------------------------
 
 export const THROTTLE_CONSTANTS = {
   CARDKIT_MS: 100,
-  PATCH_MS: 1500,
-  LONG_GAP_THRESHOLD_MS: 2000,
-  BATCH_AFTER_GAP_MS: 300,
   REASONING_STATUS_MS: 1500,
 } as const;
-
-export const EMPTY_REPLY_FALLBACK_TEXT = 'Done.';
 
 // ---------------------------------------------------------------------------
 // Footer metrics

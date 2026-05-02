@@ -32,7 +32,8 @@
 import * as Lark from '@larksuiteoapi/node-sdk';
 
 import type { StreamHandle } from '../../types.js';
-import { logger } from '../../logger.js';
+import { errMsg, logger } from '../../logger.js';
+import { SerialChain } from '../../util/serial-chain.js';
 import {
   bumpInFlightCardSequence,
   clearInFlightCard,
@@ -131,18 +132,9 @@ export class FeishuStreamHandle implements StreamHandle {
   // ---- Throttled text streaming (cardElement.content) ----
   private readonly textFlusher: FlushController;
 
-  /**
-   * Serializes every CardKit write (cardElement.content, card.update,
-   * card.settings) so the sequence number we attach to a request equals the
-   * order it actually leaves the host. Without this, two writers (the text
-   * flusher and the body-restructure scheduler) could race: a slow
-   * cardElement.content with seq=5 lands on the server *after* a fast
-   * card.update + re-flush at seq=7, and CardKit (which trusts arrival
-   * order for the same element) overwrites the newer state with the older
-   * short-text snapshot — visually a "reply rewinds" bug. Allocating seq
-   * inside the serialized callback (not at schedule time) closes that gap.
-   */
-  private writeChain: Promise<void> = Promise.resolve();
+  /** Serializes CardKit writes; seq must be allocated inside the callback,
+   *  not at schedule time, so request order matches seq order on the wire. */
+  private readonly writeChain = new SerialChain();
 
   // ---- Resolved footer config ----
   private readonly footer: ResolvedFooterConfig;
@@ -150,20 +142,6 @@ export class FeishuStreamHandle implements StreamHandle {
   constructor(private readonly deps: FeishuStreamDeps) {
     this.footer = { ...DEFAULT_FOOTER, ...(deps.footer ?? {}) };
     this.textFlusher = new FlushController(() => this.flushTextElement());
-  }
-
-  /** Append `fn` to the strict CardKit write chain. Failures are isolated:
-   *  the next write still runs, but the failed promise rejects to the
-   *  caller. */
-  private serialize<T>(fn: () => Promise<T>): Promise<T> {
-    const next = this.writeChain.then(fn);
-    // Swallow on the *chain* (so a failed write doesn't poison subsequent
-    // writes) while still propagating to the caller via `next`.
-    this.writeChain = next.then(
-      () => undefined,
-      () => undefined,
-    );
-    return next;
   }
 
   // -------------------------------------------------------------------------
@@ -273,20 +251,16 @@ export class FeishuStreamHandle implements StreamHandle {
       this.isReasoningPhase = false;
     }
 
-    // Cancel pending throttled updates and wait for any in-flight ones to
-    // settle before we issue the terminal full-card replacement. Then drain
-    // the serialized write chain so every prior cardElement.content +
-    // card.update has actually hit the wire — without this, the terminal
-    // card.update can race a late seq=N flush and CardKit may resurrect
-    // an older snapshot.
+    // Drain throttled + serialized writes so the terminal card.update
+    // doesn't race a late flush (which would resurrect an older snapshot).
+    // cancelCardUpdateTimer prevents new runCardUpdate from firing; any
+    // in-flight one is already on writeChain, so awaiting the chain drains
+    // both the body-restructure and the text-element flush queues.
     this.textFlusher.cancelPending();
     await this.textFlusher.waitForFlush();
     this.textFlusher.complete();
     this.cancelCardUpdateTimer();
-    while (this.cardUpdateInFlight) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
-    }
-    await this.writeChain;
+    await this.writeChain.drain();
 
     if (this.failed) {
       // Fallback already delivered the buffered text on first card-create
@@ -309,9 +283,7 @@ export class FeishuStreamHandle implements StreamHandle {
       try {
         await this.flushTextElement();
       } catch (err) {
-        log(
-          `final text flush failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        log(`final text flush failed: ${errMsg(err)}`);
       }
     }
 
@@ -322,7 +294,7 @@ export class FeishuStreamHandle implements StreamHandle {
     // its seq is guaranteed greater than every prior cardElement.content.
     const complete = this.buildCompleteCard(reason);
     try {
-      await this.serialize(async () => {
+      await this.writeChain.run(async () => {
         await updateCardKitCard(this.deps.client, {
           cardId: this.cardId!,
           card: complete,
@@ -333,13 +305,11 @@ export class FeishuStreamHandle implements StreamHandle {
         `complete card pushed cardId=${this.cardId} elapsed=${this.finalElapsedMs}ms reason=${reason}`,
       );
     } catch (err) {
-      log(
-        `final card.update failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      log(`final card.update failed: ${errMsg(err)}`);
       // Best-effort: at least flip streaming_mode off so the card stops
       // showing the loading spinner.
       try {
-        await this.serialize(async () => {
+        await this.writeChain.run(async () => {
           await setCardStreamingMode(this.deps.client, {
             cardId: this.cardId!,
             streamingMode: false,
@@ -347,9 +317,7 @@ export class FeishuStreamHandle implements StreamHandle {
           });
         });
       } catch (innerErr) {
-        log(
-          `streaming_mode toggle failed: ${innerErr instanceof Error ? innerErr.message : String(innerErr)}`,
-        );
+        log(`streaming_mode toggle failed: ${errMsg(innerErr)}`);
       }
     }
 
@@ -360,9 +328,7 @@ export class FeishuStreamHandle implements StreamHandle {
       try {
         clearInFlightCard(this.cardId);
       } catch (err) {
-        log(
-          `clearInFlightCard failed (harmless leak): ${err instanceof Error ? err.message : String(err)}`,
-        );
+        log(`clearInFlightCard failed (harmless leak): ${errMsg(err)}`);
       }
     }
 
@@ -412,9 +378,8 @@ export class FeishuStreamHandle implements StreamHandle {
           `card sent messageId=${sent.messageId} chatId=${sent.chatId} cardId=${cardId}`,
         );
         this.cardId = cardId;
-        // Record the card as in-flight BEFORE marking ready, so a crash
-        // between here and the first flush still leaves a row for the boot
-        // reconciler to clean up.
+        // Record before marking ready so a crash before the first flush
+        // still leaves a reconcile row.
         try {
           recordInFlightCard({
             cardId,
@@ -422,25 +387,19 @@ export class FeishuStreamHandle implements StreamHandle {
             messageId: sent.messageId || null,
           });
         } catch (err) {
-          log(
-            `recordInFlightCard failed (proceeding): ${err instanceof Error ? err.message : String(err)}`,
-          );
+          log(`recordInFlightCard failed (proceeding): ${errMsg(err)}`);
         }
         this.transition(CARD_PHASES.streaming, 'normal');
         this.textFlusher.setReady(true);
       } catch (err) {
         this.failed = true;
         this.transition(CARD_PHASES.creation_failed, 'creation_failed');
-        log(
-          `card create/send failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        log(`card create/send failed: ${errMsg(err)}`);
         if (this.deps.fallbackSend && this.textBuffer) {
           try {
             await this.deps.fallbackSend(this.textBuffer);
           } catch (sendErr) {
-            log(
-              `fallbackSend failed: ${sendErr instanceof Error ? sendErr.message : String(sendErr)}`,
-            );
+            log(`fallbackSend failed: ${errMsg(sendErr)}`);
           }
         }
       }
@@ -459,16 +418,11 @@ export class FeishuStreamHandle implements StreamHandle {
    */
   private async flushTextElement(): Promise<void> {
     if (!this.cardId) return;
-    // Snapshot the *current* visible text inside the serialized callback,
-    // not at schedule time. If three appendText() calls landed while a
-    // previous flush was in flight, this guarantees we pick up the latest
-    // accumulated buffer rather than a stale prefix.
-    return this.serialize(async () => {
+    // Snapshot visible text inside the serialized callback so coalesced
+    // appends in flight pick up the latest buffer, not a stale prefix.
+    return this.writeChain.run(async () => {
       const visible = this.computeStreamingText();
       if (visible === this.lastFlushedText) return;
-      // Allocate seq INSIDE the serialized callback so the seq attached to
-      // a request matches the order it actually leaves the host. Otherwise
-      // network reordering between writers could ship seq=5 after seq=7.
       const seq = this.nextSequence();
       try {
         await streamCardContent(this.deps.client, {
@@ -481,7 +435,7 @@ export class FeishuStreamHandle implements StreamHandle {
         log(`flush ok seq=${seq} len=${visible.length} cardId=${this.cardId}`);
       } catch (err) {
         log(
-          `flush FAILED seq=${seq} len=${visible.length} cardId=${this.cardId}: ${err instanceof Error ? err.message : String(err)}`,
+          `flush FAILED seq=${seq} len=${visible.length} cardId=${this.cardId}: ${errMsg(err)}`,
         );
         throw err;
       }
@@ -519,16 +473,10 @@ export class FeishuStreamHandle implements StreamHandle {
     this.cardUpdateInFlight = true;
     this.cardUpdatePending = false;
     try {
-      // Restructure the card body in a SINGLE serialized write that ALSO
-      // carries the current streaming-element content. Sending the
-      // tool-use panel update with content="" (then re-flushing in a
-      // separate cardElement.content call) made CardKit render a "wipe
-      // and retype" animation every tool call — observable as the
-      // reasoning text disappearing and re-streaming. Bundling the
-      // current text into the same card.update means CardKit diffs the
-      // streaming element to itself (no-op visually) and only the
-      // tool-use panel animates.
-      await this.serialize(async () => {
+      // Bundle current streaming text into the same card.update as the body
+      // restructure — separating them makes CardKit "wipe and retype" the
+      // streaming element on every tool-use change.
+      await this.writeChain.run(async () => {
         const display = this.computeToolUseDisplay();
         const streamingContent = this.computeStreamingText();
         const card = buildStreamingPreAnswerCard({
@@ -546,15 +494,12 @@ export class FeishuStreamHandle implements StreamHandle {
         log(
           `card.update ok seq=${seq} steps=${display?.stepCount ?? 0} streamingLen=${streamingContent.length}`,
         );
-        // The card.update wrote `streamingContent` into STREAMING_ELEMENT_ID.
-        // Update the high-water mark so the next throttledUpdate doesn't
-        // immediately re-push the same content.
+        // card.update wrote streamingContent into STREAMING_ELEMENT_ID; bump
+        // the high-water mark so the next text flush won't re-push it.
         this.lastFlushedText = streamingContent;
       });
     } catch (err) {
-      log(
-        `card.update FAILED: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      log(`card.update FAILED: ${errMsg(err)}`);
     } finally {
       this.cardUpdateInFlight = false;
       if (this.cardUpdatePending) this.scheduleCardUpdate();
@@ -596,7 +541,7 @@ export class FeishuStreamHandle implements StreamHandle {
         ? buildToolUseTitleSuffix({ stepCount: display.stepCount })
         : undefined;
     const card = buildCardContent('complete', {
-      text: this.textBuffer || (this.reasoningBuffer ? '' : ''),
+      text: this.textBuffer,
       elapsedMs: this.finalElapsedMs,
       isError: reason === 'error' || reason === 'unavailable',
       isAborted: reason === 'abort',
@@ -638,8 +583,8 @@ export class FeishuStreamHandle implements StreamHandle {
     if (typeof args !== 'object')
       return { value: args } as Record<string, unknown>;
     try {
-      // Shallow redact — the trace store does deep redaction at render time
-      // anyway, this is just a safety net for top-level secret-shaped keys.
+      // Snapshot now so later mutations to args don't mutate the rendered
+      // trace step. Redaction happens at render time in tool-use-display.
       return JSON.parse(JSON.stringify(args)) as Record<string, unknown>;
     } catch {
       return undefined;

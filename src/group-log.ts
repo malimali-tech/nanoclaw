@@ -1,10 +1,11 @@
 import * as fsp from 'fs/promises';
-import { existsSync, readFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
 
 import { GROUPS_DIR } from './config.js';
 import { logger } from './logger.js';
 import type { NewMessage } from './types.js';
+import { KeyedSerialChain } from './util/serial-chain.js';
 
 /**
  * Per-group append-only message log + cursor, replacing the old `messages`
@@ -27,9 +28,9 @@ interface CursorState {
   lastAgentTimestamp?: string;
 }
 
-// Per-folder Promise chain to serialise appendFile calls. `.catch` keeps the
-// chain alive after a failure so one bad write does not freeze the group.
-const writeChain: Map<string, Promise<unknown>> = new Map();
+// Per-folder FIFO chain serializing appendFile calls. SerialChain isolates
+// failures so one bad write does not freeze subsequent appends for the group.
+const appendChain = new KeyedSerialChain<string>();
 
 export function metaDir(folder: string): string {
   return path.join(GROUPS_DIR, folder, META_DIR_NAME);
@@ -49,23 +50,39 @@ function ensureMetaDir(folder: string): void {
 
 /** Append one message line. Resolves once the bytes are flushed. */
 export function appendMessage(folder: string, msg: NewMessage): Promise<void> {
-  const prev = writeChain.get(folder) ?? Promise.resolve();
-  const next = prev.then(async () => {
+  const next = appendChain.run(folder, async () => {
     ensureMetaDir(folder);
     await fsp.appendFile(logPath(folder), `${JSON.stringify(msg)}\n`, 'utf-8');
   });
-  writeChain.set(
-    folder,
-    next.catch((err) => {
-      logger.error({ folder, err }, 'group-log: appendMessage failed');
-    }),
-  );
+  next.catch((err) => {
+    logger.error({ folder, err }, 'group-log: appendMessage failed');
+  });
   return next;
 }
 
+// Cache parsed log.jsonl per folder, invalidated by (size, mtimeMs). The
+// hot path is the message-loop polling every group every 2s; without this
+// each tick re-reads + re-parses every group's full log.
+const lineCache = new Map<
+  string,
+  { size: number; mtimeMs: number; lines: NewMessage[] }
+>();
+
 function readAllLines(folder: string): NewMessage[] {
   const p = logPath(folder);
-  if (!existsSync(p)) return [];
+  let stat: { size: number; mtimeMs: number };
+  try {
+    const s = statSync(p);
+    stat = { size: s.size, mtimeMs: s.mtimeMs };
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    logger.warn({ folder, err }, 'group-log: stat failed');
+    return [];
+  }
+  const cached = lineCache.get(folder);
+  if (cached && cached.size === stat.size && cached.mtimeMs === stat.mtimeMs) {
+    return cached.lines;
+  }
   let text: string;
   try {
     text = readFileSync(p, 'utf-8');
@@ -73,7 +90,10 @@ function readAllLines(folder: string): NewMessage[] {
     logger.warn({ folder, err }, 'group-log: read failed');
     return [];
   }
-  if (!text) return [];
+  if (!text) {
+    lineCache.set(folder, { ...stat, lines: [] });
+    return [];
+  }
   const out: NewMessage[] = [];
   for (const line of text.split('\n')) {
     const t = line.trim();
@@ -84,6 +104,7 @@ function readAllLines(folder: string): NewMessage[] {
       logger.warn({ folder }, 'group-log: skipping malformed jsonl line');
     }
   }
+  lineCache.set(folder, { ...stat, lines: out });
   return out;
 }
 
@@ -153,10 +174,11 @@ export async function writeCursor(
 
 /** Wait for any pending appends. Use in shutdown / before snapshot reads. */
 export async function flushWrites(): Promise<void> {
-  await Promise.all([...writeChain.values()]);
+  await appendChain.drainAll();
 }
 
 /** @internal — for tests */
 export function _resetForTest(): void {
-  writeChain.clear();
+  appendChain.clear();
+  lineCache.clear();
 }
