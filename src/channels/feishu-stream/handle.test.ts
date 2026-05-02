@@ -199,6 +199,50 @@ describe('FeishuStreamHandle', () => {
     }
   });
 
+  it('retries cardElement.content on transient 5xx and recovers without losing the flush', async () => {
+    let attempts = 0;
+    const cardElementContent = vi.fn(async (req: any) => {
+      attempts++;
+      // First attempt: simulate the SDK rejecting with a 500-class body
+      // code (CardKitApiError isRetryable path). Second attempt: succeed.
+      if (attempts === 1) return { code: 503, msg: 'service unavailable' };
+      return { code: 0, ...req };
+    });
+    const { client, mocks } = buildClient({ cardElementContent });
+    const handle = new FeishuStreamHandle({ client, chatId: 'oc_1' });
+
+    await handle.appendText('A');
+    await handle.appendText('B');
+    await handle.finalize();
+
+    // 2 attempts on the first flush, then the second flush sees seq=2 and
+    // either finds the buffer unchanged from lastFlushedText (no-op) or
+    // sends seq=2 cleanly. Either way we got >=1 successful content call
+    // and the final card carries 'AB'.
+    expect(attempts).toBeGreaterThanOrEqual(2);
+    expect(mocks.cardUpdate).toHaveBeenCalledTimes(1);
+    const finalCard = JSON.parse(
+      mocks.cardUpdate.mock.calls[0][0].data.card.data,
+    );
+    expect(JSON.stringify(finalCard.body.elements)).toContain('AB');
+  });
+
+  it('does not retry deterministic business errors (e.g. invalid sequence)', async () => {
+    let attempts = 0;
+    const cardElementContent = vi.fn(async () => {
+      attempts++;
+      // 230002 is a hypothetical sequence-out-of-order; not in the
+      // retryable set, should fail-fast.
+      return { code: 230002, msg: 'sequence is invalid' };
+    });
+    const { client } = buildClient({ cardElementContent });
+    const handle = new FeishuStreamHandle({ client, chatId: 'oc_1' });
+
+    await handle.appendText('A');
+    await handle.finalize();
+    expect(attempts).toBe(1);
+  });
+
   it('finalize without any text appended makes no API calls', async () => {
     const { client, mocks } = buildClient();
     const handle = new FeishuStreamHandle({ client, chatId: 'oc_1' });
