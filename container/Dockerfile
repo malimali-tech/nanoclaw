@@ -143,6 +143,20 @@ done
 exec /pnpm/agent-browser --launch "$@"
 WRAPPER
 
+# Default User-Agent: real macOS Chrome string. The stealth fork patches JS
+# navigator props (webdriver/plugins/chrome.runtime) but does NOT rewrite
+# the underlying Chromium process UA, so the request still self-identifies
+# as `HeadlessChrome/<n>` — most Chinese B2B / e-commerce anti-bot walls
+# (Tongdun, Shumei, Reishin, etc.) keyword-match "HeadlessChrome" and 202
+# the request before the SPA shell even loads. Setting this env makes the
+# daemon launch with a normal-looking UA by default; agents that need a
+# different UA (mobile site, specific browser) just pass `--user-agent`,
+# which last-wins over this env.
+#
+# Bump the Chrome major version periodically — too-old UAs are themselves
+# a signal on stricter detectors.
+ENV AGENT_BROWSER_USER_AGENT="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
 # ---- lark-cli (Feishu / Lark official CLI) -----------------------------------
 # Provides the `lark-cli` binary the agent shells out to for any Feishu API
 # operation (calendar, im, doc, base, sheets, task, wiki, drive, mail, ...).
