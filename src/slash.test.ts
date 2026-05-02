@@ -1,31 +1,38 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the agent helpers; slash.ts only needs them to be callable async fns.
+const NOW = new Date('2026-05-02T12:00:00Z').getTime();
+
+// Pi's firstMessage is the NanoClaw envelope, not the raw user text.
+const envelope1 =
+  '<context timezone="Asia/Shanghai" />\n<messages>\n<message sender="andy" time="2026-05-02 05:02">想看下 GitHub 上的 PR 状态</message>\n</messages>';
+const envelope2 =
+  '<context timezone="Asia/Shanghai" />\n<messages>\n<message sender="andy" time="2026-05-02 04:51">帮我查最近 24 小时的报警</message>\n</messages>';
+
 vi.mock('./agent/run.js', () => ({
   newChatSession: vi.fn(async () => {}),
   listChatSessions: vi.fn(async () => [
     {
-      path: '/sessions/2026-05-01_aaa.jsonl',
+      path: '/sessions/2026-05-02_aaa.jsonl',
       id: 'aaa',
       cwd: '/cwd',
       name: undefined,
       parentSessionPath: undefined,
-      created: new Date('2026-05-01T10:00:00Z'),
-      modified: new Date('2026-05-01T12:34:00Z'),
+      created: new Date('2026-05-02T11:00:00Z'),
+      modified: new Date('2026-05-02T11:30:00Z'), // 30m ago
       messageCount: 8,
-      firstMessage: 'hello world from earlier session',
+      firstMessage: envelope1,
       allMessagesText: '',
     },
     {
-      path: '/sessions/2026-04-30_bbb.jsonl',
+      path: '/sessions/2026-05-02_bbb.jsonl',
       id: 'bbb',
       cwd: '/cwd',
-      name: undefined,
+      name: 'PR triage notes',
       parentSessionPath: undefined,
-      created: new Date('2026-04-30T08:00:00Z'),
-      modified: new Date('2026-04-30T09:15:00Z'),
-      messageCount: 3,
-      firstMessage: 'second oldest',
+      created: new Date('2026-05-01T08:00:00Z'),
+      modified: new Date('2026-05-01T09:15:00Z'), // ~1d ago
+      messageCount: 16,
+      firstMessage: envelope2,
       allMessagesText: '',
     },
   ]),
@@ -58,7 +65,7 @@ import {
   resumeChatSession,
 } from './agent/run.js';
 import type { Channel } from './types.js';
-import { tryHandleSlash } from './slash.js';
+import { _resetSlashState, tryHandleSlash } from './slash.js';
 
 interface CapturedSend {
   jid: string;
@@ -92,6 +99,9 @@ const baseCtx = {
 };
 
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  _resetSlashState();
   vi.mocked(newChatSession).mockClear();
   vi.mocked(listChatSessions).mockClear();
   vi.mocked(resumeChatSession).mockClear();
@@ -100,6 +110,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -158,7 +169,7 @@ describe('tryHandleSlash', () => {
     expect(newChatSession).toHaveBeenCalledTimes(1);
   });
 
-  it('routes /resume without args and lists sessions', async () => {
+  it('/resume lists sessions with stripped envelope, not raw XML', async () => {
     const { channel, sent } = makeChannel();
     const handled = await tryHandleSlash({
       ...baseCtx,
@@ -166,18 +177,33 @@ describe('tryHandleSlash', () => {
       channel,
     });
     expect(handled).toBe(true);
-    expect(listChatSessions).toHaveBeenCalledWith('feishu_main');
+    expect(listChatSessions).toHaveBeenCalledWith('feishu_main', 10);
     expect(resumeChatSession).not.toHaveBeenCalled();
-    expect(sent[0].text).toContain('最近会话');
-    expect(sent[0].text).toContain('1.');
-    expect(sent[0].text).toContain('hello world');
+    const text = sent[0].text;
+    // Inner user text recovered from envelope:
+    expect(text).toContain('想看下 GitHub 上的 PR 状态');
+    // Session name preferred when set:
+    expect(text).toContain('PR triage notes');
+    // Envelope tags must NOT leak through:
+    expect(text).not.toContain('<context');
+    expect(text).not.toContain('<message');
+    // Relative age, not raw timestamp:
+    expect(text).toMatch(/30 分钟前|1 天前/);
+    expect(text).not.toContain('2026-05-02 05:02');
   });
 
-  it('routes /resume N and switches to that session', async () => {
+  it('/resume followed by a bare integer reply resumes that session', async () => {
     const { channel, sent } = makeChannel();
+    await tryHandleSlash({
+      ...baseCtx,
+      lastContent: '@andy /resume',
+      channel,
+    });
+    expect(sent).toHaveLength(1);
+
     const handled = await tryHandleSlash({
       ...baseCtx,
-      lastContent: '@andy /resume 2',
+      lastContent: '@andy 2',
       channel,
     });
     expect(handled).toBe(true);
@@ -185,10 +211,85 @@ describe('tryHandleSlash', () => {
       'feishu_main',
       'feishu:oc_abc',
       false,
-      '/sessions/2026-04-30_bbb.jsonl',
+      '/sessions/2026-05-02_bbb.jsonl',
+    );
+    expect(sent[1].text).toContain('已恢复');
+    expect(sent[1].text).toContain('#2');
+  });
+
+  it('rejects out-of-range bare-integer pick after /resume', async () => {
+    const { channel, sent } = makeChannel();
+    await tryHandleSlash({
+      ...baseCtx,
+      lastContent: '@andy /resume',
+      channel,
+    });
+    const handled = await tryHandleSlash({
+      ...baseCtx,
+      lastContent: '@andy 99',
+      channel,
+    });
+    expect(handled).toBe(true);
+    expect(resumeChatSession).not.toHaveBeenCalled();
+    expect(sent[1].text).toContain('序号无效');
+  });
+
+  it('expired pending /resume picker falls through; bare integer is not consumed', async () => {
+    const { channel, sent } = makeChannel();
+    await tryHandleSlash({
+      ...baseCtx,
+      lastContent: '@andy /resume',
+      channel,
+    });
+    // Advance past the 5-minute TTL.
+    vi.setSystemTime(NOW + 6 * 60_000);
+    const handled = await tryHandleSlash({
+      ...baseCtx,
+      lastContent: '@andy 1',
+      channel,
+    });
+    expect(handled).toBe(false);
+    expect(resumeChatSession).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(1);
+  });
+
+  it('/new clears any pending /resume picker', async () => {
+    const { channel } = makeChannel();
+    await tryHandleSlash({
+      ...baseCtx,
+      lastContent: '@andy /resume',
+      channel,
+    });
+    await tryHandleSlash({
+      ...baseCtx,
+      lastContent: '@andy /new',
+      channel,
+    });
+    // Now a bare-integer reply should NOT be consumed as a pick.
+    const handled = await tryHandleSlash({
+      ...baseCtx,
+      lastContent: '@andy 1',
+      channel,
+    });
+    expect(handled).toBe(false);
+    expect(resumeChatSession).not.toHaveBeenCalled();
+  });
+
+  it('/resume N still works directly without listing first', async () => {
+    const { channel, sent } = makeChannel();
+    const handled = await tryHandleSlash({
+      ...baseCtx,
+      lastContent: '@andy /resume 1',
+      channel,
+    });
+    expect(handled).toBe(true);
+    expect(resumeChatSession).toHaveBeenCalledWith(
+      'feishu_main',
+      'feishu:oc_abc',
+      false,
+      '/sessions/2026-05-02_aaa.jsonl',
     );
     expect(sent[0].text).toContain('已恢复');
-    expect(sent[0].text).toContain('#2');
   });
 
   it('rejects /resume with out-of-range index', async () => {
