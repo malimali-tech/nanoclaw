@@ -90,4 +90,3 @@ export function fmtSessionStats(s: ChatSessionStats): string {
     `• 估算成本: $${s.cost.toFixed(4)}`,
   ].join('\n');
 }
-
