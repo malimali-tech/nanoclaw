@@ -25,9 +25,7 @@ import {
   appendMessage,
   flushWrites,
   getLastBotTimestamp,
-  readCursor,
   readMessagesSince,
-  writeCursor,
 } from './group-log.js';
 import {
   findChannel,
@@ -67,13 +65,9 @@ import type { RouterPort } from './agent/types.js';
 export { escapeXml, formatMessages } from './router.js';
 
 let registeredGroups: Record<string, RegisteredGroup> = {};
-/** Per-group processing cursor (last message timestamp handed to the agent). */
-const cursors: Record<string, string> = {};
 /** Chats currently being processed by handleMessage. Prevents the polling
  *  loop from dispatching a second concurrent agent run for the same chat
- *  while the first is still in flight — necessary because cursor advance
- *  is deferred until after the agent commits, so the same `missed` window
- *  is visible to subsequent loop iterations until then. */
+ *  while the first is still in flight. */
 const inFlightChats = new Set<string>();
 let messageLoopRunning = false;
 
@@ -81,10 +75,6 @@ const channels: Channel[] = [];
 
 function loadState(): void {
   registeredGroups = getAllRegisteredGroups();
-  for (const [jid, group] of Object.entries(registeredGroups)) {
-    const fromDisk = readCursor(group.folder);
-    if (fromDisk) cursors[jid] = fromDisk;
-  }
   logger.info(
     { groupCount: Object.keys(registeredGroups).length },
     'State loaded',
@@ -92,27 +82,16 @@ function loadState(): void {
 }
 
 /**
- * Return the message cursor for a group, recovering from the last bot reply
- * if cursor.json is missing (new group, corrupted state, restart).
+ * The processing cursor is the timestamp of the last bot reply in the
+ * group's log.jsonl. Reading it on every tick is cheap because group-log
+ * caches the parsed lines by (size, mtimeMs); a tick that finds nothing
+ * new in the log just hits the cache. log.jsonl is the single source of
+ * truth — no separate cursor file, no in-memory shadow that can drift.
  */
-function getOrRecoverCursor(chatJid: string): string {
-  const existing = cursors[chatJid];
-  if (existing) return existing;
-
+function getCursor(chatJid: string): string {
   const group = registeredGroups[chatJid];
   if (!group) return '';
-
-  const fromLog = getLastBotTimestamp(group.folder);
-  if (fromLog) {
-    logger.info(
-      { chatJid, recoveredFrom: fromLog },
-      'Recovered message cursor from last bot reply in log.jsonl',
-    );
-    cursors[chatJid] = fromLog;
-    void writeCursor(group.folder, fromLog).catch(() => {});
-    return fromLog;
-  }
-  return '';
+  return getLastBotTimestamp(group.folder) ?? '';
 }
 
 function registerGroup(jid: string, group: RegisteredGroup): void {
@@ -196,14 +175,16 @@ function deriveFolderFromJid(jid: string): string {
 
 /**
  * Process all pending messages for a group via the in-process pi agent.
- * Returns true on success (or no-op), false if the agent errored and the
- * cursor should not advance.
+ * Returns true on success (or no-op), false if the agent errored.
  *
- * Cursor semantics: advance ONLY after the agent successfully finished
- * the prompt (session.prompt() resolves). On agent error or writeCursor
- * failure, the cursor stays put so the next poll re-processes the batch.
- * Per-chat concurrency is limited to 1 via `inFlightChats` so the polling
- * loop doesn't dispatch a duplicate run while the first is still working.
+ * Cursor semantics: the cursor IS the last bot reply timestamp in
+ * log.jsonl. routerPort.send appends the bot's reply when the agent
+ * succeeds, which advances the cursor as a side effect of writing the
+ * reply itself — there is nothing to write here. On agent error no reply
+ * is appended, so the cursor stays put and the next poll re-processes
+ * the batch. Per-chat concurrency is limited to 1 via `inFlightChats` so
+ * the polling loop doesn't dispatch a duplicate run while the first is
+ * still working.
  */
 async function processGroupMessages(chatJid: string): Promise<boolean> {
   const group = registeredGroups[chatJid];
@@ -219,7 +200,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   const isMainGroup = group.isMain === true;
 
-  const cursor = getOrRecoverCursor(chatJid);
+  const cursor = getCursor(chatJid);
   const missedMessages = readMessagesSince(
     group.folder,
     cursor,
@@ -252,7 +233,6 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   const isSlash = /^\/\w/.test(stripped);
 
   const prompt = isSlash ? stripped : formatMessages(missedMessages, TIMEZONE);
-  const newCursor = missedMessages[missedMessages.length - 1].timestamp;
 
   logger.info(
     { group: group.name, messageCount: missedMessages.length },
@@ -268,19 +248,9 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       isMain: isMainGroup,
       text: prompt,
     });
-    // Agent succeeded → persist cursor on disk, then in memory. If
-    // writeCursor throws we leave both in their old state so the next poll
-    // retries; the cost is a duplicate reply, which is preferable to
-    // silently desyncing memory and disk.
-    try {
-      await writeCursor(group.folder, newCursor);
-      cursors[chatJid] = newCursor;
-    } catch (err) {
-      logger.error(
-        { chatJid, err },
-        'writeCursor failed after successful agent run; cursor not advanced',
-      );
-    }
+    // Agent succeeded — its reply has been appended to log.jsonl by
+    // routerPort.send. The cursor is derived from that log on the next
+    // poll, so there is nothing to write here.
     return true;
   } catch (err) {
     logger.error({ group: group.name, err }, 'Agent error');
@@ -309,7 +279,7 @@ async function startMessageLoop(): Promise<void> {
         const group = registeredGroups[chatJid];
         if (!group) continue;
 
-        const cursor = getOrRecoverCursor(chatJid);
+        const cursor = getCursor(chatJid);
         const missed = readMessagesSince(
           group.folder,
           cursor,
@@ -350,7 +320,7 @@ async function startMessageLoop(): Promise<void> {
 async function recoverPendingMessages(): Promise<void> {
   await flushWrites();
   for (const [chatJid, group] of Object.entries(registeredGroups)) {
-    const cursor = getOrRecoverCursor(chatJid);
+    const cursor = getCursor(chatJid);
     const pending = readMessagesSince(
       group.folder,
       cursor,
