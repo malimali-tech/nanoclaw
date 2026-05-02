@@ -145,6 +145,60 @@ describe('FeishuStreamHandle', () => {
     expect(mocks.cardUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it('CardKit writes share a single monotonic sequence — no overtake under concurrent slow flushes', async () => {
+    // Simulate a slow network on cardElement.content so a second appendText
+    // and a tool_use-triggered card.update get a chance to enqueue before
+    // the first cardElement.content's promise settles. Without the write
+    // chain, runCardUpdate's seq could race ahead of the in-flight content
+    // call and CardKit (which trusts arrival order for the same element)
+    // would overwrite the longer text with the older short one — the
+    // observable "reply rewinds" bug.
+    const sequences: { kind: string; seq: number; len?: number }[] = [];
+    let releaseFirstContent: (() => void) | null = null;
+    const firstContentLatch = new Promise<void>((resolve) => {
+      releaseFirstContent = resolve;
+    });
+    let contentCalls = 0;
+
+    const cardElementContent = vi.fn(async (req: any) => {
+      contentCalls++;
+      sequences.push({
+        kind: 'content',
+        seq: req.data.sequence,
+        len: req.data.content.length,
+      });
+      if (contentCalls === 1) await firstContentLatch;
+      return { code: 0 };
+    });
+    const cardUpdate = vi.fn(async (req: any) => {
+      sequences.push({ kind: 'update', seq: req.data.sequence });
+      return { code: 0 };
+    });
+
+    const { client } = buildClient({ cardElementContent, cardUpdate });
+    const handle = new FeishuStreamHandle({ client, chatId: 'oc_1' });
+
+    // Trigger a slow first content flush, then queue more work behind it.
+    await handle.appendText('A');
+    const more = Promise.all([
+      handle.appendText('B'),
+      handle.appendToolUse('call_1', 'lark-cli', { cmd: 'foo' }),
+      handle.appendToolResult('call_1', 'lark-cli', 'ok', false),
+    ]);
+
+    // Let the slow first cardElement.content finally settle.
+    releaseFirstContent!();
+    await more;
+    await handle.finalize();
+
+    // Every observed seq is strictly greater than the previous one — no
+    // out-of-order arrivals at CardKit, regardless of how the throttle and
+    // tool-update timers interleave.
+    for (let i = 1; i < sequences.length; i++) {
+      expect(sequences[i].seq).toBeGreaterThan(sequences[i - 1].seq);
+    }
+  });
+
   it('finalize without any text appended makes no API calls', async () => {
     const { client, mocks } = buildClient();
     const handle = new FeishuStreamHandle({ client, chatId: 'oc_1' });

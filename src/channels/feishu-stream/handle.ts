@@ -126,12 +126,39 @@ export class FeishuStreamHandle implements StreamHandle {
   // ---- Throttled text streaming (cardElement.content) ----
   private readonly textFlusher: FlushController;
 
+  /**
+   * Serializes every CardKit write (cardElement.content, card.update,
+   * card.settings) so the sequence number we attach to a request equals the
+   * order it actually leaves the host. Without this, two writers (the text
+   * flusher and the body-restructure scheduler) could race: a slow
+   * cardElement.content with seq=5 lands on the server *after* a fast
+   * card.update + re-flush at seq=7, and CardKit (which trusts arrival
+   * order for the same element) overwrites the newer state with the older
+   * short-text snapshot — visually a "reply rewinds" bug. Allocating seq
+   * inside the serialized callback (not at schedule time) closes that gap.
+   */
+  private writeChain: Promise<void> = Promise.resolve();
+
   // ---- Resolved footer config ----
   private readonly footer: ResolvedFooterConfig;
 
   constructor(private readonly deps: FeishuStreamDeps) {
     this.footer = { ...DEFAULT_FOOTER, ...(deps.footer ?? {}) };
     this.textFlusher = new FlushController(() => this.flushTextElement());
+  }
+
+  /** Append `fn` to the strict CardKit write chain. Failures are isolated:
+   *  the next write still runs, but the failed promise rejects to the
+   *  caller. */
+  private serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.writeChain.then(fn);
+    // Swallow on the *chain* (so a failed write doesn't poison subsequent
+    // writes) while still propagating to the caller via `next`.
+    this.writeChain = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
   }
 
   // -------------------------------------------------------------------------
@@ -242,7 +269,11 @@ export class FeishuStreamHandle implements StreamHandle {
     }
 
     // Cancel pending throttled updates and wait for any in-flight ones to
-    // settle before we issue the terminal full-card replacement.
+    // settle before we issue the terminal full-card replacement. Then drain
+    // the serialized write chain so every prior cardElement.content +
+    // card.update has actually hit the wire — without this, the terminal
+    // card.update can race a late seq=N flush and CardKit may resurrect
+    // an older snapshot.
     this.textFlusher.cancelPending();
     await this.textFlusher.waitForFlush();
     this.textFlusher.complete();
@@ -250,6 +281,7 @@ export class FeishuStreamHandle implements StreamHandle {
     while (this.cardUpdateInFlight) {
       await new Promise<void>((resolve) => setTimeout(resolve, 10));
     }
+    await this.writeChain;
 
     if (this.failed) {
       // Fallback already delivered the buffered text on first card-create
@@ -281,12 +313,16 @@ export class FeishuStreamHandle implements StreamHandle {
     // Replace the card with the settled "complete" snapshot. This is what
     // gives the user the final visual: reasoning collapsible, tool-use
     // panel (collapsed), main markdown answer, footer with elapsed time.
+    // Routed through the write chain (single in-flight at this point) so
+    // its seq is guaranteed greater than every prior cardElement.content.
     const complete = this.buildCompleteCard(reason);
     try {
-      await updateCardKitCard(this.deps.client, {
-        cardId: this.cardId,
-        card: complete,
-        sequence: this.nextSequence(),
+      await this.serialize(async () => {
+        await updateCardKitCard(this.deps.client, {
+          cardId: this.cardId!,
+          card: complete,
+          sequence: this.nextSequence(),
+        });
       });
       log(
         `complete card pushed cardId=${this.cardId} elapsed=${this.finalElapsedMs}ms reason=${reason}`,
@@ -298,10 +334,12 @@ export class FeishuStreamHandle implements StreamHandle {
       // Best-effort: at least flip streaming_mode off so the card stops
       // showing the loading spinner.
       try {
-        await setCardStreamingMode(this.deps.client, {
-          cardId: this.cardId,
-          streamingMode: false,
-          sequence: this.nextSequence(),
+        await this.serialize(async () => {
+          await setCardStreamingMode(this.deps.client, {
+            cardId: this.cardId!,
+            streamingMode: false,
+            sequence: this.nextSequence(),
+          });
         });
       } catch (innerErr) {
         log(
@@ -389,24 +427,33 @@ export class FeishuStreamHandle implements StreamHandle {
    */
   private async flushTextElement(): Promise<void> {
     if (!this.cardId) return;
-    const visible = this.computeStreamingText();
-    if (visible === this.lastFlushedText) return;
-    const seq = this.nextSequence();
-    try {
-      await streamCardContent(this.deps.client, {
-        cardId: this.cardId,
-        elementId: STREAMING_ELEMENT_ID,
-        content: visible,
-        sequence: seq,
-      });
-      this.lastFlushedText = visible;
-      log(`flush ok seq=${seq} len=${visible.length} cardId=${this.cardId}`);
-    } catch (err) {
-      log(
-        `flush FAILED seq=${seq} len=${visible.length} cardId=${this.cardId}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      throw err;
-    }
+    // Snapshot the *current* visible text inside the serialized callback,
+    // not at schedule time. If three appendText() calls landed while a
+    // previous flush was in flight, this guarantees we pick up the latest
+    // accumulated buffer rather than a stale prefix.
+    return this.serialize(async () => {
+      const visible = this.computeStreamingText();
+      if (visible === this.lastFlushedText) return;
+      // Allocate seq INSIDE the serialized callback so the seq attached to
+      // a request matches the order it actually leaves the host. Otherwise
+      // network reordering between writers could ship seq=5 after seq=7.
+      const seq = this.nextSequence();
+      try {
+        await streamCardContent(this.deps.client, {
+          cardId: this.cardId!,
+          elementId: STREAMING_ELEMENT_ID,
+          content: visible,
+          sequence: seq,
+        });
+        this.lastFlushedText = visible;
+        log(`flush ok seq=${seq} len=${visible.length} cardId=${this.cardId}`);
+      } catch (err) {
+        log(
+          `flush FAILED seq=${seq} len=${visible.length} cardId=${this.cardId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        throw err;
+      }
+    });
   }
 
   /**
@@ -440,22 +487,34 @@ export class FeishuStreamHandle implements StreamHandle {
     this.cardUpdateInFlight = true;
     this.cardUpdatePending = false;
     try {
-      const display = this.computeToolUseDisplay();
-      const card = buildStreamingPreAnswerCard({
-        steps: display?.steps,
-        elapsedMs: this.visibleToolUseElapsedMs,
-        showToolUse: true,
+      // Restructure the card body, then re-push the streaming text — both
+      // through the same write chain so seq order strictly matches send
+      // order with any in-flight cardElement.content from the text flusher.
+      // Any plain `card.update` followed by an unserialized re-flush would
+      // race the next cardElement.content scheduled by appendText().
+      await this.serialize(async () => {
+        const display = this.computeToolUseDisplay();
+        const card = buildStreamingPreAnswerCard({
+          steps: display?.steps,
+          elapsedMs: this.visibleToolUseElapsedMs,
+          showToolUse: true,
+        });
+        const seq = this.nextSequence();
+        await updateCardKitCard(this.deps.client, {
+          cardId: this.cardId!,
+          card,
+          sequence: seq,
+        });
+        log(`card.update ok seq=${seq} steps=${display?.stepCount ?? 0}`);
+        // The replace reset the streaming element. Mark "no flushed text"
+        // so the next flushTextElement re-pushes the full buffer; do *not*
+        // call flushTextElement here — appendText() schedules the next
+        // throttled flush and that runs serialized after this entry.
+        this.lastFlushedText = '';
       });
-      const seq = this.nextSequence();
-      await updateCardKitCard(this.deps.client, {
-        cardId: this.cardId,
-        card,
-        sequence: seq,
-      });
-      log(`card.update ok seq=${seq} steps=${display?.stepCount ?? 0}`);
-      // After a full replace the streaming element gets reset — re-push the
-      // current text so the typewriter content stays in sync.
-      this.lastFlushedText = '';
+      // If there's nothing further coming (rare — usually appendText is
+      // the trigger that brought us here), prime an immediate re-flush so
+      // the just-reset streaming element catches up to the text buffer.
       if (this.computeStreamingText()) {
         try {
           await this.flushTextElement();
