@@ -73,6 +73,13 @@ import { normalizeToolName, redactInlineSecrets } from './reasoning-utils.js';
 
 const log = (m: string) => logger.info(`[feishu-stream] ${m}`);
 
+/** Hard ceiling on `finalize()` — every Feishu API call inside finalize is
+ *  defensively try/caught, but if all of them genuinely hang we don't want
+ *  the orchestration layer (StreamRenderer.abort, SessionPool dispose) to
+ *  inherit the wait. This drops the card into a terminal state with a
+ *  best-effort fallback message instead of pinning the chat forever. */
+const FINALIZE_TIMEOUT_MS = 30000;
+
 export interface FeishuStreamDeps {
   /** Slice of the Lark SDK client this controller actually touches. */
   client: Pick<Lark.Client, 'im' | 'cardkit'>;
@@ -243,8 +250,40 @@ export class FeishuStreamHandle implements StreamHandle {
   async finalize(opts?: {
     reason?: 'normal' | 'aborted' | 'error';
   }): Promise<void> {
-    const reason = mapReason(opts?.reason);
     if (this.isTerminal) return;
+    // Cap the entire finalize in a watchdog. If any Feishu call genuinely
+    // hangs past the timeout we fall through to a terminal phase and let
+    // the caller continue — a stuck card must never pin SessionPool dispose
+    // or the upstream message loop.
+    let timeoutHandle: NodeJS.Timeout | undefined;
+    const timeout = new Promise<'timeout'>((resolve) => {
+      timeoutHandle = setTimeout(() => resolve('timeout'), FINALIZE_TIMEOUT_MS);
+    });
+    const work = this.finalizeImpl(opts);
+    try {
+      const result = await Promise.race([work, timeout]);
+      if (result === 'timeout') {
+        log(
+          `finalize timed out after ${FINALIZE_TIMEOUT_MS}ms cardId=${this.cardId ?? '<none>'}; forcing terminal state`,
+        );
+        // Best-effort: park the card in an aborted phase so subsequent
+        // events become no-ops. The in-flight finalize keeps running in
+        // the background; if it eventually succeeds, the card.update will
+        // race a no-op transition. Acceptable: the user's view either way
+        // converges to a terminal card.
+        if (!this.isTerminal) {
+          this.transition(CARD_PHASES.aborted, 'abort');
+        }
+      }
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
+  }
+
+  private async finalizeImpl(opts?: {
+    reason?: 'normal' | 'aborted' | 'error';
+  }): Promise<void> {
+    const reason = mapReason(opts?.reason);
     this.finalElapsedMs = Date.now() - this.startedAt;
     if (this.isReasoningPhase && this.reasoningStartedAt) {
       this.reasoningElapsedMs = Date.now() - this.reasoningStartedAt;

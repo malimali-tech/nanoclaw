@@ -135,8 +135,7 @@ export class SessionPool<T extends DisposableSession> {
       const idleNotice = new Promise<void>((resolve) =>
         entry.idleWaiters.push(resolve),
       );
-      const cap =
-        this.opts.forceDisposeAfterMs ?? DEFAULT_FORCE_DISPOSE_MS;
+      const cap = this.opts.forceDisposeAfterMs ?? DEFAULT_FORCE_DISPOSE_MS;
       let timeoutHandle: NodeJS.Timeout | undefined;
       const timer = new Promise<void>((resolve) => {
         timeoutHandle = setTimeout(resolve, cap);
