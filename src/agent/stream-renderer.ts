@@ -116,9 +116,7 @@ export class StreamRenderer {
   }
 
   /** Finalize the open stream (if any) and reset turn-local state. */
-  private async endTurn(
-    reason: 'normal' | 'aborted' | 'error',
-  ): Promise<void> {
+  private async endTurn(reason: 'normal' | 'aborted' | 'error'): Promise<void> {
     const stream = this.streamHandle;
     this.streamHandle = null;
     this.streamProbed = false;
