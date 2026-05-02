@@ -1,4 +1,19 @@
 // src/agent/extension.ts
+//
+// NanoClaw's pi-coding-agent extension. Registers two kinds of things:
+//
+//   1) Tools — agent-callable APIs (bash, read, write, edit, schedule_task,
+//      register_group, …). These cost LLM tokens and are part of the
+//      model's reasoning loop.
+//
+//   2) Slash commands — user-typed shortcuts (`/help`, `/new`, `/resume`,
+//      `/compact`, `/context`, `/diagnostics`, `/tools`). pi's
+//      `_tryExecuteExtensionCommand` (agent-session.ts:970) intercepts
+//      `/<name>` in `session.prompt(...)` BEFORE any LLM call — handlers
+//      run for free. Output is sent via the closure-captured `ctx.send`
+//      (per-chat sink) rather than pi's TUI-shaped `piCtx.ui.notify`,
+//      because we render to Feishu, not to a terminal.
+
 import path from 'path';
 import { Type } from 'typebox';
 import type {
@@ -17,6 +32,21 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import { CronExpressionParser } from 'cron-parser';
 import { GROUPS_DIR } from '../config.js';
+import { probeChatDiagnostics } from './diagnostics.js';
+import {
+  compactChatSession,
+  getChatSessionStats,
+  getChatTools,
+  listChatSessions,
+  newChatSession,
+  resumeChatSession,
+} from './run.js';
+import {
+  fmtDiagnostics,
+  fmtSessionList,
+  fmtSessionStats,
+  fmtTools,
+} from './slash-helpers.js';
 import { getChatToolBindings } from './tool-runtime.js';
 import type { ExtensionCtx, ScheduleType } from './types.js';
 
@@ -236,5 +266,122 @@ export function nanoclawExtension(ctx: ExtensionCtx) {
         },
       }),
     );
+
+    // -----------------------------------------------------------------
+    // Slash commands. Registered via pi's extension API; handlers run
+    // when the user types `/<name>` and short-circuit the LLM call
+    // (agent-session.ts:972). All output goes through `ctx.send` —
+    // there's no notification of pi's TUI-shaped `piCtx.ui` because
+    // NanoClaw renders to Feishu cards/messages, not a terminal.
+    // -----------------------------------------------------------------
+
+    pi.registerCommand('help', {
+      description: '查看可用命令',
+      handler: async () => {
+        const cmds = pi
+          .getCommands()
+          .filter((c) => c.source === 'extension')
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const lines = ['_NanoClaw 内置命令_:'];
+        for (const c of cmds) {
+          lines.push(
+            c.description ? `- \`/${c.name}\` — ${c.description}` : `- \`/${c.name}\``,
+          );
+        }
+        await ctx.send(lines.join('\n'));
+      },
+    });
+
+    pi.registerCommand('new', {
+      description: '开启新会话（旧会话保留在磁盘上，可用 /resume 找回）',
+      handler: async () => {
+        await newChatSession(ctx.groupFolder, ctx.chatJid, ctx.isMain);
+        await ctx.send(
+          '_已开启新会话。旧会话已保存，可用 `/resume` 找回。_',
+        );
+      },
+    });
+
+    pi.registerCommand('resume', {
+      description: '不带参数列出最近会话；带参数 N 切换到第 N 个',
+      handler: async (args) => {
+        const sessions = await listChatSessions(ctx.groupFolder, 10);
+        if (sessions.length === 0) {
+          await ctx.send('_暂无可恢复的历史会话。_');
+          return;
+        }
+        const trimmed = args.trim();
+        if (!trimmed) {
+          await ctx.send(fmtSessionList(sessions));
+          return;
+        }
+        const idx = Number.parseInt(trimmed, 10);
+        if (!Number.isInteger(idx) || idx < 1 || idx > sessions.length) {
+          await ctx.send(
+            `_序号无效。请传 1..${sessions.length} 之间的整数，或不带参数查看列表。_`,
+          );
+          return;
+        }
+        const target = sessions[idx - 1];
+        await resumeChatSession(
+          ctx.groupFolder,
+          ctx.chatJid,
+          ctx.isMain,
+          target.path,
+        );
+        await ctx.send(
+          `_已恢复会话 #${idx}（${target.messageCount} 条消息）_`,
+        );
+      },
+    });
+
+    pi.registerCommand('compact', {
+      description: '手动压缩当前上下文（可选传压缩指令）',
+      handler: async (args) => {
+        const r = await compactChatSession(
+          ctx.groupFolder,
+          ctx.chatJid,
+          ctx.isMain,
+          args.trim() || undefined,
+        );
+        const detail =
+          r.tokensBefore > 0
+            ? `（压缩前 ${r.tokensBefore.toLocaleString()} tokens）`
+            : '';
+        await ctx.send(`_已压缩会话上下文。${detail}_`);
+      },
+    });
+
+    pi.registerCommand('context', {
+      description: '查看当前模型、token 用量、上下文窗口与费用',
+      handler: async () => {
+        const s = await getChatSessionStats(
+          ctx.groupFolder,
+          ctx.chatJid,
+          ctx.isMain,
+        );
+        await ctx.send(fmtSessionStats(s));
+      },
+    });
+
+    pi.registerCommand('diagnostics', {
+      description: '运行时自检：sandbox / 容器 / 镜像',
+      handler: async () => {
+        const d = probeChatDiagnostics(ctx.groupFolder);
+        await ctx.send(fmtDiagnostics(d));
+      },
+    });
+
+    pi.registerCommand('tools', {
+      description: '列出当前会话已注册的 tools（按来源分组）',
+      handler: async () => {
+        const tools = await getChatTools(
+          ctx.groupFolder,
+          ctx.chatJid,
+          ctx.isMain,
+        );
+        await ctx.send(fmtTools(tools));
+      },
+    });
   };
 }

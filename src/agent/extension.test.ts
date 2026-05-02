@@ -1,4 +1,55 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+
+vi.mock('./run.js', () => ({
+  newChatSession: vi.fn(async () => {}),
+  resumeChatSession: vi.fn(async () => {}),
+  compactChatSession: vi.fn(async () => ({
+    tokensBefore: 1234,
+    summary: 'compact summary',
+  })),
+  listChatSessions: vi.fn(async () => []),
+  getChatSessionStats: vi.fn(async () => ({
+    totalMessages: 12,
+    inputTokens: 800,
+    outputTokens: 200,
+    cacheReadTokens: 4000,
+    cacheWriteTokens: 0,
+    totalTokens: 5000,
+    cost: 0.0123,
+    contextWindow: 200000,
+    contextPercent: 2.5,
+    modelProvider: 'anthropic',
+    modelId: 'claude-opus-4-7',
+    thinkingLevel: 'medium',
+  })),
+  getChatTools: vi.fn(async () => [
+    { name: 'bash', description: 'shell', source: 'pi-builtin' },
+    { name: 'register_group', description: 'reg', source: 'extension:nanoclaw' },
+  ]),
+}));
+
+vi.mock('./diagnostics.js', () => ({
+  probeChatDiagnostics: vi.fn(() => ({
+    runtime: 'docker',
+    docker: {
+      daemonReachable: true,
+      image: 'nanoclaw-tool:latest',
+      imageExists: true,
+      containerName: 'nanoclaw-tool-wa_test',
+      containerExists: true,
+      containerRunning: true,
+    },
+  })),
+}));
+
+import {
+  compactChatSession,
+  getChatSessionStats,
+  getChatTools,
+  listChatSessions,
+  newChatSession,
+  resumeChatSession,
+} from './run.js';
 import { nanoclawExtension } from './extension.js';
 import * as toolRuntime from './tool-runtime.js';
 import type { ChatToolBindings } from './tool-runtime.js';
@@ -38,15 +89,35 @@ interface RegisteredTool {
   execute: (id: string, params: any) => Promise<any>;
 }
 
+interface RegisteredCommand {
+  name: string;
+  description?: string;
+  handler: (args: string, piCtx: any) => Promise<void>;
+}
+
 function makePi() {
   const tools: RegisteredTool[] = [];
+  const commands: RegisteredCommand[] = [];
   return {
     pi: {
       registerTool: (t: RegisteredTool) => tools.push(t),
+      registerCommand: (
+        name: string,
+        opts: { description?: string; handler: any },
+      ) => commands.push({ name, ...opts }),
       on: vi.fn(),
-      registerCommand: vi.fn(),
+      // /help iterates pi.getCommands(); we synthesize on demand from
+      // what's been registered through this fake.
+      getCommands: () =>
+        commands.map((c) => ({
+          name: c.name,
+          description: c.description,
+          source: 'extension',
+          sourceInfo: { path: 'test', source: 'nanoclaw', scope: 'user', origin: 'package' },
+        })),
     } as any,
     tools,
+    commands,
   };
 }
 
@@ -214,5 +285,175 @@ describe('nanoclawExtension', () => {
     });
     expect(JSON.stringify(res)).toMatch(/timezone/i);
     expect(ctx.taskScheduler.schedule).not.toHaveBeenCalled();
+  });
+});
+
+describe('nanoclawExtension — slash commands', () => {
+  let bindingsSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    bindingsSpy = vi.spyOn(toolRuntime, 'getChatToolBindings');
+    bindingsSpy.mockReturnValue(NO_BINDINGS);
+    vi.mocked(newChatSession).mockClear();
+    vi.mocked(resumeChatSession).mockClear();
+    vi.mocked(compactChatSession).mockClear();
+    vi.mocked(listChatSessions).mockClear();
+    vi.mocked(getChatSessionStats).mockClear();
+    vi.mocked(getChatTools).mockClear();
+  });
+
+  afterEach(() => {
+    bindingsSpy.mockRestore();
+  });
+
+  function bind() {
+    const ctx = makeCtx();
+    const { pi, commands } = makePi();
+    nanoclawExtension(ctx)(pi);
+    const byName = new Map(commands.map((c) => [c.name, c]));
+    return { ctx, commands, byName, pi };
+  }
+
+  it('registers all expected slash commands', () => {
+    const { commands } = bind();
+    const names = commands.map((c) => c.name).sort();
+    expect(names).toEqual([
+      'compact',
+      'context',
+      'diagnostics',
+      'help',
+      'new',
+      'resume',
+      'tools',
+    ]);
+  });
+
+  it('/help renders auto-generated list from registered commands', async () => {
+    const { ctx, byName } = bind();
+    await byName.get('help')!.handler('', {});
+    expect(ctx.send).toHaveBeenCalledTimes(1);
+    const out = (ctx.send as any).mock.calls[0][0] as string;
+    for (const n of ['help', 'new', 'resume', 'compact', 'context', 'diagnostics', 'tools']) {
+      expect(out).toContain(`/${n}`);
+    }
+  });
+
+  it('/new triggers newChatSession and reports back', async () => {
+    const { ctx, byName } = bind();
+    await byName.get('new')!.handler('', {});
+    expect(newChatSession).toHaveBeenCalledWith('wa_test', 'jid@s', false);
+    expect((ctx.send as any).mock.calls[0][0]).toContain('新会话');
+  });
+
+  it('/resume with no args lists sessions', async () => {
+    vi.mocked(listChatSessions).mockResolvedValueOnce([
+      {
+        path: '/p/aaa.jsonl',
+        id: 'aaa',
+        cwd: '/cwd',
+        name: undefined,
+        parentSessionPath: undefined,
+        created: new Date('2026-05-02T11:00:00Z'),
+        modified: new Date('2026-05-02T11:30:00Z'),
+        messageCount: 8,
+        firstMessage:
+          '<context timezone="Asia/Shanghai" />\n<messages>\n<message sender="andy" time="x">想看下 GitHub PR 状态</message>\n</messages>',
+        allMessagesText: '',
+      },
+    ] as any);
+    const { ctx, byName } = bind();
+    await byName.get('resume')!.handler('', {});
+    expect(resumeChatSession).not.toHaveBeenCalled();
+    const out = (ctx.send as any).mock.calls[0][0] as string;
+    expect(out).toContain('想看下 GitHub PR 状态');
+    expect(out).not.toContain('<message');
+  });
+
+  it('/resume N switches to that session', async () => {
+    vi.mocked(listChatSessions).mockResolvedValueOnce([
+      {
+        path: '/p/a.jsonl',
+        id: 'a',
+        cwd: '/c',
+        name: undefined,
+        parentSessionPath: undefined,
+        created: new Date(),
+        modified: new Date(),
+        messageCount: 3,
+        firstMessage: 'x',
+        allMessagesText: '',
+      },
+      {
+        path: '/p/b.jsonl',
+        id: 'b',
+        cwd: '/c',
+        name: undefined,
+        parentSessionPath: undefined,
+        created: new Date(),
+        modified: new Date(),
+        messageCount: 5,
+        firstMessage: 'y',
+        allMessagesText: '',
+      },
+    ] as any);
+    const { byName } = bind();
+    await byName.get('resume')!.handler('2', {});
+    expect(resumeChatSession).toHaveBeenCalledWith(
+      'wa_test',
+      'jid@s',
+      false,
+      '/p/b.jsonl',
+    );
+  });
+
+  it('/resume rejects out-of-range index', async () => {
+    vi.mocked(listChatSessions).mockResolvedValueOnce([] as any);
+    const { ctx, byName } = bind();
+    await byName.get('resume')!.handler('99', {});
+    expect(resumeChatSession).not.toHaveBeenCalled();
+    expect((ctx.send as any).mock.calls[0][0]).toContain('暂无');
+  });
+
+  it('/compact passes args verbatim and reports tokensBefore', async () => {
+    const { ctx, byName } = bind();
+    await byName.get('compact')!.handler('保留 PR 链接', {});
+    expect(compactChatSession).toHaveBeenCalledWith(
+      'wa_test',
+      'jid@s',
+      false,
+      '保留 PR 链接',
+    );
+    expect((ctx.send as any).mock.calls[0][0]).toContain('1,234');
+  });
+
+  it('/context formats stats from getChatSessionStats', async () => {
+    const { ctx, byName } = bind();
+    await byName.get('context')!.handler('', {});
+    const out = (ctx.send as any).mock.calls[0][0] as string;
+    expect(out).toContain('anthropic/claude-opus-4-7');
+    expect(out).toContain('thinking medium');
+    expect(out).toContain('↑800');
+    expect(out).toContain('R4.0k');
+    expect(out).toContain('2.5%');
+    expect(out).toContain('$0.0123');
+  });
+
+  it('/diagnostics renders runtime + docker status', async () => {
+    const { ctx, byName } = bind();
+    await byName.get('diagnostics')!.handler('', {});
+    const out = (ctx.send as any).mock.calls[0][0] as string;
+    expect(out).toContain('docker');
+    expect(out).toContain('Image');
+    expect(out).toContain('容器');
+  });
+
+  it('/tools groups tools by source', async () => {
+    const { ctx, byName } = bind();
+    await byName.get('tools')!.handler('', {});
+    const out = (ctx.send as any).mock.calls[0][0] as string;
+    expect(out).toContain('pi-builtin');
+    expect(out).toContain('extension:nanoclaw');
+    expect(out).toContain('bash');
+    expect(out).toContain('register_group');
   });
 });

@@ -226,9 +226,7 @@ async function buildSession(
  * a stream — subsequent events for that turn become no-ops rather than
  * spamming retries. The next turn re-probes after `endTurn` clears the flag.
  */
-async function ensureStream(
-  p: PooledSession,
-): Promise<StreamHandle | null> {
+async function ensureStream(p: PooledSession): Promise<StreamHandle | null> {
   if (p.streamRef.current) return p.streamRef.current;
   if (p.streamProbed) return null;
   p.streamProbed = true;

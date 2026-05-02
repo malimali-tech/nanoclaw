@@ -35,7 +35,6 @@ import {
   openStream as openChannelStream,
   routeOutbound,
 } from './router.js';
-import { tryHandleSlash } from './slash.js';
 import {
   restoreRemoteControl,
   startRemoteControl,
@@ -227,29 +226,20 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (!hasTrigger) return true;
   }
 
-  // Slash command short-circuit. Runs after trigger validation (so sender
-  // ACL is enforced) and before agent invocation. Recognized commands
-  // (e.g. /clear, /compact) reply via channel.sendMessage and skip the
-  // agent entirely; unknown patterns fall through to the agent.
+  // Slash command short-circuit. When the LAST missed message is a `/cmd`,
+  // pass it through to pi VERBATIM (no `<context>/<messages>` envelope) so
+  // pi's `_tryExecuteExtensionCommand` (agent-session.ts:970) can dispatch
+  // it to an extension-registered handler. Unknown slashes fall through to
+  // the LLM as plain text. Earlier missed messages in the batch are
+  // discarded — same semantics as before: a slash from the user supersedes
+  // chatter that preceded it.
   const lastMsg = missedMessages[missedMessages.length - 1];
-  const slashHandled = await tryHandleSlash({
-    groupFolder: group.folder,
-    chatJid,
-    isMain: isMainGroup,
-    lastContent: lastMsg.content,
-    trigger: group.trigger,
-    channel,
-  });
-  if (slashHandled) {
-    // Advance cursor so we don't re-process this slash on the next loop.
-    cursors[chatJid] = lastMsg.timestamp;
-    await writeCursor(group.folder, lastMsg.timestamp).catch((err) =>
-      logger.warn({ chatJid, err }, 'writeCursor (slash) failed'),
-    );
-    return true;
-  }
+  const stripped = lastMsg.content
+    .replace(getTriggerPattern(group.trigger), '')
+    .trim();
+  const isSlash = /^\/\w/.test(stripped);
 
-  const prompt = formatMessages(missedMessages, TIMEZONE);
+  const prompt = isSlash ? stripped : formatMessages(missedMessages, TIMEZONE);
 
   // Advance cursor before dispatch so concurrent loop iterations don't
   // re-pick up these messages. Roll back if the agent errors before any
