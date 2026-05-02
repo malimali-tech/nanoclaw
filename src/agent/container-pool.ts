@@ -17,11 +17,12 @@ import {
   containerExists,
   containerRunning,
   hostGatewayArgs,
+  listContainersWithPrefix,
   stopAndRemoveContainer,
 } from './container-runtime.js';
 import { buildVolumeMounts, safeContainerName } from './container-mounts.js';
 import type { DockerRuntimeConfig } from './sandbox-config.js';
-import { logger } from '../logger.js';
+import { errMsg, logger } from '../logger.js';
 
 interface PoolEntry {
   name: string;
@@ -126,9 +127,7 @@ export class ContainerPool {
       stopAndRemoveContainer(entry.name, this.docker.stopTimeoutSec);
       log(`disposed ${entry.name}`);
     } catch (err) {
-      log(
-        `dispose ${entry.name} failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      log(`dispose ${entry.name} failed: ${errMsg(err)}`);
     }
   }
 
@@ -136,6 +135,30 @@ export class ContainerPool {
   disposeAll(): void {
     const folders = [...this.entries.keys()];
     for (const f of folders) this.dispose(f);
+  }
+
+  /**
+   * Boot-time reaper: stop+remove any prefix-matching container whose
+   * folder name is not in `knownFolders`. Containers for still-registered
+   * chats are left alone so the next `ensure()` reattaches them.
+   */
+  reapOrphans(knownFolders: Iterable<string>): void {
+    const expectedNames = new Set<string>();
+    for (const folder of knownFolders) {
+      expectedNames.add(
+        safeContainerName(this.docker.containerNamePrefix, folder),
+      );
+    }
+    const live = listContainersWithPrefix(this.docker.containerNamePrefix);
+    for (const name of live) {
+      if (expectedNames.has(name)) continue;
+      log(`reaping orphan container ${name}`);
+      try {
+        stopAndRemoveContainer(name, this.docker.stopTimeoutSec);
+      } catch (err) {
+        log(`reap ${name} failed: ${errMsg(err)}`);
+      }
+    }
   }
 
   /** Look up the container name for a chat (or undefined if not running). */

@@ -72,6 +72,11 @@ export const logger = {
     log('fatal', dataOrMsg, msg),
 };
 
+/** One-line message for an unknown error, for embedding in log strings. */
+export function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 // Route uncaught errors through logger so they get timestamps in stderr
 process.on('uncaughtException', (err) => {
   logger.fatal({ err }, 'Uncaught exception');

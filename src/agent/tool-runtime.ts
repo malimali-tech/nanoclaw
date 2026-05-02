@@ -18,7 +18,7 @@ import type {
   WriteOperations,
 } from '@mariozechner/pi-coding-agent';
 import { GROUPS_DIR } from '../config.js';
-import { logger } from '../logger.js';
+import { errMsg, logger } from '../logger.js';
 import {
   dockerRuntimeConfig,
   loadSandboxConfig,
@@ -179,9 +179,7 @@ export async function shutdownToolRuntime(): Promise<void> {
     try {
       await SandboxManager.reset();
     } catch (err) {
-      log(
-        `SandboxManager.reset failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      log(`SandboxManager.reset failed: ${errMsg(err)}`);
     }
   }
   initialized = false;
@@ -189,6 +187,16 @@ export async function shutdownToolRuntime(): Promise<void> {
 }
 
 /** Inspection only — used by extension.ts to decide whether to override. */
+/**
+ * Boot-time orphan reaper. In docker mode, stop+remove any prefix-matching
+ * container whose group folder is not in `knownFolders`. No-op for other
+ * runtimes. Safe to call before any `getChatToolBindings`.
+ */
+export function reapOrphanContainers(knownFolders: Iterable<string>): void {
+  if (runtime !== 'docker' || !containerPool) return;
+  containerPool.reapOrphans(knownFolders);
+}
+
 export function currentRuntime(): Runtime {
   return runtime;
 }

@@ -109,6 +109,25 @@ export function stopAndRemoveContainer(
   }
 }
 
+/**
+ * List existing container names whose name starts with `prefix`. Includes
+ * stopped + running. Used at boot to reap orphans whose owning chat is no
+ * longer registered.
+ */
+export function listContainersWithPrefix(prefix: string): string[] {
+  const result = spawnSync(
+    CONTAINER_RUNTIME_BIN,
+    ['ps', '-a', '--filter', `name=^${prefix}`, '--format', '{{.Names}}'],
+    { stdio: 'pipe', timeout: 10000 },
+  );
+  if (result.status !== 0) return [];
+  return result.stdout
+    .toString()
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 /** Hostname containers use to reach the host. */
 export const CONTAINER_HOST_GATEWAY = 'host.docker.internal';
 
