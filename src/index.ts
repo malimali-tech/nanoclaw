@@ -69,6 +69,12 @@ export { escapeXml, formatMessages } from './router.js';
 let registeredGroups: Record<string, RegisteredGroup> = {};
 /** Per-group processing cursor (last message timestamp handed to the agent). */
 const cursors: Record<string, string> = {};
+/** Chats currently being processed by handleMessage. Prevents the polling
+ *  loop from dispatching a second concurrent agent run for the same chat
+ *  while the first is still in flight — necessary because cursor advance
+ *  is deferred until after the agent commits, so the same `missed` window
+ *  is visible to subsequent loop iterations until then. */
+const inFlightChats = new Set<string>();
 let messageLoopRunning = false;
 
 const channels: Channel[] = [];
@@ -192,10 +198,18 @@ function deriveFolderFromJid(jid: string): string {
  * Process all pending messages for a group via the in-process pi agent.
  * Returns true on success (or no-op), false if the agent errored and the
  * cursor should not advance.
+ *
+ * Cursor semantics: advance ONLY after the agent successfully finished
+ * the prompt (session.prompt() resolves). On agent error or writeCursor
+ * failure, the cursor stays put so the next poll re-processes the batch.
+ * Per-chat concurrency is limited to 1 via `inFlightChats` so the polling
+ * loop doesn't dispatch a duplicate run while the first is still working.
  */
 async function processGroupMessages(chatJid: string): Promise<boolean> {
   const group = registeredGroups[chatJid];
   if (!group) return true;
+
+  if (inFlightChats.has(chatJid)) return true;
 
   const channel = findChannel(channels, chatJid);
   if (!channel) {
@@ -214,7 +228,6 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   if (missedMessages.length === 0) return true;
 
-  // For non-main groups, check if trigger is required and present
   if (!isMainGroup && group.requiresTrigger !== false) {
     const triggerPattern = getTriggerPattern(group.trigger);
     const allowlistCfg = loadSenderAllowlist();
@@ -228,11 +241,10 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   // Slash command short-circuit. When the LAST missed message is a `/cmd`,
   // pass it through to pi VERBATIM (no `<context>/<messages>` envelope) so
-  // pi's `_tryExecuteExtensionCommand` (agent-session.ts:970) can dispatch
-  // it to an extension-registered handler. Unknown slashes fall through to
-  // the LLM as plain text. Earlier missed messages in the batch are
-  // discarded — same semantics as before: a slash from the user supersedes
-  // chatter that preceded it.
+  // pi's `_tryExecuteExtensionCommand` can dispatch it to an
+  // extension-registered handler. Unknown slashes fall through to the LLM
+  // as plain text. Earlier missed messages in the batch are discarded —
+  // a slash from the user supersedes chatter that preceded it.
   const lastMsg = missedMessages[missedMessages.length - 1];
   const stripped = lastMsg.content
     .replace(getTriggerPattern(group.trigger), '')
@@ -240,22 +252,14 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   const isSlash = /^\/\w/.test(stripped);
 
   const prompt = isSlash ? stripped : formatMessages(missedMessages, TIMEZONE);
-
-  // Advance cursor before dispatch so concurrent loop iterations don't
-  // re-pick up these messages. Roll back if the agent errors before any
-  // output reached the user.
-  const previousCursor = cursors[chatJid] ?? '';
   const newCursor = missedMessages[missedMessages.length - 1].timestamp;
-  cursors[chatJid] = newCursor;
-  await writeCursor(group.folder, newCursor).catch((err) =>
-    logger.warn({ chatJid, err }, 'writeCursor failed'),
-  );
 
   logger.info(
     { group: group.name, messageCount: missedMessages.length },
     'Processing messages',
   );
 
+  inFlightChats.add(chatJid);
   await channel.setTyping?.(chatJid, true);
   try {
     await handleMessage({
@@ -264,14 +268,25 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       isMain: isMainGroup,
       text: prompt,
     });
+    // Agent succeeded → persist cursor on disk, then in memory. If
+    // writeCursor throws we leave both in their old state so the next poll
+    // retries; the cost is a duplicate reply, which is preferable to
+    // silently desyncing memory and disk.
+    try {
+      await writeCursor(group.folder, newCursor);
+      cursors[chatJid] = newCursor;
+    } catch (err) {
+      logger.error(
+        { chatJid, err },
+        'writeCursor failed after successful agent run; cursor not advanced',
+      );
+    }
     return true;
   } catch (err) {
     logger.error({ group: group.name, err }, 'Agent error');
-    // Roll back cursor so retries can re-process these messages
-    cursors[chatJid] = previousCursor;
-    await writeCursor(group.folder, previousCursor).catch(() => {});
     return false;
   } finally {
+    inFlightChats.delete(chatJid);
     await channel.setTyping?.(chatJid, false).catch(() => {});
   }
 }
