@@ -48,9 +48,7 @@ export const CONTAINER_PATHS = {
  */
 export function larkCliStateDir(): string {
   const xdg = process.env.XDG_CONFIG_HOME;
-  const base = xdg
-    ? xdg
-    : path.join(process.env.HOME ?? '', '.config');
+  const base = xdg ? xdg : path.join(process.env.HOME ?? '', '.config');
   return path.join(base, 'nanoclaw', 'lark-cli');
 }
 
