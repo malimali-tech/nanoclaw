@@ -29,7 +29,12 @@ import {
   readMessagesSince,
   writeCursor,
 } from './group-log.js';
-import { findChannel, formatMessages, routeOutbound } from './router.js';
+import {
+  findChannel,
+  formatMessages,
+  openStream as openChannelStream,
+  routeOutbound,
+} from './router.js';
 import { tryHandleSlash } from './slash.js';
 import {
   restoreRemoteControl,
@@ -577,6 +582,7 @@ async function main(): Promise<void> {
         );
       }
     },
+    openStream: (jid) => openChannelStream(channels, jid),
   };
 
   const groupRegistryPort: GroupRegistryPort = {
@@ -594,22 +600,18 @@ async function main(): Promise<void> {
 
   const taskSchedulerPort = makeTaskSchedulerPort();
 
-  configureAgent({
+  const ports = {
     router: routerPort,
     taskScheduler: taskSchedulerPort,
     groupRegistry: groupRegistryPort,
-    channels,
-  });
+  };
+
+  configureAgent(ports);
 
   // Start subsystems (independently of connection handler)
   startSchedulerLoop({
     registeredGroups: () => registeredGroups,
-    ports: {
-      router: routerPort,
-      taskScheduler: taskSchedulerPort,
-      groupRegistry: groupRegistryPort,
-      channels,
-    },
+    ports,
   });
   await recoverPendingMessages();
   startMessageLoop().catch((err) => {

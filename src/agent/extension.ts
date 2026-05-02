@@ -86,36 +86,6 @@ export function nanoclawExtension(ctx: ExtensionCtx) {
 
     pi.registerTool(
       defineTool({
-        name: 'send_message',
-        label: 'send_message',
-        description:
-          'Append text to the current streaming reply. Use for mid-turn progress notes (e.g. "starting long task…") — the regular turn output already streams to the user, so most of the time you can just write directly.',
-        parameters: Type.Object({
-          text: Type.String({ description: 'Message text' }),
-          sender: Type.Optional(
-            Type.String({
-              description: 'Optional role/identity name (e.g. "Researcher")',
-            }),
-          ),
-        }),
-        execute: async (_id, p) => {
-          const stream = ctx.streamRef.current;
-          if (!stream) {
-            // Outside a turn (shouldn't normally happen — tools fire from
-            // inside an in-flight prompt). Fall back to a one-shot send so
-            // the message isn't silently dropped.
-            await ctx.router.send(ctx.chatJid, p.text, p.sender);
-            return okText('Message sent (no active stream).');
-          }
-          const prefix = p.sender ? `**${p.sender}:** ` : '';
-          await stream.appendText(`\n\n${prefix}${p.text}\n\n`);
-          return okText('Message appended to stream.');
-        },
-      }),
-    );
-
-    pi.registerTool(
-      defineTool({
         name: 'schedule_task',
         label: 'schedule_task',
         description:

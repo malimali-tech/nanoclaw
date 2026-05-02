@@ -24,15 +24,17 @@ import {
   updateTaskAfterRun,
 } from './db.js';
 import { resolveGroupFolderPath } from './group-folder.js';
-import { logger } from './logger.js';
+import { errMsg, logger } from './logger.js';
 import { nanoclawExtension } from './agent/extension.js';
 import { resolveModel } from './agent/model.js';
-import type {
-  ExtensionCtx,
-  ScheduleTaskRequest,
-  ScheduledTaskSummary,
-  TaskSchedulerPort,
-  UpdateTaskRequest,
+import {
+  buildExtensionCtx,
+  type ExtensionCtx,
+  type ExtensionPorts,
+  type ScheduleTaskRequest,
+  type ScheduledTaskSummary,
+  type TaskSchedulerPort,
+  type UpdateTaskRequest,
 } from './agent/types.js';
 import { RegisteredGroup, ScheduledTask } from './types.js';
 
@@ -114,10 +116,7 @@ function toSummary(t: ScheduledTask): ScheduledTaskSummary {
 export interface SchedulerDependencies {
   registeredGroups: () => Record<string, RegisteredGroup>;
   /** Ports forwarded into the in-process pi agent for scheduled task runs. */
-  ports: Pick<
-    ExtensionCtx,
-    'router' | 'taskScheduler' | 'groupRegistry' | 'channels'
-  >;
+  ports: ExtensionPorts;
 }
 
 async function runTask(
@@ -129,7 +128,7 @@ async function runTask(
   try {
     groupDir = resolveGroupFolderPath(task.group_folder);
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
+    const error = errMsg(err);
     // Stop retry churn for malformed legacy rows.
     updateTask(task.id, { status: 'paused' });
     logger.error(
@@ -184,30 +183,28 @@ async function runTask(
   let buffer = '';
   let sendChain: Promise<void> = Promise.resolve();
 
-  // Scheduled-task agents don't run inside an interactive turn, so they have
-  // no active stream — `send_message` (and other tools that consult
-  // ctx.streamRef) will fall through to `router.send`, which is what we want
-  // for scheduler-triggered output.
-  const ctx: ExtensionCtx = {
-    ...deps.ports,
+  // Scheduled-task agents don't run inside an interactive turn, so the
+  // turn-level streaming card isn't open — text is buffered and flushed
+  // as ordinary one-shot messages via the resolved channel sink.
+  const ctx: ExtensionCtx = buildExtensionCtx({
+    ports: deps.ports,
     groupFolder: task.group_folder,
     chatJid: task.chat_jid,
     isMain,
-    streamRef: { current: null },
-  };
+  });
 
   const flush = async () => {
     const text = buffer.trim();
     buffer = '';
     if (!text) return;
     try {
-      await deps.ports.router.send(task.chat_jid, text);
+      await ctx.send(text);
       // Track the last non-empty output as the task's result.
       result = text;
     } catch (err) {
       logger.error(
         { taskId: task.id, err },
-        'router.send failed during scheduled task',
+        'channel send failed during scheduled task',
       );
     }
   };
@@ -258,7 +255,7 @@ async function runTask(
       'Task completed',
     );
   } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
+    error = errMsg(err);
     logger.error({ taskId: task.id, error }, 'Task failed');
   } finally {
     if (session) {

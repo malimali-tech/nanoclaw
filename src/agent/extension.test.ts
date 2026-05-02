@@ -16,7 +16,7 @@ const NO_BINDINGS: ChatToolBindings = {
 
 function makeCtx(over: Partial<ExtensionCtx> = {}): ExtensionCtx {
   return {
-    router: { send: vi.fn().mockResolvedValue(undefined) },
+    send: vi.fn().mockResolvedValue(undefined),
     taskScheduler: {
       schedule: vi.fn().mockReturnValue({ taskId: 'task-test' }),
       list: vi.fn().mockReturnValue([]),
@@ -29,8 +29,6 @@ function makeCtx(over: Partial<ExtensionCtx> = {}): ExtensionCtx {
     groupFolder: 'wa_test',
     chatJid: 'jid@s',
     isMain: false,
-    channels: [],
-    streamRef: { current: null },
     ...over,
   };
 }
@@ -118,33 +116,10 @@ describe('nanoclawExtension', () => {
     expect(pi.on).toHaveBeenCalledWith('user_bash', expect.any(Function));
   });
 
-  it('send_message falls back to router.send when no stream is active', async () => {
-    const ctx = makeCtx();
+  it('does not register a send_message tool (deprecated; agent text streams via text_delta)', () => {
     const { pi, tools } = makePi();
-    nanoclawExtension(ctx)(pi);
-    const send = tools.find((t) => t.name === 'send_message')!;
-    await send.execute('id1', { text: 'hello', sender: 'Bot' });
-    expect(ctx.router.send).toHaveBeenCalledWith('jid@s', 'hello', 'Bot');
-  });
-
-  it('send_message appends into the active stream instead of router.send', async () => {
-    const appendText = vi.fn().mockResolvedValue(undefined);
-    const stream = {
-      appendText,
-      appendReasoning: vi.fn(),
-      appendToolUse: vi.fn(),
-      appendToolResult: vi.fn(),
-      finalize: vi.fn(),
-    };
-    const ctx = makeCtx({ streamRef: { current: stream } });
-    const { pi, tools } = makePi();
-    nanoclawExtension(ctx)(pi);
-    const send = tools.find((t) => t.name === 'send_message')!;
-    await send.execute('id1', { text: 'hello', sender: 'Bot' });
-    expect(ctx.router.send).not.toHaveBeenCalled();
-    expect(appendText).toHaveBeenCalledTimes(1);
-    expect(appendText.mock.calls[0][0]).toContain('hello');
-    expect(appendText.mock.calls[0][0]).toContain('Bot');
+    nanoclawExtension(makeCtx())(pi);
+    expect(tools.find((t) => t.name === 'send_message')).toBeUndefined();
   });
 
   it('schedule_task forwards args and returns taskId', async () => {

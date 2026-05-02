@@ -42,7 +42,12 @@ import {
 } from './task-scheduler.js';
 
 const noopPorts: SchedulerDependencies['ports'] = {
-  router: { send: async () => {} },
+  router: {
+    send: async () => {},
+    openStream: async () => {
+      throw new Error('not used in scheduler tests');
+    },
+  },
   taskScheduler: {
     schedule: () => ({ taskId: 'x' }),
     list: () => [],
@@ -52,7 +57,6 @@ const noopPorts: SchedulerDependencies['ports'] = {
     update: () => {},
   },
   groupRegistry: { register: () => {} },
-  channels: [],
 };
 
 describe('task scheduler', () => {

@@ -14,10 +14,8 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import { GROUPS_DIR } from '../config.js';
 import { errMsg, logger } from '../logger.js';
-import { openStream as openChannelStream } from '../router.js';
 import type { StreamHandle } from '../types.js';
 import { SerialChain } from '../util/serial-chain.js';
-import type { StreamRef } from './types.js';
 import { chatSkillsDirs } from './global-skills.js';
 import { SessionPool, type DisposableSession } from './session-pool.js';
 import {
@@ -27,7 +25,16 @@ import {
 } from './tool-runtime.js';
 import { nanoclawExtension } from './extension.js';
 import { resolveModel } from './model.js';
-import type { ExtensionCtx } from './types.js';
+import {
+  buildExtensionCtx,
+  type ExtensionCtx,
+  type ExtensionPorts,
+} from './types.js';
+
+/** run.ts-internal mutable wrapper for the in-flight stream handle. */
+interface StreamRef {
+  current: StreamHandle | null;
+}
 
 const IDLE_MS_RAW = parseInt(process.env.NANOCLAW_AGENT_IDLE_TTL_MS ?? '', 10);
 const IDLE_MS =
@@ -42,24 +49,21 @@ const log = (m: string) => logger.info(`[agent] ${m}`);
 
 interface PooledSession extends DisposableSession {
   session: AgentSession;
-  /** Mutable handle reference shared with `ExtensionCtx.streamRef` so tools
-   *  (notably `send_message`) can append into the same stream the agent's
-   *  `text_delta` events feed. Lazily opened on the first event of a turn,
-   *  cleared on `endTurn`. */
+  /** Mutable handle reference for the in-flight streaming card. Owned by
+   *  run.ts; never exposed to extensions. Lazily opened on the first
+   *  text/tool/thinking event of a turn, finalized on `agent_end`. */
   streamRef: StreamRef;
   /** Memoized "we already tried to open a stream this turn" — avoids
    *  retrying the channel on every event when openStream throws. Reset on
    *  `endTurn`. */
   streamProbed: boolean;
+  /** Pre-bound stream factory for this chat. Resolved at construction so
+   *  the event subscriber doesn't have to search a channel list per event. */
+  openStream: () => Promise<StreamHandle>;
   /** Serializes stream appends and finalize so they hit the channel in the
    *  same order the events arrived from pi-agent. */
   sendChain: SerialChain;
 }
-
-type SharedPorts = Pick<
-  ExtensionCtx,
-  'router' | 'taskScheduler' | 'groupRegistry' | 'channels'
->;
 
 /**
  * Initialize the tool runtime exactly once. Must be awaited before any
@@ -108,22 +112,6 @@ function makeSkillsMerger(groupFolder: string, isMain: boolean) {
   };
 }
 
-function buildCtx(args: {
-  groupFolder: string;
-  chatJid: string;
-  isMain: boolean;
-  ports: SharedPorts;
-  streamRef: StreamRef;
-}): ExtensionCtx {
-  return {
-    ...args.ports,
-    groupFolder: args.groupFolder,
-    chatJid: args.chatJid,
-    isMain: args.isMain,
-    streamRef: args.streamRef,
-  };
-}
-
 /**
  * Per-chat next-session override. Set by /new (→ "fresh") or /resume
  * (→ { resume: <sessionFile> }) right before evicting the pool entry. The
@@ -136,6 +124,7 @@ const pendingSessionInit = new Map<string, SessionInit>();
 
 async function buildSession(
   ctx: ExtensionCtx,
+  ports: ExtensionPorts,
   init: SessionInit | undefined,
 ): Promise<PooledSession> {
   const groupCwd = path.join(GROUPS_DIR, ctx.groupFolder);
@@ -169,8 +158,9 @@ async function buildSession(
 
   const pooled: PooledSession = {
     session,
-    streamRef: ctx.streamRef,
+    streamRef: { current: null },
     streamProbed: false,
+    openStream: () => ports.router.openStream(ctx.chatJid),
     sendChain: new SerialChain(),
     dispose: async () => {
       await pooled.sendChain.drain();
@@ -190,7 +180,7 @@ async function buildSession(
     fn: (s: StreamHandle) => Promise<void>,
   ): void => {
     void pooled.sendChain.run(async () => {
-      const stream = await ensureStream(pooled, ctx);
+      const stream = await ensureStream(pooled);
       if (!stream) return;
       try {
         await fn(stream);
@@ -238,13 +228,12 @@ async function buildSession(
  */
 async function ensureStream(
   p: PooledSession,
-  ctx: ExtensionCtx,
 ): Promise<StreamHandle | null> {
   if (p.streamRef.current) return p.streamRef.current;
   if (p.streamProbed) return null;
   p.streamProbed = true;
   try {
-    const handle = await openChannelStream(ctx.channels, ctx.chatJid);
+    const handle = await p.openStream();
     p.streamRef.current = handle;
     return handle;
   } catch (err) {
@@ -271,7 +260,7 @@ async function endTurn(
 
 let pool: SessionPool<PooledSession> | null = null;
 
-export function configureAgent(ports: SharedPorts): void {
+export function configureAgent(ports: ExtensionPorts): void {
   pool = new SessionPool<PooledSession>({
     factory: async (key) => {
       const [groupFolder, chatJid, isMain] = JSON.parse(key) as [
@@ -279,11 +268,10 @@ export function configureAgent(ports: SharedPorts): void {
         string,
         boolean,
       ];
-      const streamRef: StreamRef = { current: null };
-      const ctx = buildCtx({ groupFolder, chatJid, isMain, ports, streamRef });
+      const ctx = buildExtensionCtx({ ports, groupFolder, chatJid, isMain });
       const init = pendingSessionInit.get(key);
       pendingSessionInit.delete(key);
-      return buildSession(ctx, init);
+      return buildSession(ctx, ports, init);
     },
     idleMs: IDLE_MS,
   });
@@ -370,6 +358,32 @@ export async function compactChatSession(
   const pooled = await pool.getOrCreate(key);
   const result = await pooled.session.compact(customInstructions);
   return { tokensBefore: result.tokensBefore, summary: result.summary };
+}
+
+export interface ChatToolInfo {
+  name: string;
+  description: string;
+  /** Free-form provenance string (`'user'`, `'extension:nanoclaw'`, package name, ...). */
+  source: string;
+}
+
+/**
+ * Snapshot of tools currently registered for this chat's session, grouped
+ * by source. Loads / creates the pool entry as a side effect.
+ */
+export async function getChatTools(
+  groupFolder: string,
+  chatJid: string,
+  isMain: boolean,
+): Promise<ChatToolInfo[]> {
+  if (!pool) throw new Error('agent not configured');
+  const key = JSON.stringify([groupFolder, chatJid, isMain]);
+  const pooled = await pool.getOrCreate(key);
+  return pooled.session.getAllTools().map((t) => ({
+    name: t.name,
+    description: t.description ?? '',
+    source: t.sourceInfo?.source ?? 'unknown',
+  }));
 }
 
 export interface ChatSessionStats {
