@@ -12,11 +12,12 @@ import {
   type Skill,
 } from '@mariozechner/pi-coding-agent';
 import { GROUPS_DIR } from '../config.js';
-import { logger } from '../logger.js';
+import { errMsg, logger } from '../logger.js';
 import { openStream as openChannelStream } from '../router.js';
 import type { StreamHandle } from '../types.js';
+import { SerialChain } from '../util/serial-chain.js';
 import type { StreamRef } from './types.js';
-import { globalSkillsDirs } from './global-skills.js';
+import { chatSkillsDirs } from './global-skills.js';
 import { SessionPool, type DisposableSession } from './session-pool.js';
 import {
   disposeChatRuntime,
@@ -32,10 +33,11 @@ const IDLE_MS =
   Number.isFinite(IDLE_MS_RAW) && IDLE_MS_RAW > 0 ? IDLE_MS_RAW : 600000;
 const log = (m: string) => logger.info(`[agent] ${m}`);
 
-// Global skills directories live in src/agent/global-skills.ts so the
-// path-guard and container-mount layers see the same list. Pi's default
-// scan already covers `~/.pi/agent/skills/` and `<cwd>/.pi/skills/`; we
-// add `~/.agents/skills/` (where `npx skills` installs) on top.
+// Skills are sourced per-chat from `groups/global/skills/` (shared) and
+// `groups/<folder>/skills/` (chat-private). The host user's
+// `~/.agents/skills/` is no longer a default source — see global-skills.ts
+// for the rationale. Path-guard and container-mounts read from the same
+// helper so all three layers see the same list.
 
 interface PooledSession extends DisposableSession {
   session: AgentSession;
@@ -50,7 +52,7 @@ interface PooledSession extends DisposableSession {
   streamProbed: boolean;
   /** Serializes stream appends and finalize so they hit the channel in the
    *  same order the events arrived from pi-agent. */
-  sendChain: Promise<void>;
+  sendChain: SerialChain;
 }
 
 type SharedPorts = Pick<
@@ -70,31 +72,39 @@ export async function ensureSandbox(): Promise<void> {
 }
 
 /**
- * Append skills from every directory returned by `globalSkillsDirs()` to
- * whatever pi loaded by default. Name collisions: pi's defaults win
- * (consistent with pi's own collision policy — first-seen keeps the slot).
- * Used as the `skillsOverride` callback on every DefaultResourceLoader.
+ * Build the `skillsOverride` callback for one chat. Pi's `cwd` scan
+ * lives at `groups/<folder>/`, which already includes `skills/` as a
+ * subdirectory of the cwd — but pi only auto-loads from `<cwd>/.pi/skills/`
+ * and `<cwd>/.skills/`, not arbitrary `<cwd>/skills/`. So we explicitly
+ * surface `groups/global/skills/` and `groups/<folder>/skills/` here.
+ *
+ * Name collisions: pi's defaults win (consistent with pi's own policy
+ * — first-seen keeps the slot). Within our extras, the first dir
+ * returned by `chatSkillsDirs` (chat-private) wins over later ones
+ * (shared), letting a chat shadow a shared skill with a local override.
  */
-function mergeGlobalSkills(base: {
-  skills: Skill[];
-  diagnostics: ReturnType<typeof loadSkillsFromDir>['diagnostics'];
-}): {
-  skills: Skill[];
-  diagnostics: ReturnType<typeof loadSkillsFromDir>['diagnostics'];
-} {
-  const seen = new Set(base.skills.map((s) => s.name));
-  const merged = [...base.skills];
-  const diagnostics = [...base.diagnostics];
-  for (const dir of globalSkillsDirs()) {
-    const extra = loadSkillsFromDir({ dir, source: 'user' });
-    diagnostics.push(...extra.diagnostics);
-    for (const s of extra.skills) {
-      if (seen.has(s.name)) continue;
-      merged.push(s);
-      seen.add(s.name);
+function makeSkillsMerger(groupFolder: string, isMain: boolean) {
+  return (base: {
+    skills: Skill[];
+    diagnostics: ReturnType<typeof loadSkillsFromDir>['diagnostics'];
+  }): {
+    skills: Skill[];
+    diagnostics: ReturnType<typeof loadSkillsFromDir>['diagnostics'];
+  } => {
+    const seen = new Set(base.skills.map((s) => s.name));
+    const merged = [...base.skills];
+    const diagnostics = [...base.diagnostics];
+    for (const dir of chatSkillsDirs(groupFolder, isMain)) {
+      const extra = loadSkillsFromDir({ dir, source: 'user' });
+      diagnostics.push(...extra.diagnostics);
+      for (const s of extra.skills) {
+        if (seen.has(s.name)) continue;
+        merged.push(s);
+        seen.add(s.name);
+      }
     }
-  }
-  return { skills: merged, diagnostics };
+    return { skills: merged, diagnostics };
+  };
 }
 
 function buildCtx(args: {
@@ -122,7 +132,7 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
     cwd: groupCwd,
     agentDir: getAgentDir(),
     extensionFactories: [nanoclawExtension(ctx)],
-    skillsOverride: mergeGlobalSkills,
+    skillsOverride: makeSkillsMerger(ctx.groupFolder, ctx.isMain),
   });
   await loader.reload();
 
@@ -141,9 +151,9 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
     session,
     streamRef: ctx.streamRef,
     streamProbed: false,
-    sendChain: Promise.resolve(),
+    sendChain: new SerialChain(),
     dispose: async () => {
-      await pooled.sendChain;
+      await pooled.sendChain.drain();
       await endTurn(pooled, 'aborted');
       session.dispose();
       // Tear down the chat's container (no-op in non-docker modes). Done
@@ -159,15 +169,13 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
     label: string,
     fn: (s: StreamHandle) => Promise<void>,
   ): void => {
-    pooled.sendChain = pooled.sendChain.then(async () => {
+    void pooled.sendChain.run(async () => {
       const stream = await ensureStream(pooled, ctx);
       if (!stream) return;
       try {
         await fn(stream);
       } catch (err) {
-        log(
-          `${label} failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        log(`${label} failed: ${errMsg(err)}`);
       }
     });
   };
@@ -195,7 +203,7 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
       // prompt can produce multiple turns when the model takes a tool-call
       // loop; finalizing per turn would close the card mid-conversation and
       // open a fresh one for the next turn — the "two cards per reply" bug.
-      pooled.sendChain = pooled.sendChain.then(() => endTurn(pooled, 'normal'));
+      void pooled.sendChain.run(() => endTurn(pooled, 'normal'));
     }
   });
 
@@ -220,9 +228,7 @@ async function ensureStream(
     p.streamRef.current = handle;
     return handle;
   } catch (err) {
-    log(
-      `openStream failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    log(`openStream failed: ${errMsg(err)}`);
     return null;
   }
 }
@@ -239,9 +245,7 @@ async function endTurn(
   try {
     await stream.finalize({ reason });
   } catch (err) {
-    log(
-      `stream.finalize failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    log(`stream.finalize failed: ${errMsg(err)}`);
   }
 }
 

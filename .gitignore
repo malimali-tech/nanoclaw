@@ -17,6 +17,13 @@ groups/main/*
 groups/global/*
 !groups/main/CLAUDE.md
 !groups/global/CLAUDE.md
+# Shared skills shipped with the repo — `groups/global/skills/` is what
+# every chat sees as the shared skill catalog (see src/agent/global-
+# skills.ts). Tracked here so a fresh clone has working skills out of
+# the box; chat-private state under `groups/<folder>/skills/` stays
+# gitignored.
+!groups/global/skills/
+!groups/global/skills/**
 
 # Secrets
 *.keys.json

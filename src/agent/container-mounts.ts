@@ -16,7 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { GROUPS_DIR } from '../config.js';
 import { resolveGroupFolderPath } from '../group-folder.js';
-import { globalSkillsDirs } from './global-skills.js';
+import { chatSkillsDirs } from './global-skills.js';
 
 export interface VolumeMount {
   hostPath: string;
@@ -116,13 +116,18 @@ export function buildVolumeMounts(
     }
   }
 
-  // Global skills bind-mounted at their host paths so bash sees them at
-  // the exact path pi advertised to the LLM in <available_skills>.
-  // Read-only — skills are operator-managed (`npx skills`, `pi skills`),
-  // not chat-managed. If a skill calls `python3 scripts/x.py` it works
-  // iff python3 is in the image; missing runtimes are an image concern,
+  // Skills directories — `groups/global/skills/` (shared) and
+  // `groups/<folder>/skills/` (chat-private). Bind-mounted at their host
+  // paths so bash sees them at the exact path pi advertised to the LLM
+  // in <available_skills>. Read-only here (the parent `groups/<folder>/`
+  // is RW elsewhere; making the skills subdir RO via overlay prevents
+  // accidental edits during a chat — a deliberate skill update goes
+  // through git, not through a stray Bash tool call).
+  //
+  // If a skill ships executable assets (`python3 scripts/x.py`), they
+  // run inside this container; missing runtimes are an image concern,
   // not a mount concern.
-  for (const dir of globalSkillsDirs()) {
+  for (const dir of chatSkillsDirs(groupFolder, isMain)) {
     mounts.push({ hostPath: dir, containerPath: dir, readonly: true });
   }
 

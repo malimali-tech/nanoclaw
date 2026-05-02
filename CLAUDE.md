@@ -68,6 +68,19 @@ Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) f
 | `/debug` | Logs, troubleshooting, sandbox/agent issues |
 | `/add-macos-statusbar` | Install macOS menu bar indicator (one-time, macOS only) |
 
+### Where agent skills live (the runtime SKILL.md catalog)
+
+Skills the **agent** sees are loaded per-chat from two directories — `src/agent/global-skills.ts:chatSkillsDirs()` is the single source of truth:
+
+| Directory | Scope | Tracked in git? |
+|---|---|---|
+| `groups/global/skills/` | Shared across every chat (the repo's shipped catalog — `lark-*`, `find-skills`, etc.) | ✅ via `.gitignore` exception |
+| `groups/<folder>/skills/` | Private to that one chat — agent or operator can drop a SKILL.md here for chat-specific behavior | ❌ |
+
+**Deliberately not loaded:** the host user's `~/.agents/skills/` and `~/.pi/agent/skills/`. Pulling those in means a feishu agent ends up with the user's personal `frontend-design` / cross-project skills in its system prompt. Bring-your-own-skills users can opt them back in via `NANOCLAW_GLOBAL_SKILLS_DIRS=path1:path2`.
+
+CLI binaries the skills shell out to (`lark-cli`, `agent-browser`, `python3`, `uv`) are installed inside the container image — see `container/Dockerfile`. Image and skills are versioned together: a clone + `./container/build.sh` + start = working agent, no `npx skills add` step.
+
 ## Contributing
 
 Before creating a PR, adding a skill, or preparing any contribution, you MUST read [CONTRIBUTING.md](CONTRIBUTING.md). It covers accepted change types, the four skill types and their guidelines, SKILL.md format rules, PR requirements, and the pre-submission checklist (searching for existing PRs/issues, testing, description format).
