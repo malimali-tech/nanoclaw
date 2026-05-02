@@ -5,8 +5,7 @@
 // these into chat replies.
 
 import type { SessionInfo } from '@mariozechner/pi-coding-agent';
-import type { ChatDiagnostics } from './diagnostics.js';
-import type { ChatSessionStats, ChatToolInfo } from './run.js';
+import type { ChatSessionStats } from './run.js';
 
 export function fmtTokens(n: number): string {
   if (n < 1000) return `${n}`;
@@ -69,7 +68,8 @@ export function fmtSessionList(sessions: SessionInfo[]): string {
 }
 
 export function fmtSessionStats(s: ChatSessionStats): string {
-  const pct = s.contextPercent != null ? `${s.contextPercent.toFixed(1)}%` : '?';
+  const pct =
+    s.contextPercent != null ? `${s.contextPercent.toFixed(1)}%` : '?';
   const win = s.contextWindow ? fmtTokens(s.contextWindow) : '?';
   const tokenParts: string[] = [];
   if (s.inputTokens) tokenParts.push(`↑${fmtTokens(s.inputTokens)}`);
@@ -91,31 +91,3 @@ export function fmtSessionStats(s: ChatSessionStats): string {
   ].join('\n');
 }
 
-export function fmtDiagnostics(d: ChatDiagnostics): string {
-  const ok = (b: boolean) => (b ? '✅' : '❌');
-  const lines = ['_NanoClaw 自检_', `• Runtime: \`${d.runtime}\``];
-  if (d.docker) {
-    lines.push(
-      `• Docker daemon: ${ok(d.docker.daemonReachable)}`,
-      `• Image \`${d.docker.image}\`: ${ok(d.docker.imageExists)}`,
-      `• 容器 \`${d.docker.containerName}\`: 存在 ${ok(d.docker.containerExists)} / 运行中 ${ok(d.docker.containerRunning)}`,
-    );
-  }
-  return lines.join('\n');
-}
-
-export function fmtTools(tools: ChatToolInfo[]): string {
-  if (tools.length === 0) return '_当前会话暂无注册 tool。_';
-  const bySource = new Map<string, string[]>();
-  for (const t of tools) {
-    const list = bySource.get(t.source) ?? [];
-    list.push(t.name);
-    bySource.set(t.source, list);
-  }
-  const lines = [`_已注册 tools_（共 ${tools.length}）`];
-  for (const src of [...bySource.keys()].sort()) {
-    const names = bySource.get(src)!.sort();
-    lines.push(`• \`${src}\` (${names.length}): ${names.join(', ')}`);
-  }
-  return lines.join('\n');
-}

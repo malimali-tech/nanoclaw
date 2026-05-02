@@ -32,21 +32,13 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import { CronExpressionParser } from 'cron-parser';
 import { GROUPS_DIR } from '../config.js';
-import { probeChatDiagnostics } from './diagnostics.js';
 import {
-  compactChatSession,
   getChatSessionStats,
-  getChatTools,
   listChatSessions,
   newChatSession,
   resumeChatSession,
 } from './run.js';
-import {
-  fmtDiagnostics,
-  fmtSessionList,
-  fmtSessionStats,
-  fmtTools,
-} from './slash-helpers.js';
+import { fmtSessionList, fmtSessionStats } from './slash-helpers.js';
 import { getChatToolBindings } from './tool-runtime.js';
 import type { ExtensionCtx, ScheduleType } from './types.js';
 
@@ -285,7 +277,9 @@ export function nanoclawExtension(ctx: ExtensionCtx) {
         const lines = ['_NanoClaw 内置命令_:'];
         for (const c of cmds) {
           lines.push(
-            c.description ? `- \`/${c.name}\` — ${c.description}` : `- \`/${c.name}\``,
+            c.description
+              ? `- \`/${c.name}\` — ${c.description}`
+              : `- \`/${c.name}\``,
           );
         }
         await ctx.send(lines.join('\n'));
@@ -296,9 +290,7 @@ export function nanoclawExtension(ctx: ExtensionCtx) {
       description: '开启新会话（旧会话保留在磁盘上，可用 /resume 找回）',
       handler: async () => {
         await newChatSession(ctx.groupFolder, ctx.chatJid, ctx.isMain);
-        await ctx.send(
-          '_已开启新会话。旧会话已保存，可用 `/resume` 找回。_',
-        );
+        await ctx.send('_已开启新会话。旧会话已保存，可用 `/resume` 找回。_');
       },
     });
 
@@ -329,26 +321,7 @@ export function nanoclawExtension(ctx: ExtensionCtx) {
           ctx.isMain,
           target.path,
         );
-        await ctx.send(
-          `_已恢复会话 #${idx}（${target.messageCount} 条消息）_`,
-        );
-      },
-    });
-
-    pi.registerCommand('compact', {
-      description: '手动压缩当前上下文（可选传压缩指令）',
-      handler: async (args) => {
-        const r = await compactChatSession(
-          ctx.groupFolder,
-          ctx.chatJid,
-          ctx.isMain,
-          args.trim() || undefined,
-        );
-        const detail =
-          r.tokensBefore > 0
-            ? `（压缩前 ${r.tokensBefore.toLocaleString()} tokens）`
-            : '';
-        await ctx.send(`_已压缩会话上下文。${detail}_`);
+        await ctx.send(`_已恢复会话 #${idx}（${target.messageCount} 条消息）_`);
       },
     });
 
@@ -361,26 +334,6 @@ export function nanoclawExtension(ctx: ExtensionCtx) {
           ctx.isMain,
         );
         await ctx.send(fmtSessionStats(s));
-      },
-    });
-
-    pi.registerCommand('diagnostics', {
-      description: '运行时自检：sandbox / 容器 / 镜像',
-      handler: async () => {
-        const d = probeChatDiagnostics(ctx.groupFolder);
-        await ctx.send(fmtDiagnostics(d));
-      },
-    });
-
-    pi.registerCommand('tools', {
-      description: '列出当前会话已注册的 tools（按来源分组）',
-      handler: async () => {
-        const tools = await getChatTools(
-          ctx.groupFolder,
-          ctx.chatJid,
-          ctx.isMain,
-        );
-        await ctx.send(fmtTools(tools));
       },
     });
   };

@@ -339,51 +339,6 @@ export async function resumeChatSession(
   await pool.evict(key);
 }
 
-/**
- * Manually trigger a compaction on the chat's active AgentSession. If no
- * session is currently pooled, creates one (which loads existing context
- * from disk). Returns the pre-compaction token count so the caller can
- * format a confirmation message.
- */
-export async function compactChatSession(
-  groupFolder: string,
-  chatJid: string,
-  isMain: boolean,
-  customInstructions?: string,
-): Promise<{ tokensBefore: number; summary: string }> {
-  if (!pool) throw new Error('agent not configured');
-  const key = JSON.stringify([groupFolder, chatJid, isMain]);
-  const pooled = await pool.getOrCreate(key);
-  const result = await pooled.session.compact(customInstructions);
-  return { tokensBefore: result.tokensBefore, summary: result.summary };
-}
-
-export interface ChatToolInfo {
-  name: string;
-  description: string;
-  /** Free-form provenance string (`'user'`, `'extension:nanoclaw'`, package name, ...). */
-  source: string;
-}
-
-/**
- * Snapshot of tools currently registered for this chat's session, grouped
- * by source. Loads / creates the pool entry as a side effect.
- */
-export async function getChatTools(
-  groupFolder: string,
-  chatJid: string,
-  isMain: boolean,
-): Promise<ChatToolInfo[]> {
-  if (!pool) throw new Error('agent not configured');
-  const key = JSON.stringify([groupFolder, chatJid, isMain]);
-  const pooled = await pool.getOrCreate(key);
-  return pooled.session.getAllTools().map((t) => ({
-    name: t.name,
-    description: t.description ?? '',
-    source: t.sourceInfo?.source ?? 'unknown',
-  }));
-}
-
 export interface ChatSessionStats {
   totalMessages: number;
   inputTokens: number;
