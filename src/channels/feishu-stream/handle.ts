@@ -62,7 +62,6 @@ import {
   streamCardContent,
   updateCardKitCard,
 } from './cardkit.js';
-import { FlushController } from './flush.js';
 import {
   buildToolUseTitleSuffix,
   normalizeToolUseDisplay,
@@ -72,6 +71,13 @@ import type { ToolUseTraceStep } from './tool-use-trace-store.js';
 import { normalizeToolName, redactInlineSecrets } from './reasoning-utils.js';
 
 const log = (m: string) => logger.info(`[feishu-stream] ${m}`);
+
+/** Hard ceiling on `finalize()` — every Feishu API call inside finalize is
+ *  defensively try/caught, but if all of them genuinely hang we don't want
+ *  the orchestration layer (StreamRenderer.abort, SessionPool dispose) to
+ *  inherit the wait. This drops the card into a terminal state with a
+ *  best-effort fallback message instead of pinning the chat forever. */
+const FINALIZE_TIMEOUT_MS = 30000;
 
 export interface FeishuStreamDeps {
   /** Slice of the Lark SDK client this controller actually touches. */
@@ -121,16 +127,24 @@ export class FeishuStreamHandle implements StreamHandle {
   private readonly startedAt = Date.now();
   private finalElapsedMs = 0;
 
-  // ---- Throttled card-level updates (full body replace via card.update) ----
-  /** Set when an event has restructured the card body (tool-use panel /
-   *  reasoning collapsed panel) and we need a full `card.update`, distinct
-   *  from the text-element streaming flush. */
-  private cardUpdatePending = false;
-  private cardUpdateTimer: ReturnType<typeof setTimeout> | null = null;
-  private cardUpdateInFlight = false;
-
-  // ---- Throttled text streaming (cardElement.content) ----
-  private readonly textFlusher: FlushController;
+  // ---- Single-loop reconciler (replaces the old textFlusher +
+  //      cardUpdateTimer pair) ----
+  //
+  // The render layer is declarative: events update internal state, and a
+  // single scheduled reconcile() compares the current state against the
+  // last successfully-pushed snapshot to decide which CardKit call to
+  // issue (cardElement.content for text-only changes; card.update when
+  // structure changes — tool steps added/finished/etc.). All pushes go
+  // through `writeChain` so seq order on the wire matches dispatch order.
+  /** Snapshot of what's currently rendered at STREAMING_ELEMENT_ID on the
+   *  Feishu side (or, equivalently, what would be there had every prior
+   *  push succeeded). Used to short-circuit no-op reconciles. */
+  private lastPushedText = '';
+  /** Fingerprint of the toolSteps array as last pushed. When this differs
+   *  from `hashToolSteps(traceSteps)`, structure changed → card.update. */
+  private lastPushedToolHash = '';
+  private reconcileTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconcileInProgress = false;
 
   /** Serializes CardKit writes; seq must be allocated inside the callback,
    *  not at schedule time, so request order matches seq order on the wire. */
@@ -141,7 +155,6 @@ export class FeishuStreamHandle implements StreamHandle {
 
   constructor(private readonly deps: FeishuStreamDeps) {
     this.footer = { ...DEFAULT_FOOTER, ...(deps.footer ?? {}) };
-    this.textFlusher = new FlushController(() => this.flushTextElement());
   }
 
   // -------------------------------------------------------------------------
@@ -160,7 +173,7 @@ export class FeishuStreamHandle implements StreamHandle {
     this.textBuffer += delta;
     await this.ensureCard();
     if (this.failed) return;
-    await this.textFlusher.throttledUpdate(THROTTLE_CONSTANTS.CARDKIT_MS);
+    this.scheduleReconcile();
   }
 
   async appendReasoning(delta: string): Promise<void> {
@@ -168,14 +181,9 @@ export class FeishuStreamHandle implements StreamHandle {
     if (!this.reasoningStartedAt) this.reasoningStartedAt = Date.now();
     this.isReasoningPhase = true;
     this.reasoningBuffer += delta;
-    // Reasoning content is rendered into the streaming text element while
-    // we're still in the pre-answer phase (mirrors upstream behaviour:
-    // the card shows a "💭 Thinking…" block until the answer starts).
     await this.ensureCard();
     if (this.failed) return;
-    await this.textFlusher.throttledUpdate(
-      THROTTLE_CONSTANTS.REASONING_STATUS_MS,
-    );
+    this.scheduleReconcile();
   }
 
   async appendToolUse(
@@ -199,7 +207,7 @@ export class FeishuStreamHandle implements StreamHandle {
     this.traceSteps.push(step);
     await this.ensureCard();
     if (this.failed) return;
-    this.scheduleCardUpdate();
+    this.scheduleReconcile();
   }
 
   async appendToolResult(
@@ -237,29 +245,56 @@ export class FeishuStreamHandle implements StreamHandle {
       this.toolUseElapsedMs = now - this.toolUseStartedAt;
     }
     if (this.failed) return;
-    this.scheduleCardUpdate();
+    this.scheduleReconcile();
   }
 
   async finalize(opts?: {
     reason?: 'normal' | 'aborted' | 'error';
   }): Promise<void> {
-    const reason = mapReason(opts?.reason);
     if (this.isTerminal) return;
+    // Cap the entire finalize in a watchdog. If any Feishu call genuinely
+    // hangs past the timeout we fall through to a terminal phase and let
+    // the caller continue — a stuck card must never pin SessionPool dispose
+    // or the upstream message loop.
+    let timeoutHandle: NodeJS.Timeout | undefined;
+    const timeout = new Promise<'timeout'>((resolve) => {
+      timeoutHandle = setTimeout(() => resolve('timeout'), FINALIZE_TIMEOUT_MS);
+    });
+    const work = this.finalizeImpl(opts);
+    try {
+      const result = await Promise.race([work, timeout]);
+      if (result === 'timeout') {
+        log(
+          `finalize timed out after ${FINALIZE_TIMEOUT_MS}ms cardId=${this.cardId ?? '<none>'}; forcing terminal state`,
+        );
+        // Best-effort: park the card in an aborted phase so subsequent
+        // events become no-ops. The in-flight finalize keeps running in
+        // the background; if it eventually succeeds, the card.update will
+        // race a no-op transition. Acceptable: the user's view either way
+        // converges to a terminal card.
+        if (!this.isTerminal) {
+          this.transition(CARD_PHASES.aborted, 'abort');
+        }
+      }
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
+  }
+
+  private async finalizeImpl(opts?: {
+    reason?: 'normal' | 'aborted' | 'error';
+  }): Promise<void> {
+    const reason = mapReason(opts?.reason);
     this.finalElapsedMs = Date.now() - this.startedAt;
     if (this.isReasoningPhase && this.reasoningStartedAt) {
       this.reasoningElapsedMs = Date.now() - this.reasoningStartedAt;
       this.isReasoningPhase = false;
     }
 
-    // Drain throttled + serialized writes so the terminal card.update
-    // doesn't race a late flush (which would resurrect an older snapshot).
-    // cancelCardUpdateTimer prevents new runCardUpdate from firing; any
-    // in-flight one is already on writeChain, so awaiting the chain drains
-    // both the body-restructure and the text-element flush queues.
-    this.textFlusher.cancelPending();
-    await this.textFlusher.waitForFlush();
-    this.textFlusher.complete();
-    this.cancelCardUpdateTimer();
+    // Drain pending reconciles so the terminal card.update doesn't race a
+    // late push (which would resurrect an older snapshot). Cancel the
+    // scheduled timer first so no fresh reconcile starts while we drain.
+    this.cancelReconcileTimer();
     await this.writeChain.drain();
 
     if (this.failed) {
@@ -277,14 +312,13 @@ export class FeishuStreamHandle implements StreamHandle {
       return;
     }
 
-    // One last text-element flush in case appendText fired between the
-    // last throttled tick and finalize().
-    if (this.textBuffer !== this.lastFlushedText) {
-      try {
-        await this.flushTextElement();
-      } catch (err) {
-        log(`final text flush failed: ${errMsg(err)}`);
-      }
+    // One last reconcile in case events fired between the last scheduled
+    // tick and finalize() — diff-based, so it's a no-op when nothing
+    // changed.
+    try {
+      await this.reconcile();
+    } catch (err) {
+      log(`final reconcile failed: ${errMsg(err)}`);
     }
 
     // Replace the card with the settled "complete" snapshot. This is what
@@ -390,7 +424,9 @@ export class FeishuStreamHandle implements StreamHandle {
           log(`recordInFlightCard failed (proceeding): ${errMsg(err)}`);
         }
         this.transition(CARD_PHASES.streaming, 'normal');
-        this.textFlusher.setReady(true);
+        // Card is live — kick off the first reconcile so any events that
+        // queued during creation get pushed.
+        this.scheduleReconcile();
       } catch (err) {
         this.failed = true;
         this.transition(CARD_PHASES.creation_failed, 'creation_failed');
@@ -408,102 +444,129 @@ export class FeishuStreamHandle implements StreamHandle {
   }
 
   // -------------------------------------------------------------------------
-  // Streaming flushers
+  // Reconciler — diffs current state against the last pushed snapshot and
+  // emits the minimal CardKit call. Replaces the old textFlusher +
+  // scheduleCardUpdate / runCardUpdate triplet. Pi web-ui uses an
+  // equivalent "snapshot + RAF" model; the flow here is the same idea
+  // adapted for a remote API target instead of the DOM.
   // -------------------------------------------------------------------------
 
-  /**
-   * Push the cumulative textBuffer (or, while still in the reasoning phase,
-   * the reasoning text) into STREAMING_ELEMENT_ID. CardKit diffs the new
-   * value against the prior to drive the typewriter animation.
-   */
-  private async flushTextElement(): Promise<void> {
-    if (!this.cardId) return;
-    // Snapshot visible text inside the serialized callback so coalesced
-    // appends in flight pick up the latest buffer, not a stale prefix.
-    return this.writeChain.run(async () => {
-      const visible = this.computeStreamingText();
-      if (visible === this.lastFlushedText) return;
-      const seq = this.nextSequence();
-      try {
-        await streamCardContent(this.deps.client, {
-          cardId: this.cardId!,
-          elementId: STREAMING_ELEMENT_ID,
-          content: visible,
-          sequence: seq,
-        });
-        this.lastFlushedText = visible;
-        log(`flush ok seq=${seq} len=${visible.length} cardId=${this.cardId}`);
-      } catch (err) {
-        log(
-          `flush FAILED seq=${seq} len=${visible.length} cardId=${this.cardId}: ${errMsg(err)}`,
-        );
-        throw err;
-      }
-    });
+  private scheduleReconcile(): void {
+    if (this.isTerminal || this.failed || !this.cardId) return;
+    if (this.reconcileTimer) return;
+    // Reasoning bursts are gentler-rated than answer text — match the old
+    // REASONING_STATUS_MS cadence to avoid flooding CardKit while the
+    // model is still thinking.
+    const delay =
+      !this.textBuffer && this.reasoningBuffer
+        ? THROTTLE_CONSTANTS.REASONING_STATUS_MS
+        : THROTTLE_CONSTANTS.CARDKIT_MS;
+    this.reconcileTimer = setTimeout(() => {
+      this.reconcileTimer = null;
+      void this.reconcile();
+    }, delay);
   }
 
-  /**
-   * Schedule a full-card replace (tool-use panel changed). Throttled so we
-   * don't spam the API on rapid back-to-back tool start/end events.
-   */
-  private scheduleCardUpdate(): void {
-    if (!this.cardId || this.isTerminal) return;
-    this.cardUpdatePending = true;
-    if (this.cardUpdateTimer) return;
-    this.cardUpdateTimer = setTimeout(() => {
-      this.cardUpdateTimer = null;
-      void this.runCardUpdate();
-    }, 200);
-  }
-
-  private cancelCardUpdateTimer(): void {
-    if (this.cardUpdateTimer) {
-      clearTimeout(this.cardUpdateTimer);
-      this.cardUpdateTimer = null;
+  private cancelReconcileTimer(): void {
+    if (this.reconcileTimer) {
+      clearTimeout(this.reconcileTimer);
+      this.reconcileTimer = null;
     }
   }
 
-  private async runCardUpdate(): Promise<void> {
-    if (!this.cardId || this.isTerminal || !this.cardUpdatePending) return;
-    if (this.cardUpdateInFlight) {
-      // Re-arm so we don't lose the latest state.
-      this.scheduleCardUpdate();
+  /**
+   * Diff the current state against the last successfully-pushed snapshot
+   * and dispatch the minimal CardKit call that closes the gap. Routed
+   * through writeChain so seq order matches dispatch order.
+   *
+   * Diff rules:
+   *   • toolStep set/status changed → card.update (bundles current text)
+   *   • text-only change → cardElement.content
+   *   • neither → no-op
+   *
+   * Re-arms itself if state mutated during the dispatch (writeChain.run
+   * can take 100+ ms under network slowness).
+   */
+  private async reconcile(): Promise<void> {
+    if (this.isTerminal || this.failed || !this.cardId) return;
+    if (this.reconcileInProgress) {
+      // A push is already in flight; the post-push tail will re-check.
       return;
     }
-    this.cardUpdateInFlight = true;
-    this.cardUpdatePending = false;
+    this.reconcileInProgress = true;
     try {
-      // Bundle current streaming text into the same card.update as the body
-      // restructure — separating them makes CardKit "wipe and retype" the
-      // streaming element on every tool-use change.
       await this.writeChain.run(async () => {
-        const display = this.computeToolUseDisplay();
-        const streamingContent = this.computeStreamingText();
-        const card = buildStreamingPreAnswerCard({
-          steps: display?.steps,
-          elapsedMs: this.visibleToolUseElapsedMs,
-          showToolUse: true,
-          streamingContent,
-        });
+        if (this.isTerminal || this.failed || !this.cardId) return;
+        const visibleText = this.computeStreamingText();
+        const toolHash = this.hashToolSteps();
+        const structureChanged = toolHash !== this.lastPushedToolHash;
+        const textChanged = visibleText !== this.lastPushedText;
+        if (!structureChanged && !textChanged) return;
+
+        if (structureChanged) {
+          const display = this.computeToolUseDisplay();
+          const card = buildStreamingPreAnswerCard({
+            steps: display?.steps,
+            elapsedMs: this.visibleToolUseElapsedMs,
+            showToolUse: true,
+            streamingContent: visibleText,
+          });
+          const seq = this.nextSequence();
+          await updateCardKitCard(this.deps.client, {
+            cardId: this.cardId,
+            card,
+            sequence: seq,
+          });
+          this.lastPushedText = visibleText;
+          this.lastPushedToolHash = toolHash;
+          log(
+            `card.update ok seq=${seq} steps=${display?.stepCount ?? 0} streamingLen=${visibleText.length}`,
+          );
+          return;
+        }
+
+        // text-only path
         const seq = this.nextSequence();
-        await updateCardKitCard(this.deps.client, {
-          cardId: this.cardId!,
-          card,
-          sequence: seq,
-        });
-        log(
-          `card.update ok seq=${seq} steps=${display?.stepCount ?? 0} streamingLen=${streamingContent.length}`,
-        );
-        // card.update wrote streamingContent into STREAMING_ELEMENT_ID; bump
-        // the high-water mark so the next text flush won't re-push it.
-        this.lastFlushedText = streamingContent;
+        try {
+          await streamCardContent(this.deps.client, {
+            cardId: this.cardId,
+            elementId: STREAMING_ELEMENT_ID,
+            content: visibleText,
+            sequence: seq,
+          });
+          this.lastPushedText = visibleText;
+          log(
+            `flush ok seq=${seq} len=${visibleText.length} cardId=${this.cardId}`,
+          );
+        } catch (err) {
+          log(
+            `flush FAILED seq=${seq} len=${visibleText.length} cardId=${this.cardId}: ${errMsg(err)}`,
+          );
+          // Don't rethrow: the next reconcile will retry with a higher seq.
+        }
       });
-    } catch (err) {
-      log(`card.update FAILED: ${errMsg(err)}`);
     } finally {
-      this.cardUpdateInFlight = false;
-      if (this.cardUpdatePending) this.scheduleCardUpdate();
+      this.reconcileInProgress = false;
+      // If state mutated while we were pushing, schedule another pass.
+      if (
+        !this.isTerminal &&
+        !this.failed &&
+        this.cardId &&
+        (this.computeStreamingText() !== this.lastPushedText ||
+          this.hashToolSteps() !== this.lastPushedToolHash)
+      ) {
+        this.scheduleReconcile();
+      }
     }
+  }
+
+  /** Compact fingerprint of the toolSteps array — captures count + each
+   *  step's status so the reconciler can detect "structure changed"
+   *  cheaply. Step ordering is stable (append-only) so a length+status
+   *  string is sufficient. */
+  private hashToolSteps(): string {
+    if (this.traceSteps.length === 0) return '';
+    return this.traceSteps.map((s) => `${s.id}:${s.status}`).join('|');
   }
 
   // -------------------------------------------------------------------------

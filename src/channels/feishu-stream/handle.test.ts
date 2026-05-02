@@ -291,4 +291,23 @@ describe('FeishuStreamHandle', () => {
     expect(mocks.cardElementContent).not.toHaveBeenCalled();
     expect(mocks.cardUpdate).not.toHaveBeenCalled();
   });
+
+  it('finalize times out instead of pinning when CardKit hangs', async () => {
+    // Simulate a card.update that never resolves. Without the watchdog,
+    // finalize() would await forever — pinning SessionPool dispose and the
+    // upstream message loop. The 30s ceiling forces a terminal transition
+    // and lets the caller proceed.
+    vi.useFakeTimers();
+    try {
+      const cardUpdate = vi.fn(() => new Promise(() => {})); // never settles
+      const { client } = buildClient({ cardUpdate });
+      const handle = new FeishuStreamHandle({ client, chatId: 'oc_1' });
+      await handle.appendText('hi');
+      const finalizePromise = handle.finalize();
+      await vi.advanceTimersByTimeAsync(31000);
+      await expect(finalizePromise).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

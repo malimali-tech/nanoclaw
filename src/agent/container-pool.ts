@@ -15,14 +15,21 @@ import {
   CONTAINER_RUNTIME_BIN,
   bindMountArg,
   containerExists,
+  containerLabel,
   containerRunning,
   hostGatewayArgs,
   listContainersWithPrefix,
   stopAndRemoveContainer,
 } from './container-runtime.js';
-import { buildVolumeMounts, safeContainerName } from './container-mounts.js';
+import { computeMountPolicy, safeContainerName } from './mount-policy.js';
 import type { DockerRuntimeConfig } from './sandbox-config.js';
 import { errMsg, logger } from '../logger.js';
+
+/** Docker label key carrying the MountPolicy hash. Used by `ensure` to
+ *  recreate a container whose bind-mount surface no longer matches the
+ *  current policy (e.g. a skill directory was added/removed across a
+ *  NanoClaw restart). */
+const MOUNT_HASH_LABEL = 'nanoclaw.mount-hash';
 
 interface PoolEntry {
   name: string;
@@ -42,8 +49,10 @@ export class ContainerPool {
    * Returns the container name (caller uses it as the `docker exec` target).
    *
    * If a container of the same name exists from a previous NanoClaw run,
-   * we reuse it — its bind-mounts are baked in at create time and the
-   * group's mount set hasn't changed, so reuse is safe.
+   * we reuse it iff its `nanoclaw.mount-hash` label matches the current
+   * MountPolicy hash. A mismatch means the chat's mount surface drifted
+   * (skill added/removed, etc.) and the bind-mounts baked in at create
+   * time are stale — recreate from scratch.
    */
   ensure(groupFolder: string, isMain: boolean): string {
     const cached = this.entries.get(groupFolder);
@@ -53,38 +62,53 @@ export class ContainerPool {
       this.docker.containerNamePrefix,
       groupFolder,
     );
+    const policy = computeMountPolicy(groupFolder, isMain);
+    const expectedHash = policy.hash();
 
     if (containerExists(name)) {
-      if (!containerRunning(name)) {
+      const existingHash = containerLabel(name, MOUNT_HASH_LABEL);
+      if (existingHash !== expectedHash) {
+        log(
+          `mount surface changed for ${name} (was=${existingHash ?? 'unset'} now=${expectedHash}); recreating`,
+        );
+        stopAndRemoveContainer(name, this.docker.stopTimeoutSec);
+        this.create(name, groupFolder, isMain, policy);
+      } else if (!containerRunning(name)) {
         log(`reusing existing container ${name} (was stopped, starting)`);
         const start = spawnSync(CONTAINER_RUNTIME_BIN, ['start', name], {
           stdio: 'pipe',
           timeout: 10000,
         });
         if (start.status !== 0) {
-          // Stale image / mount mismatch / orphaned name — wipe and recreate.
           log(`start failed, removing stale ${name}`);
           stopAndRemoveContainer(name, this.docker.stopTimeoutSec);
-          this.create(name, groupFolder, isMain);
+          this.create(name, groupFolder, isMain, policy);
         }
       } else {
         log(`reusing running container ${name}`);
       }
     } else {
-      this.create(name, groupFolder, isMain);
+      this.create(name, groupFolder, isMain, policy);
     }
 
     this.entries.set(groupFolder, { name, groupFolder, isMain });
     return name;
   }
 
-  private create(name: string, groupFolder: string, isMain: boolean): void {
-    const mounts = buildVolumeMounts(groupFolder, isMain);
+  private create(
+    name: string,
+    groupFolder: string,
+    isMain: boolean,
+    policy = computeMountPolicy(groupFolder, isMain),
+  ): void {
+    const mounts = policy.volumeMounts();
     const args: string[] = [
       'run',
       '-d',
       '--name',
       name,
+      '--label',
+      `${MOUNT_HASH_LABEL}=${policy.hash()}`,
       // Match host UID/GID so bind-mounted writes are owned by the user, not
       // root. Falls back to image's default user when getuid is unavailable
       // (e.g. native Windows).

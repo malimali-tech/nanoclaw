@@ -81,6 +81,14 @@ function defaultDeps(
 
 export class FeishuChannel implements Channel {
   name = 'feishu';
+  readonly capabilities = {
+    streaming: true,
+    // setTyping is implemented as a no-op (the Feishu Open API has no
+    // per-conversation typing indicator), but the method is present so
+    // upstream code that conditionally calls it stays simple.
+    typing: true,
+    groupSync: false,
+  } as const;
   private deps: FeishuChannelDeps;
   private connected = false;
   private botOpenId: string | undefined;

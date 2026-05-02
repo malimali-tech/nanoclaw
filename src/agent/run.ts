@@ -13,11 +13,10 @@ import {
   type Skill,
 } from '@mariozechner/pi-coding-agent';
 import { GROUPS_DIR } from '../config.js';
-import { errMsg, logger } from '../logger.js';
-import type { StreamHandle } from '../types.js';
-import { SerialChain } from '../util/serial-chain.js';
+import { logger } from '../logger.js';
 import { chatSkillsDirs } from './global-skills.js';
 import { SessionPool, type DisposableSession } from './session-pool.js';
+import { StreamRenderer } from './stream-renderer.js';
 import {
   disposeChatRuntime,
   initToolRuntime,
@@ -30,11 +29,6 @@ import {
   type ExtensionCtx,
   type ExtensionPorts,
 } from './types.js';
-
-/** run.ts-internal mutable wrapper for the in-flight stream handle. */
-interface StreamRef {
-  current: StreamHandle | null;
-}
 
 const IDLE_MS_RAW = parseInt(process.env.NANOCLAW_AGENT_IDLE_TTL_MS ?? '', 10);
 const IDLE_MS =
@@ -49,20 +43,7 @@ const log = (m: string) => logger.info(`[agent] ${m}`);
 
 interface PooledSession extends DisposableSession {
   session: AgentSession;
-  /** Mutable handle reference for the in-flight streaming card. Owned by
-   *  run.ts; never exposed to extensions. Lazily opened on the first
-   *  text/tool/thinking event of a turn, finalized on `agent_end`. */
-  streamRef: StreamRef;
-  /** Memoized "we already tried to open a stream this turn" — avoids
-   *  retrying the channel on every event when openStream throws. Reset on
-   *  `endTurn`. */
-  streamProbed: boolean;
-  /** Pre-bound stream factory for this chat. Resolved at construction so
-   *  the event subscriber doesn't have to search a channel list per event. */
-  openStream: () => Promise<StreamHandle>;
-  /** Serializes stream appends and finalize so they hit the channel in the
-   *  same order the events arrived from pi-agent. */
-  sendChain: SerialChain;
+  renderer: StreamRenderer;
 }
 
 /**
@@ -156,15 +137,16 @@ async function buildSession(
     model,
   });
 
+  const renderer = new StreamRenderer({
+    session,
+    openStream: () => ports.router.openStream(ctx.chatJid),
+  });
+
   const pooled: PooledSession = {
     session,
-    streamRef: { current: null },
-    streamProbed: false,
-    openStream: () => ports.router.openStream(ctx.chatJid),
-    sendChain: new SerialChain(),
+    renderer,
     dispose: async () => {
-      await pooled.sendChain.drain();
-      await endTurn(pooled, 'aborted');
+      await renderer.abort();
       session.dispose();
       // Tear down the chat's container (no-op in non-docker modes). Done
       // after session.dispose so any final tool calls have already settled.
@@ -172,88 +154,7 @@ async function buildSession(
     },
   };
 
-  // Helper: serialize `fn` onto the sendChain after lazily ensuring the
-  // stream is open. Failures (open or per-call) are logged and swallowed —
-  // pi-agent must keep advancing even if the channel hiccups.
-  const onStream = (
-    label: string,
-    fn: (s: StreamHandle) => Promise<void>,
-  ): void => {
-    void pooled.sendChain.run(async () => {
-      const stream = await ensureStream(pooled);
-      if (!stream) return;
-      try {
-        await fn(stream);
-      } catch (err) {
-        log(`${label} failed: ${errMsg(err)}`);
-      }
-    });
-  };
-
-  session.subscribe((event) => {
-    if (event.type === 'message_update') {
-      const ame = event.assistantMessageEvent;
-      if (ame.type === 'text_delta') {
-        onStream('appendText', (s) => s.appendText(ame.delta));
-      } else if (ame.type === 'thinking_delta') {
-        onStream('appendReasoning', (s) => s.appendReasoning(ame.delta));
-      }
-    } else if (event.type === 'tool_execution_start') {
-      const { toolCallId, toolName, args } = event;
-      onStream('appendToolUse', (s) =>
-        s.appendToolUse(toolCallId, toolName, args),
-      );
-    } else if (event.type === 'tool_execution_end') {
-      const { toolCallId, toolName, result, isError } = event;
-      onStream('appendToolResult', (s) =>
-        s.appendToolResult(toolCallId, toolName, result, isError),
-      );
-    } else if (event.type === 'agent_end') {
-      // Finalize on agent_end (prompt boundary), NOT turn_end. A single user
-      // prompt can produce multiple turns when the model takes a tool-call
-      // loop; finalizing per turn would close the card mid-conversation and
-      // open a fresh one for the next turn — the "two cards per reply" bug.
-      void pooled.sendChain.run(() => endTurn(pooled, 'normal'));
-    }
-  });
-
   return pooled;
-}
-
-/**
- * Lazily open the per-turn stream on the first event that wants one. Returns
- * null (and remembers it via `streamProbed`) when the channel can't supply
- * a stream — subsequent events for that turn become no-ops rather than
- * spamming retries. The next turn re-probes after `endTurn` clears the flag.
- */
-async function ensureStream(p: PooledSession): Promise<StreamHandle | null> {
-  if (p.streamRef.current) return p.streamRef.current;
-  if (p.streamProbed) return null;
-  p.streamProbed = true;
-  try {
-    const handle = await p.openStream();
-    p.streamRef.current = handle;
-    return handle;
-  } catch (err) {
-    log(`openStream failed: ${errMsg(err)}`);
-    return null;
-  }
-}
-
-/** Finalize the open stream (if any) and reset turn-local state. */
-async function endTurn(
-  p: PooledSession,
-  reason: 'normal' | 'aborted' | 'error',
-): Promise<void> {
-  const stream = p.streamRef.current;
-  p.streamRef.current = null;
-  p.streamProbed = false;
-  if (!stream) return;
-  try {
-    await stream.finalize({ reason });
-  } catch (err) {
-    log(`stream.finalize failed: ${errMsg(err)}`);
-  }
 }
 
 let pool: SessionPool<PooledSession> | null = null;
@@ -286,7 +187,12 @@ export async function handleMessage(args: {
   }
   const key = JSON.stringify([args.groupFolder, args.chatJid, args.isMain]);
   const pooled = await pool.getOrCreate(key);
-  await pooled.session.prompt(args.text, { streamingBehavior: 'steer' });
+  pool.markActive(key);
+  try {
+    await pooled.session.prompt(args.text, { streamingBehavior: 'steer' });
+  } finally {
+    pool.markIdle(key);
+  }
 }
 
 export async function shutdownAgent(): Promise<void> {

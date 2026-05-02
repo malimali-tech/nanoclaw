@@ -67,9 +67,9 @@ export function findChannel(
 
 /**
  * Open a streaming handle for `jid`. Throws if no connected channel owns
- * the JID or the owning channel doesn't implement `openStream` — by design
- * agent output is streaming-only, so a missing handle is a configuration
- * error worth surfacing rather than silently dropping.
+ * the JID or the owning channel doesn't declare the streaming capability —
+ * by design agent output is streaming-only, so a missing handle is a
+ * configuration error worth surfacing rather than silently dropping.
  */
 export async function openStream(
   channels: Channel[],
@@ -77,9 +77,9 @@ export async function openStream(
 ): Promise<StreamHandle> {
   const channel = channels.find((c) => c.ownsJid(jid) && c.isConnected());
   if (!channel) throw new Error(`No connected channel for JID: ${jid}`);
-  if (!channel.openStream) {
+  if (!channel.capabilities.streaming || !channel.openStream) {
     throw new Error(
-      `Channel "${channel.name}" does not implement openStream — streaming output is required`,
+      `Channel "${channel.name}" does not declare streaming capability — required for agent output`,
     );
   }
   return channel.openStream(jid);

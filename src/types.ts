@@ -124,24 +124,40 @@ export interface StreamHandle {
   finalize(opts?: { reason?: 'normal' | 'aborted' | 'error' }): Promise<void>;
 }
 
+/**
+ * Declared capabilities of a Channel. Drives feature gating in router so
+ * upstream code doesn't have to introspect optional methods. Channels
+ * MUST set every flag truthfully — declaring streaming=true while leaving
+ * `openStream` undefined is a programmer error.
+ */
+export interface ChannelCapabilities {
+  /** Channel implements `openStream` for per-turn incremental rendering. */
+  streaming: boolean;
+  /** Channel implements `setTyping`. */
+  typing: boolean;
+  /** Channel implements `syncGroups`. */
+  groupSync: boolean;
+}
+
 export interface Channel {
   name: string;
+  /** Stable declaration of what this channel can do. Read-only. */
+  readonly capabilities: ChannelCapabilities;
   connect(): Promise<void>;
   sendMessage(jid: string, text: string): Promise<void>;
   isConnected(): boolean;
   ownsJid(jid: string): boolean;
   disconnect(): Promise<void>;
-  // Optional: typing indicator. Channels that support it implement it.
+  // Present iff capabilities.typing.
   setTyping?(jid: string, isTyping: boolean): Promise<void>;
-  // Optional: sync group/chat names from the platform.
+  // Present iff capabilities.groupSync.
   syncGroups?(force: boolean): Promise<void>;
   /**
-   * Optional: open a per-turn streaming handle for `jid`. Channels that
-   * implement this opt into incremental rendering — the agent runtime will
-   * forward `text_delta` / `thinking_delta` / `tool_execution_*` events to the
-   * handle as they arrive, and call `finalize()` once on `turn_end`. Channels
-   * that don't implement this fall back to the buffered single-shot
-   * `sendMessage` path (the existing behaviour for whatsapp etc).
+   * Present iff capabilities.streaming. Opens a per-turn streaming handle:
+   * the agent runtime forwards `text_delta` / `thinking_delta` /
+   * `tool_execution_*` events to the handle as they arrive, then calls
+   * `finalize()` once on prompt boundary. Channels without streaming
+   * capability fall back to the buffered single-shot `sendMessage` path.
    */
   openStream?(jid: string): Promise<StreamHandle>;
 }
