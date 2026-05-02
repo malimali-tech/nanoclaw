@@ -11,19 +11,19 @@
 // break stdout) and breaks image previews — the same regression that got
 // the previous Docker tool sandbox PR reverted. Keeping fs on host means
 // we own that path correctness; a path check is the price.
+//
+// The allowed-root set is *derived* from MountPolicy so the host-fs view
+// and the container bind-mount view are guaranteed to agree.
 
-import fs from 'fs';
 import path from 'path';
-import { GROUPS_DIR } from '../config.js';
 import { resolveGroupFolderPath } from '../group-folder.js';
-import { chatSkillsDirs } from './global-skills.js';
+import {
+  computeMountPolicy,
+  realIfExists,
+  type HostRoot,
+} from './mount-policy.js';
 
-export interface AllowedRoot {
-  /** Absolute, realpath-resolved root directory. */
-  root: string;
-  /** True iff the agent may write under this root. */
-  writable: boolean;
-}
+export type { HostRoot as AllowedRoot } from './mount-policy.js';
 
 export interface PathGuard {
   assertReadable(p: string): void;
@@ -33,47 +33,14 @@ export interface PathGuard {
 }
 
 /**
- * Build the allowed-root set for a chat. Mirrors what
- * container-mounts.ts bind-mounts into the bash container, so the agent
- * sees a consistent surface across bash and host-fs tools.
- *
- * groupCwd is included so tool calls with absolute paths beneath it
- * resolve correctly (paths like /workspace/group/foo aren't valid host
- * paths — agents must use relative or host-absolute paths to pi's fs
- * tools).
+ * Build the allowed-root set for a chat. Derived from `computeMountPolicy`
+ * so the host-fs view and the container bind-mount view stay in lockstep.
  */
 export function buildAllowedRoots(
   groupFolder: string,
   isMain: boolean,
-): AllowedRoot[] {
-  const roots: AllowedRoot[] = [];
-
-  const groupDir = realIfExists(resolveGroupFolderPath(groupFolder));
-  roots.push({ root: groupDir, writable: true });
-
-  const globalDir = path.join(GROUPS_DIR, 'global');
-  if (fs.existsSync(globalDir)) {
-    roots.push({ root: realIfExists(globalDir), writable: isMain });
-  }
-
-  if (isMain) {
-    // Main can read project source; never write through host-fs tools (the
-    // container mount is also RO, so writes would fail there too — keep
-    // the two surfaces in lockstep).
-    roots.push({ root: realIfExists(process.cwd()), writable: false });
-  }
-
-  // Skills directories the chat should see — `groups/global/skills/`
-  // (shared) and `groups/<folder>/skills/` (chat-private). Read-only via
-  // the host-fs tools so chats don't accidentally clobber each other's
-  // skill state; if a chat genuinely wants to author a skill it can
-  // write under its own group folder via the standard group-folder
-  // write path (which is RW), and the next session will pick it up.
-  for (const dir of chatSkillsDirs(groupFolder, isMain)) {
-    roots.push({ root: realIfExists(dir), writable: false });
-  }
-
-  return roots;
+): HostRoot[] {
+  return [...computeMountPolicy(groupFolder, isMain).hostRoots()];
 }
 
 export function makePathGuard(groupFolder: string, isMain: boolean): PathGuard {
@@ -88,7 +55,7 @@ export function makePathGuard(groupFolder: string, isMain: boolean): PathGuard {
     return realIfExists(abs);
   }
 
-  function findRoot(absPath: string): AllowedRoot | undefined {
+  function findRoot(absPath: string): HostRoot | undefined {
     return roots.find(
       (r) => absPath === r.root || absPath.startsWith(r.root + path.sep),
     );
@@ -126,40 +93,4 @@ export function makePathGuard(groupFolder: string, isMain: boolean): PathGuard {
         .join(' ');
     },
   };
-}
-
-/**
- * fs.realpathSync if the path exists, else the lexically-normalized
- * absolute form. Lets us validate writes to not-yet-created files
- * (Write tool's main use case) while still defeating ../ tricks.
- *
- * For the not-yet-existing case we resolve the parent directory's
- * realpath then rejoin the basename — so a symlinked `groups/alice` →
- * `/elsewhere/alice` followed by writing `groups/alice/new.md` resolves
- * correctly even when `new.md` doesn't exist yet.
- */
-function realIfExists(p: string): string {
-  const abs = path.resolve(p);
-  if (fs.existsSync(abs)) {
-    try {
-      return fs.realpathSync(abs);
-    } catch {
-      return abs;
-    }
-  }
-  // Walk up until an ancestor exists, realpath that, then re-attach the
-  // missing tail.
-  let cur = abs;
-  const tail: string[] = [];
-  while (!fs.existsSync(cur)) {
-    const parent = path.dirname(cur);
-    if (parent === cur) return abs;
-    tail.unshift(path.basename(cur));
-    cur = parent;
-  }
-  try {
-    return path.join(fs.realpathSync(cur), ...tail);
-  } catch {
-    return abs;
-  }
 }
