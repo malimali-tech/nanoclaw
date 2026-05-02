@@ -56,6 +56,19 @@ function createSchema(database: Database.Database): void {
       container_config TEXT,
       requires_trigger INTEGER DEFAULT 1
     );
+    -- In-flight Feishu CardKit cards. A row exists from the moment a stream
+    -- successfully creates+sends its initial card to the moment finalize()
+    -- completes. Survives across restarts so a crash mid-stream can be
+    -- reconciled on next boot — without this the card stays stuck in
+    -- streaming_mode=true forever (loading icon spinning) and can't be
+    -- forwarded / interacted with.
+    CREATE TABLE IF NOT EXISTS feishu_in_flight_cards (
+      card_id TEXT PRIMARY KEY,
+      chat_id TEXT NOT NULL,
+      message_id TEXT,
+      sequence INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
   `);
 
   // Add context_mode column if it doesn't exist (migration for existing DBs)
@@ -403,6 +416,75 @@ export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
     };
   }
   return result;
+}
+
+// --- Feishu in-flight cards ---
+
+export interface InFlightCard {
+  cardId: string;
+  chatId: string;
+  messageId: string | null;
+  sequence: number;
+  createdAt: string;
+}
+
+/** Record a freshly created CardKit card. Called by FeishuStreamHandle once
+ *  card.create + im.message.create both succeeded. */
+export function recordInFlightCard(card: {
+  cardId: string;
+  chatId: string;
+  messageId: string | null;
+}): void {
+  db.prepare(
+    `INSERT OR REPLACE INTO feishu_in_flight_cards
+       (card_id, chat_id, message_id, sequence, created_at)
+     VALUES (?, ?, ?, 0, ?)`,
+  ).run(card.cardId, card.chatId, card.messageId, new Date().toISOString());
+}
+
+/** Track the highest sequence number we've issued for a given card so the
+ *  reconcile path can pick up cleanly without conflicting. Best-effort. */
+export function bumpInFlightCardSequence(
+  cardId: string,
+  sequence: number,
+): void {
+  db.prepare(
+    `UPDATE feishu_in_flight_cards
+        SET sequence = ?
+      WHERE card_id = ?
+        AND sequence < ?`,
+  ).run(sequence, cardId, sequence);
+}
+
+/** Drop the in-flight row once finalize() has flipped streaming_mode off. */
+export function clearInFlightCard(cardId: string): void {
+  db.prepare(`DELETE FROM feishu_in_flight_cards WHERE card_id = ?`).run(
+    cardId,
+  );
+}
+
+/** All cards still considered live. Called once on boot to drive
+ *  reconciliation of cards orphaned by a crash or hard kill. */
+export function getInFlightCards(): InFlightCard[] {
+  const rows = db
+    .prepare(
+      `SELECT card_id, chat_id, message_id, sequence, created_at
+         FROM feishu_in_flight_cards`,
+    )
+    .all() as Array<{
+    card_id: string;
+    chat_id: string;
+    message_id: string | null;
+    sequence: number;
+    created_at: string;
+  }>;
+  return rows.map((r) => ({
+    cardId: r.card_id,
+    chatId: r.chat_id,
+    messageId: r.message_id,
+    sequence: r.sequence,
+    createdAt: r.created_at,
+  }));
 }
 
 // --- JSON migration ---

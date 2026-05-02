@@ -3,6 +3,7 @@ import * as Lark from '@larksuiteoapi/node-sdk';
 import { ASSISTANT_NAME } from '../config.js';
 import { Channel, NewMessage, StreamHandle } from '../types.js';
 import { FeishuStreamHandle } from './feishu-stream/handle.js';
+import { reconcileInFlightCards } from './feishu-stream/reconcile.js';
 import { ChannelOpts, registerChannel } from './registry.js';
 
 interface FeishuMention {
@@ -123,6 +124,16 @@ export class FeishuChannel implements Channel {
     }
     await this.deps.wsClient.start({ eventDispatcher: this.deps.dispatcher });
     this.connected = true;
+
+    // Crash-recovery: any CardKit cards still marked in-flight in SQLite
+    // were orphaned by the previous run (SIGKILL / OOM / power loss) —
+    // their finalize() never ran, so they're stuck in streaming_mode=true
+    // on the Feishu side. Force-terminate them now. Best-effort, never
+    // rethrows; we don't want a CardKit ratelimit during reconcile to
+    // block the channel from connecting.
+    reconcileInFlightCards(this.deps.client).catch((err) => {
+      console.error('[feishu] reconcileInFlightCards failed:', err);
+    });
   }
 
   async disconnect(): Promise<void> {

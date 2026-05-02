@@ -58,7 +58,9 @@ const RETRY_BODY_CODES = new Set<number>([
 
 function isRetryable(err: unknown): boolean {
   if (err instanceof CardKitApiError) {
-    return RETRY_BODY_CODES.has(err.code) || (err.code >= 500 && err.code < 600);
+    return (
+      RETRY_BODY_CODES.has(err.code) || (err.code >= 500 && err.code < 600)
+    );
   }
   // SDK threw before we got a response body — usually network. Worth one
   // shot. node-sdk wraps Axios errors; check the canonical shape.
@@ -66,7 +68,8 @@ function isRetryable(err: unknown): boolean {
     const e = err as { code?: unknown; response?: { status?: unknown } };
     const httpStatus =
       typeof e.response?.status === 'number' ? e.response.status : undefined;
-    if (httpStatus != null && httpStatus >= 500 && httpStatus < 600) return true;
+    if (httpStatus != null && httpStatus >= 500 && httpStatus < 600)
+      return true;
     if (typeof e.code === 'string') {
       // Common Node net errors that are worth a retry.
       return ['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND'].includes(

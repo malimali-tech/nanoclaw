@@ -34,6 +34,11 @@ import * as Lark from '@larksuiteoapi/node-sdk';
 import type { StreamHandle } from '../../types.js';
 import { logger } from '../../logger.js';
 import {
+  bumpInFlightCardSequence,
+  clearInFlightCard,
+  recordInFlightCard,
+} from '../../db.js';
+import {
   STREAMING_ELEMENT_ID,
   buildCardContent,
   buildStreamingPreAnswerCard,
@@ -348,6 +353,19 @@ export class FeishuStreamHandle implements StreamHandle {
       }
     }
 
+    // Card has reached its terminal state — drop the in-flight row so the
+    // boot reconciler doesn't try to "rescue" an already-finalized card on
+    // the next nanoclaw start.
+    if (this.cardId) {
+      try {
+        clearInFlightCard(this.cardId);
+      } catch (err) {
+        log(
+          `clearInFlightCard failed (harmless leak): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
     this.transition(
       reason === 'normal' ? CARD_PHASES.completed : CARD_PHASES.aborted,
       reason,
@@ -394,6 +412,20 @@ export class FeishuStreamHandle implements StreamHandle {
           `card sent messageId=${sent.messageId} chatId=${sent.chatId} cardId=${cardId}`,
         );
         this.cardId = cardId;
+        // Record the card as in-flight BEFORE marking ready, so a crash
+        // between here and the first flush still leaves a row for the boot
+        // reconciler to clean up.
+        try {
+          recordInFlightCard({
+            cardId,
+            chatId: this.deps.chatId,
+            messageId: sent.messageId || null,
+          });
+        } catch (err) {
+          log(
+            `recordInFlightCard failed (proceeding): ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
         this.transition(CARD_PHASES.streaming, 'normal');
         this.textFlusher.setReady(true);
       } catch (err) {
@@ -595,7 +627,15 @@ export class FeishuStreamHandle implements StreamHandle {
   // -------------------------------------------------------------------------
 
   private nextSequence(): number {
-    return ++this.sequence;
+    const seq = ++this.sequence;
+    if (this.cardId) {
+      try {
+        bumpInFlightCardSequence(this.cardId, seq);
+      } catch {
+        // Best-effort — sequence tracking is for reconcile only, not flow.
+      }
+    }
+    return seq;
   }
 
   private sanitizeParams(args: unknown): Record<string, unknown> | undefined {
