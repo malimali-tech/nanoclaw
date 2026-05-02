@@ -65,7 +65,7 @@ import {
   resumeChatSession,
 } from './agent/run.js';
 import type { Channel } from './types.js';
-import { _resetSlashState, tryHandleSlash } from './slash.js';
+import { _listCommands, _resetSlashState, tryHandleSlash } from './slash.js';
 
 interface CapturedSend {
   jid: string;
@@ -112,6 +112,42 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+});
+
+describe('command registry', () => {
+  it('exposes the canonical command list with no duplicate names/aliases', () => {
+    const cmds = _listCommands();
+    expect(cmds.map((c) => c.name)).toEqual([
+      'help',
+      'new',
+      'resume',
+      'compact',
+      'context',
+    ]);
+    const seen = new Set<string>();
+    for (const c of cmds) {
+      for (const n of [c.name, ...(c.aliases ?? [])]) {
+        expect(seen.has(n)).toBe(false);
+        seen.add(n);
+      }
+    }
+  });
+
+  it('/help is auto-generated from registry entries (description + argsHint)', async () => {
+    const { channel, sent } = makeChannel();
+    await tryHandleSlash({
+      ...baseCtx,
+      lastContent: '@andy /help',
+      channel,
+    });
+    const text = sent[0].text;
+    for (const c of _listCommands()) {
+      expect(text).toContain(`/${c.name}`);
+      expect(text).toContain(c.description.split('（')[0].trim().split('，')[0].trim());
+    }
+    expect(text).toContain('[N]'); // /resume argsHint
+    expect(text).toContain('[提示词]'); // /compact argsHint
+  });
 });
 
 describe('tryHandleSlash', () => {

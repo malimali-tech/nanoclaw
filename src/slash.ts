@@ -7,15 +7,16 @@
 // fall through (return false) so the user can still type messages that
 // happen to start with /<word>.
 //
-// All session-management commands map onto pi-coding-agent primitives:
-//   * /new -> SessionManager.create (fresh jsonl)
-//   * /resume -> SessionManager.list + SessionManager.open. Without args
-//     it lists recent sessions and parks a per-chat picker; the next
-//     message that is a bare integer in range consumes the picker and
-//     resumes that session (mirrors pi's interactive selector behavior
-//     in a chat context).
-//   * /compact, /context -> pi's public AgentSession methods.
-//   * /help is local static text.
+// Commands are declared in COMMANDS as typed entries with a description
+// and an `args` hint (used to auto-render /help). The dispatcher looks up
+// by name + aliases — adding a new command is one entry, no switch
+// branch. Patterned after openclaw's commands-registry but stripped of
+// scope / tier / argsMenu / category since NanoClaw has only text-mode
+// inputs and a small catalog.
+//
+// Session-management commands map onto pi-coding-agent primitives via
+// run.ts: /new -> SessionManager.create, /resume -> SessionManager.list +
+// .open, /compact + /context -> AgentSession.compact + .getSessionStats.
 
 import type { SessionInfo } from '@mariozechner/pi-coding-agent';
 import {
@@ -39,13 +40,22 @@ export interface SlashContext {
   channel: Channel;
 }
 
-const HELP_TEXT = `_NanoClaw 内置命令_:
-- \`/help\` — 查看本帮助
-- \`/new\` — 开启新会话（旧会话保留在磁盘上，可用 /resume 找回）
-- \`/resume\` — 列出最近会话；列表给出后直接回复序号即可切换（5 分钟内有效）
-- \`/resume N\` — 直接切换到第 N 个会话
-- \`/compact [提示词]\` — 手动压缩当前上下文，可选传压缩指令
-- \`/context\` — 查看当前模型、token 用量、上下文窗口与费用`;
+export interface SlashCommand {
+  /** Primary name without leading slash. */
+  name: string;
+  /** Optional alternate names. Dispatched the same as `name`. */
+  aliases?: string[];
+  /** One-line user-facing description, used by auto-generated /help. */
+  description: string;
+  /** Optional args hint shown in /help, e.g. "[N]" or "[提示词]". */
+  argsHint?: string;
+  /**
+   * Command body. `args` is the trimmed remainder after the command name.
+   * Throwing here is reported to the chat as `_命令 /name 执行失败: ...`
+   * and counts as handled (no double dispatch on retry).
+   */
+  handler: (args: string, ctx: SlashContext) => Promise<void>;
+}
 
 const RESUME_PICK_TTL_MS = 5 * 60_000;
 const RESUME_LIST_LIMIT = 10;
@@ -145,6 +155,156 @@ async function performResume(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Command registry
+// ---------------------------------------------------------------------------
+
+/**
+ * The full catalog of NanoClaw slash commands. Append entries here; both
+ * dispatch and /help auto-discover them.
+ */
+const COMMANDS: SlashCommand[] = [
+  {
+    name: 'help',
+    description: '查看本帮助',
+    handler: async (_args, ctx) => {
+      await ctx.channel.sendMessage(ctx.chatJid, buildHelp());
+    },
+  },
+  {
+    name: 'new',
+    description: '开启新会话（旧会话保留在磁盘上，可用 /resume 找回）',
+    handler: async (_args, ctx) => {
+      await newChatSession(ctx.groupFolder, ctx.chatJid, ctx.isMain);
+      pendingResume.delete(ctx.chatJid);
+      await ctx.channel.sendMessage(
+        ctx.chatJid,
+        '_已开启新会话。旧会话已保存，可用 `/resume` 找回。_',
+      );
+    },
+  },
+  {
+    name: 'resume',
+    description:
+      '不带参数列出最近会话，列表给出后直接回复序号即可切换（5 分钟内有效）；带参数 N 直接切换',
+    argsHint: '[N]',
+    handler: async (args, ctx) => {
+      const sessions = await listChatSessions(
+        ctx.groupFolder,
+        RESUME_LIST_LIMIT,
+      );
+      if (sessions.length === 0) {
+        pendingResume.delete(ctx.chatJid);
+        await ctx.channel.sendMessage(
+          ctx.chatJid,
+          '_暂无可恢复的历史会话。_',
+        );
+        return;
+      }
+      if (!args) {
+        pendingResume.set(ctx.chatJid, {
+          sessions,
+          expiresAt: Date.now() + RESUME_PICK_TTL_MS,
+        });
+        await ctx.channel.sendMessage(ctx.chatJid, buildList(sessions));
+        return;
+      }
+      const idx = Number.parseInt(args, 10);
+      if (!Number.isInteger(idx) || idx < 1 || idx > sessions.length) {
+        await ctx.channel.sendMessage(
+          ctx.chatJid,
+          `_序号无效。请传 1..${sessions.length} 之间的整数，或不带参数查看列表。_`,
+        );
+        return;
+      }
+      await performResume(ctx, sessions, idx);
+    },
+  },
+  {
+    name: 'compact',
+    description: '手动压缩当前上下文，可选传压缩指令',
+    argsHint: '[提示词]',
+    handler: async (args, ctx) => {
+      const result = await compactChatSession(
+        ctx.groupFolder,
+        ctx.chatJid,
+        ctx.isMain,
+        args || undefined,
+      );
+      const detail =
+        result.tokensBefore > 0
+          ? `（压缩前 ${result.tokensBefore.toLocaleString()} tokens；下次 \`/context\` 可查看压缩后大小）`
+          : '';
+      await ctx.channel.sendMessage(
+        ctx.chatJid,
+        `_已压缩会话上下文。${detail}_`,
+      );
+    },
+  },
+  {
+    name: 'context',
+    description: '查看当前模型、token 用量、上下文窗口与费用',
+    handler: async (_args, ctx) => {
+      const s = await getChatSessionStats(
+        ctx.groupFolder,
+        ctx.chatJid,
+        ctx.isMain,
+      );
+      const pct =
+        s.contextPercent != null ? `${s.contextPercent.toFixed(1)}%` : '?';
+      const win = s.contextWindow ? fmtTokens(s.contextWindow) : '?';
+      const tokenParts: string[] = [];
+      if (s.inputTokens) tokenParts.push(`↑${fmtTokens(s.inputTokens)}`);
+      if (s.outputTokens) tokenParts.push(`↓${fmtTokens(s.outputTokens)}`);
+      if (s.cacheReadTokens)
+        tokenParts.push(`R${fmtTokens(s.cacheReadTokens)}`);
+      if (s.cacheWriteTokens)
+        tokenParts.push(`W${fmtTokens(s.cacheWriteTokens)}`);
+      const modelLine = s.modelId
+        ? `${s.modelProvider ?? '?'}/${s.modelId}${
+            s.thinkingLevel ? ` • thinking ${s.thinkingLevel}` : ''
+          }`
+        : 'no-model';
+      await ctx.channel.sendMessage(
+        ctx.chatJid,
+        [
+          '_会话状态_',
+          `• 模型: ${modelLine}`,
+          `• 消息数: ${s.totalMessages}`,
+          `• Tokens: ${tokenParts.join(' ') || '0'}`,
+          `• 上下文: ${pct} (${fmtTokens(s.totalTokens)}/${win})`,
+          `• 估算成本: $${s.cost.toFixed(4)}`,
+        ].join('\n'),
+      );
+    },
+  },
+];
+
+/** Build the lookup index lazily so adding entries to COMMANDS Just Works. */
+const byName: Map<string, SlashCommand> = (() => {
+  const m = new Map<string, SlashCommand>();
+  for (const cmd of COMMANDS) {
+    m.set(cmd.name, cmd);
+    for (const alias of cmd.aliases ?? []) m.set(alias, cmd);
+  }
+  return m;
+})();
+
+function buildHelp(): string {
+  const lines = ['_NanoClaw 内置命令_:'];
+  for (const cmd of COMMANDS) {
+    const head = cmd.argsHint
+      ? `\`/${cmd.name} ${cmd.argsHint}\``
+      : `\`/${cmd.name}\``;
+    lines.push(`- ${head} — ${cmd.description}`);
+  }
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Dispatcher
+// ---------------------------------------------------------------------------
+
 /**
  * Try to handle a slash command. Returns true iff the message was a
  * recognized command (caller should NOT then forward to the agent).
@@ -184,124 +344,26 @@ export async function tryHandleSlash(ctx: SlashContext): Promise<boolean> {
     return true;
   }
 
-  // 2) Slash command dispatch.
+  // 2) Slash command dispatch via registry.
   const m = stripped.match(/^\/(\w+)(?:\s+([\s\S]*))?$/);
   if (!m) return false;
 
-  const cmd = m[1].toLowerCase();
+  const cmdName = m[1].toLowerCase();
   const rest = (m[2] ?? '').trim();
+  const cmd = byName.get(cmdName);
+  if (!cmd) {
+    // Unknown slash — let the agent see it (e.g. user pasting a path).
+    return false;
+  }
 
   try {
-    switch (cmd) {
-      case 'help':
-        await ctx.channel.sendMessage(ctx.chatJid, HELP_TEXT);
-        return true;
-
-      case 'new':
-        await newChatSession(ctx.groupFolder, ctx.chatJid, ctx.isMain);
-        pendingResume.delete(ctx.chatJid);
-        await ctx.channel.sendMessage(
-          ctx.chatJid,
-          '_已开启新会话。旧会话已保存，可用 `/resume` 找回。_',
-        );
-        return true;
-
-      case 'resume': {
-        const sessions = await listChatSessions(
-          ctx.groupFolder,
-          RESUME_LIST_LIMIT,
-        );
-        if (sessions.length === 0) {
-          pendingResume.delete(ctx.chatJid);
-          await ctx.channel.sendMessage(
-            ctx.chatJid,
-            '_暂无可恢复的历史会话。_',
-          );
-          return true;
-        }
-        if (!rest) {
-          pendingResume.set(ctx.chatJid, {
-            sessions,
-            expiresAt: Date.now() + RESUME_PICK_TTL_MS,
-          });
-          await ctx.channel.sendMessage(ctx.chatJid, buildList(sessions));
-          return true;
-        }
-        const idx = Number.parseInt(rest, 10);
-        if (!Number.isInteger(idx) || idx < 1 || idx > sessions.length) {
-          await ctx.channel.sendMessage(
-            ctx.chatJid,
-            `_序号无效。请传 1..${sessions.length} 之间的整数，或不带参数查看列表。_`,
-          );
-          return true;
-        }
-        await performResume(ctx, sessions, idx);
-        return true;
-      }
-
-      case 'compact': {
-        const result = await compactChatSession(
-          ctx.groupFolder,
-          ctx.chatJid,
-          ctx.isMain,
-          rest || undefined,
-        );
-        const detail =
-          result.tokensBefore > 0
-            ? `（压缩前 ${result.tokensBefore.toLocaleString()} tokens；下次 \`/context\` 可查看压缩后大小）`
-            : '';
-        await ctx.channel.sendMessage(
-          ctx.chatJid,
-          `_已压缩会话上下文。${detail}_`,
-        );
-        return true;
-      }
-
-      case 'context': {
-        const s = await getChatSessionStats(
-          ctx.groupFolder,
-          ctx.chatJid,
-          ctx.isMain,
-        );
-        const pct =
-          s.contextPercent != null ? `${s.contextPercent.toFixed(1)}%` : '?';
-        const win = s.contextWindow ? fmtTokens(s.contextWindow) : '?';
-        const tokenParts: string[] = [];
-        if (s.inputTokens) tokenParts.push(`↑${fmtTokens(s.inputTokens)}`);
-        if (s.outputTokens)
-          tokenParts.push(`↓${fmtTokens(s.outputTokens)}`);
-        if (s.cacheReadTokens)
-          tokenParts.push(`R${fmtTokens(s.cacheReadTokens)}`);
-        if (s.cacheWriteTokens)
-          tokenParts.push(`W${fmtTokens(s.cacheWriteTokens)}`);
-        const modelLine = s.modelId
-          ? `${s.modelProvider ?? '?'}/${s.modelId}${
-              s.thinkingLevel ? ` • thinking ${s.thinkingLevel}` : ''
-            }`
-          : 'no-model';
-        await ctx.channel.sendMessage(
-          ctx.chatJid,
-          [
-            '_会话状态_',
-            `• 模型: ${modelLine}`,
-            `• 消息数: ${s.totalMessages}`,
-            `• Tokens: ${tokenParts.join(' ') || '0'}`,
-            `• 上下文: ${pct} (${fmtTokens(s.totalTokens)}/${win})`,
-            `• 估算成本: $${s.cost.toFixed(4)}`,
-          ].join('\n'),
-        );
-        return true;
-      }
-
-      default:
-        // Unknown slash — let the agent see it (e.g. user pasting a path).
-        return false;
-    }
+    await cmd.handler(rest, ctx);
+    return true;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    logger.error({ err, cmd }, `slash /${cmd} failed`);
+    logger.error({ err, cmd: cmdName }, `slash /${cmdName} failed`);
     await ctx.channel
-      .sendMessage(ctx.chatJid, `_命令 /${cmd} 执行失败: ${errMsg}_`)
+      .sendMessage(ctx.chatJid, `_命令 /${cmdName} 执行失败: ${errMsg}_`)
       .catch(() => {
         /* swallow — channel may be down, don't break the loop */
       });
@@ -312,4 +374,9 @@ export async function tryHandleSlash(ctx: SlashContext): Promise<boolean> {
 /** Test-only: reset the resume-picker state. */
 export function _resetSlashState(): void {
   pendingResume.clear();
+}
+
+/** Exposed for tests + future /diagnostics-style introspection. */
+export function _listCommands(): readonly SlashCommand[] {
+  return COMMANDS;
 }
