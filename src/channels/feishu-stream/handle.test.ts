@@ -243,6 +243,45 @@ describe('FeishuStreamHandle', () => {
     expect(attempts).toBe(1);
   });
 
+  it('preserves the streaming element content across tool-call card.updates (no wipe-and-retype)', async () => {
+    // Reproduces the user-reported bug: when reasoning is mid-stream and a
+    // tool call fires, runCardUpdate replaced the card with an empty
+    // STREAMING_ELEMENT_ID, then a separate cardElement.content re-pushed
+    // the buffer. CardKit rendered the empty intermediate state as a
+    // clear-then-retype, so users saw the "thinking" block wipe and
+    // re-stream. Fix: bake the current streamingContent into the
+    // card.update payload itself.
+    const { client, mocks } = buildClient();
+    const handle = new FeishuStreamHandle({ client, chatId: 'oc_1' });
+
+    // Simulate a thinking phase + tool call mid-stream.
+    await handle.appendReasoning('let me check the calendar');
+    await handle.appendToolUse('call_1', 'lark-cli', { cmd: 'agenda' });
+    // Allow runCardUpdate's 200ms timer to fire.
+    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    await handle.appendToolResult('call_1', 'lark-cli', 'ok', false);
+    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    await handle.finalize();
+
+    // Every card.update during the streaming phase (i.e. NOT the final
+    // complete card) must carry the current reasoning text in its
+    // streaming markdown element. If any of them have an empty content
+    // there, that's the visual "wipe" the user complained about.
+    const updateCalls = mocks.cardUpdate.mock.calls;
+    expect(updateCalls.length).toBeGreaterThanOrEqual(1);
+    // The last call is the terminal complete card; check the others.
+    for (const call of updateCalls.slice(0, -1)) {
+      const card = JSON.parse(call[0].data.card.data);
+      const streamingEl = card.body.elements.find(
+        (e: { element_id?: string }) => e.element_id === 'streaming_content',
+      );
+      expect(streamingEl).toBeDefined();
+      // Must carry the reasoning text. Empty string would mean the
+      // wipe-and-retype animation is back.
+      expect(streamingEl.content).toContain('let me check');
+    }
+  });
+
   it('finalize without any text appended makes no API calls', async () => {
     const { client, mocks } = buildClient();
     const handle = new FeishuStreamHandle({ client, chatId: 'oc_1' });

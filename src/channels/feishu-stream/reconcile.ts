@@ -26,10 +26,7 @@ import * as Lark from '@larksuiteoapi/node-sdk';
 import { clearInFlightCard, getInFlightCards } from '../../db.js';
 import { logger } from '../../logger.js';
 import { STREAMING_ELEMENT_ID } from './builder.js';
-import {
-  setCardStreamingMode,
-  streamCardContent,
-} from './cardkit.js';
+import { setCardStreamingMode, streamCardContent } from './cardkit.js';
 
 const log = (m: string) => logger.info(`[feishu-stream:reconcile] ${m}`);
 

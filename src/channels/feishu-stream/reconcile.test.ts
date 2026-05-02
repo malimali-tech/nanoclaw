@@ -8,10 +8,12 @@ import {
 } from '../../db.js';
 import { reconcileInFlightCards } from './reconcile.js';
 
-function buildClient(overrides: {
-  cardElementContent?: ReturnType<typeof vi.fn>;
-  cardSettings?: ReturnType<typeof vi.fn>;
-} = {}) {
+function buildClient(
+  overrides: {
+    cardElementContent?: ReturnType<typeof vi.fn>;
+    cardSettings?: ReturnType<typeof vi.fn>;
+  } = {},
+) {
   const cardElementContent =
     overrides.cardElementContent ?? vi.fn(async () => ({ code: 0 }));
   const cardSettings =

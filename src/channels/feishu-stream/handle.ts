@@ -519,17 +519,23 @@ export class FeishuStreamHandle implements StreamHandle {
     this.cardUpdateInFlight = true;
     this.cardUpdatePending = false;
     try {
-      // Restructure the card body, then re-push the streaming text — both
-      // through the same write chain so seq order strictly matches send
-      // order with any in-flight cardElement.content from the text flusher.
-      // Any plain `card.update` followed by an unserialized re-flush would
-      // race the next cardElement.content scheduled by appendText().
+      // Restructure the card body in a SINGLE serialized write that ALSO
+      // carries the current streaming-element content. Sending the
+      // tool-use panel update with content="" (then re-flushing in a
+      // separate cardElement.content call) made CardKit render a "wipe
+      // and retype" animation every tool call — observable as the
+      // reasoning text disappearing and re-streaming. Bundling the
+      // current text into the same card.update means CardKit diffs the
+      // streaming element to itself (no-op visually) and only the
+      // tool-use panel animates.
       await this.serialize(async () => {
         const display = this.computeToolUseDisplay();
+        const streamingContent = this.computeStreamingText();
         const card = buildStreamingPreAnswerCard({
           steps: display?.steps,
           elapsedMs: this.visibleToolUseElapsedMs,
           showToolUse: true,
+          streamingContent,
         });
         const seq = this.nextSequence();
         await updateCardKitCard(this.deps.client, {
@@ -537,25 +543,14 @@ export class FeishuStreamHandle implements StreamHandle {
           card,
           sequence: seq,
         });
-        log(`card.update ok seq=${seq} steps=${display?.stepCount ?? 0}`);
-        // The replace reset the streaming element. Mark "no flushed text"
-        // so the next flushTextElement re-pushes the full buffer; do *not*
-        // call flushTextElement here — appendText() schedules the next
-        // throttled flush and that runs serialized after this entry.
-        this.lastFlushedText = '';
+        log(
+          `card.update ok seq=${seq} steps=${display?.stepCount ?? 0} streamingLen=${streamingContent.length}`,
+        );
+        // The card.update wrote `streamingContent` into STREAMING_ELEMENT_ID.
+        // Update the high-water mark so the next throttledUpdate doesn't
+        // immediately re-push the same content.
+        this.lastFlushedText = streamingContent;
       });
-      // If there's nothing further coming (rare — usually appendText is
-      // the trigger that brought us here), prime an immediate re-flush so
-      // the just-reset streaming element catches up to the text buffer.
-      if (this.computeStreamingText()) {
-        try {
-          await this.flushTextElement();
-        } catch (err) {
-          log(
-            `re-flush after card.update failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
     } catch (err) {
       log(
         `card.update FAILED: ${err instanceof Error ? err.message : String(err)}`,

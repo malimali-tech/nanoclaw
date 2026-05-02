@@ -742,13 +742,27 @@ export function buildStreamingThinkingCard(
 /**
  * Build a CardKit 2.0 card for the pre-answer streaming phase.
  * Used both for the initial card and for live updates during tool calls.
+ *
+ * `streamingContent` lets the caller seed STREAMING_ELEMENT_ID with the
+ * current reasoning/answer buffer at the moment of the update. Without it
+ * a `card.update` resets the element to "" — CardKit renders that as a
+ * clear-then-retype animation and the user sees the reasoning text "wipe
+ * and restart" every time a tool call fires. With it, CardKit sees no
+ * change to the streaming element and only animates the tool-use panel
+ * that actually moved.
  */
 export function buildStreamingPreAnswerCard(params: {
   steps?: ToolUseDisplayStep[];
   elapsedMs?: number;
   showToolUse?: boolean;
+  streamingContent?: string;
 }): Record<string, unknown> {
-  const { steps, elapsedMs, showToolUse = true } = params;
+  const {
+    steps,
+    elapsedMs,
+    showToolUse = true,
+    streamingContent = '',
+  } = params;
   const hasSteps = Boolean(steps?.length);
   const elements: unknown[] = [];
 
@@ -762,7 +776,7 @@ export function buildStreamingPreAnswerCard(params: {
 
   elements.push({
     tag: 'markdown',
-    content: '',
+    content: streamingContent,
     text_align: 'left',
     text_size: 'normal_v2',
     margin: '0px 0px 0px 0px',
