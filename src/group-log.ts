@@ -1,5 +1,5 @@
 import * as fsp from 'fs/promises';
-import { existsSync, readFileSync, mkdirSync, statSync } from 'fs';
+import { readFileSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
 
 import { GROUPS_DIR } from './config.js';
@@ -8,25 +8,26 @@ import type { NewMessage } from './types.js';
 import { KeyedSerialChain } from './util/serial-chain.js';
 
 /**
- * Per-group append-only message log + cursor, replacing the old `messages`
- * and `chats` SQLite tables. Lives under `groups/<folder>/.nanoclaw/` to
- * keep the agent's working directory clean.
+ * Per-group append-only message log, replacing the old `messages` and
+ * `chats` SQLite tables. Lives under `groups/<folder>/.nanoclaw/` to keep
+ * the agent's working directory clean.
+ *
+ * Cursor: there is no separate cursor file. The processing cursor is the
+ * timestamp of the last bot-authored line in `log.jsonl`. `index.ts`
+ * keeps an in-memory cache; on cold start `getLastBotTimestamp` rederives
+ * it via a reverse scan. log.jsonl is therefore the single source of
+ * truth for "what has the agent already replied to".
  *
  * Access patterns:
  *   - append (one writer per group, but multiple paths: channel inbound,
  *     scheduler, agent reply) → serialised via per-folder Promise chain
  *   - read tail since cursor → small (<= MAX_MESSAGES_PER_PROMPT) → read
  *     whole file is fine for personal-assistant scale
- *   - find last bot reply (cursor recovery) → reverse scan
+ *   - cursor recovery → reverse scan for last bot row
  */
 
 const META_DIR_NAME = '.nanoclaw';
 const LOG_FILE = 'log.jsonl';
-const CURSOR_FILE = 'cursor.json';
-
-interface CursorState {
-  lastAgentTimestamp?: string;
-}
 
 // Per-folder FIFO chain serializing appendFile calls. SerialChain isolates
 // failures so one bad write does not freeze subsequent appends for the group.
@@ -38,10 +39,6 @@ export function metaDir(folder: string): string {
 
 export function logPath(folder: string): string {
   return path.join(metaDir(folder), LOG_FILE);
-}
-
-export function cursorPath(folder: string): string {
-  return path.join(metaDir(folder), CURSOR_FILE);
 }
 
 function ensureMetaDir(folder: string): void {
@@ -133,9 +130,9 @@ export function readMessagesSince(
 }
 
 /**
- * Most recent bot-authored message timestamp, used to recover the
- * processing cursor when `cursor.json` is missing (new install,
- * corrupted state). Reverse scan to keep this O(tail) in practice.
+ * Most recent bot-authored message timestamp. This IS the processing
+ * cursor — `index.ts` caches it in memory but rederives it from here on
+ * cold start. Reverse scan to keep this O(tail) in practice.
  */
 export function getLastBotTimestamp(folder: string): string | undefined {
   const all = readAllLines(folder);
@@ -143,33 +140,6 @@ export function getLastBotTimestamp(folder: string): string | undefined {
     if (all[i].is_bot_message) return all[i].timestamp;
   }
   return undefined;
-}
-
-export function readCursor(folder: string): string | undefined {
-  const p = cursorPath(folder);
-  if (!existsSync(p)) return undefined;
-  try {
-    const data = JSON.parse(readFileSync(p, 'utf-8')) as CursorState;
-    return data.lastAgentTimestamp;
-  } catch (err) {
-    logger.warn(
-      { folder, err },
-      'group-log: cursor parse failed, treating as missing',
-    );
-    return undefined;
-  }
-}
-
-export async function writeCursor(
-  folder: string,
-  timestamp: string,
-): Promise<void> {
-  ensureMetaDir(folder);
-  await fsp.writeFile(
-    cursorPath(folder),
-    JSON.stringify({ lastAgentTimestamp: timestamp } satisfies CursorState),
-    'utf-8',
-  );
 }
 
 /** Wait for any pending appends. Use in shutdown / before snapshot reads. */

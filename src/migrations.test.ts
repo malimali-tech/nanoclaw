@@ -4,7 +4,7 @@ import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { GROUPS_DIR } from './config.js';
-import { _resetForTest, logPath, cursorPath } from './group-log.js';
+import { _resetForTest, logPath } from './group-log.js';
 import { migrateDbToJsonl } from './migrations.js';
 
 afterEach(() => {
@@ -108,7 +108,6 @@ describe('migrateDbToJsonl', () => {
       expect(report.migrated).toBe(true);
       expect(report.groupsTouched).toBe(1);
       expect(report.rowsWritten).toBe(3);
-      expect(report.cursorsWritten).toBe(1);
 
       const lines = fs
         .readFileSync(logPath(folder), 'utf-8')
@@ -117,9 +116,6 @@ describe('migrateDbToJsonl', () => {
       expect(lines).toHaveLength(3);
       const ids = lines.map((l) => JSON.parse(l).id);
       expect(ids).toEqual(['m1', 'm2', 'm3']);
-
-      const cursor = JSON.parse(fs.readFileSync(cursorPath(folder), 'utf-8'));
-      expect(cursor.lastAgentTimestamp).toBe('2025-01-01T00:00:01.000Z');
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

@@ -1,8 +1,9 @@
 /**
  * One-shot migration: read legacy `messages` and `chats` tables from
- * store/messages.db and write per-group `groups/<folder>/.nanoclaw/log.jsonl`
- * + `cursor.json`. Idempotent — re-running on a migrated DB (where the
- * legacy tables have been dropped) is a no-op.
+ * store/messages.db and write per-group `groups/<folder>/.nanoclaw/log.jsonl`.
+ * Idempotent — re-running on a migrated DB (where the legacy tables have
+ * been dropped) is a no-op. The processing cursor is auto-derived from
+ * the imported log.jsonl on first run; no separate cursor file is written.
  *
  * Triggered automatically from `main()` before `initDatabase` so the legacy
  * tables can be cleanly dropped afterwards. Also exposed as a CLI via
@@ -13,7 +14,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { GROUPS_DIR, STORE_DIR } from './config.js';
-import { appendMessage, flushWrites, writeCursor } from './group-log.js';
+import { appendMessage, flushWrites } from './group-log.js';
 import { logger } from './logger.js';
 import type { NewMessage } from './types.js';
 
@@ -48,7 +49,6 @@ export interface MigrationReport {
   reason?: string;
   groupsTouched: number;
   rowsWritten: number;
-  cursorsWritten: number;
 }
 
 export async function migrateDbToJsonl(opts?: {
@@ -62,7 +62,6 @@ export async function migrateDbToJsonl(opts?: {
       reason: 'no-db',
       groupsTouched: 0,
       rowsWritten: 0,
-      cursorsWritten: 0,
     };
   }
   const db = new Database(dbPath, { readonly: true });
@@ -74,7 +73,6 @@ export async function migrateDbToJsonl(opts?: {
       reason: 'no-messages-table',
       groupsTouched: 0,
       rowsWritten: 0,
-      cursorsWritten: 0,
     };
   }
 
@@ -88,25 +86,9 @@ export async function migrateDbToJsonl(opts?: {
     }
   }
 
-  // Load last_agent_timestamp map (if any) for cursor seeding
-  const cursorByJid = new Map<string, string>();
-  if (tableExists(db, 'router_state')) {
-    const row = db
-      .prepare(`SELECT value FROM router_state WHERE key = ?`)
-      .get('last_agent_timestamp') as { value: string } | undefined;
-    if (row?.value) {
-      try {
-        const parsed = JSON.parse(row.value) as Record<string, string>;
-        for (const [jid, ts] of Object.entries(parsed)) {
-          cursorByJid.set(jid, ts);
-        }
-      } catch {
-        /* ignore corrupt cursor map */
-      }
-    }
-  }
-
   // Pull all messages, sorted ascending. Personal-assistant scale; safe.
+  // The cursor (last bot timestamp) is auto-derived from log.jsonl on
+  // first run after migration — no separate cursor file to seed.
   const rows = db
     .prepare(
       `SELECT id, chat_jid, sender, sender_name, content, timestamp,
@@ -152,16 +134,6 @@ export async function migrateDbToJsonl(opts?: {
     await flushWrites();
   }
 
-  let cursorsWritten = 0;
-  for (const [jid, ts] of cursorByJid.entries()) {
-    const folder = folderByJid.get(jid);
-    if (!folder) continue;
-    if (!opts?.dryRun) {
-      await writeCursor(folder, ts);
-    }
-    cursorsWritten++;
-  }
-
   if (!opts?.dryRun) {
     logger.info(
       {
@@ -189,6 +161,5 @@ export async function migrateDbToJsonl(opts?: {
     migrated: true,
     groupsTouched: Object.keys(written).length,
     rowsWritten: Object.values(written).reduce((a, b) => a + b, 0),
-    cursorsWritten,
   };
 }

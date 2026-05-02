@@ -6,14 +6,11 @@ import { GROUPS_DIR } from './config.js';
 import {
   _resetForTest,
   appendMessage,
-  cursorPath,
   flushWrites,
   getLastBotTimestamp,
   logPath,
   metaDir,
-  readCursor,
   readMessagesSince,
-  writeCursor,
 } from './group-log.js';
 import type { NewMessage } from './types.js';
 
@@ -225,31 +222,15 @@ describe('group-log', () => {
     });
   });
 
-  describe('cursor', () => {
-    it('round-trips through writeCursor / readCursor', async () => {
-      const folder = uniqueFolder();
-      expect(readCursor(folder)).toBeUndefined();
-      await writeCursor(folder, '2025-01-01T12:00:00.000Z');
-      expect(readCursor(folder)).toBe('2025-01-01T12:00:00.000Z');
-    });
-
-    it('returns undefined when cursor.json is corrupted', async () => {
-      const folder = uniqueFolder();
-      await writeCursor(folder, '2025-01-01T00:00:00.000Z');
-      fs.writeFileSync(cursorPath(folder), 'not-json', 'utf-8');
-      expect(readCursor(folder)).toBeUndefined();
-    });
-
-    it('places metadata under .nanoclaw/ inside the group folder', async () => {
+  describe('metadata layout', () => {
+    it('places log.jsonl under .nanoclaw/ inside the group folder', async () => {
       const folder = uniqueFolder();
       await appendMessage(
         folder,
         msg({ id: 'a', timestamp: '2025-01-01T00:00:00.000Z' }),
       );
-      await writeCursor(folder, '2025-01-01T00:00:00.000Z');
       const md = metaDir(folder);
       expect(fs.existsSync(path.join(md, 'log.jsonl'))).toBe(true);
-      expect(fs.existsSync(path.join(md, 'cursor.json'))).toBe(true);
       expect(path.basename(md)).toBe('.nanoclaw');
     });
   });
