@@ -1,5 +1,4 @@
 // src/agent/run.ts
-import fs from 'node:fs';
 import path from 'path';
 import {
   AuthStorage,
@@ -10,6 +9,7 @@ import {
   getAgentDir,
   loadSkillsFromDir,
   type AgentSession,
+  type SessionInfo,
   type Skill,
 } from '@mariozechner/pi-coding-agent';
 import { GROUPS_DIR } from '../config.js';
@@ -124,7 +124,20 @@ function buildCtx(args: {
   };
 }
 
-async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
+/**
+ * Per-chat next-session override. Set by /new (→ "fresh") or /resume
+ * (→ { resume: <sessionFile> }) right before evicting the pool entry. The
+ * factory reads + clears this map so the next `getOrCreate` for that key
+ * builds a session against the requested file instead of the default
+ * `continueRecent` lookup.
+ */
+type SessionInit = 'fresh' | { resume: string };
+const pendingSessionInit = new Map<string, SessionInit>();
+
+async function buildSession(
+  ctx: ExtensionCtx,
+  init: SessionInit | undefined,
+): Promise<PooledSession> {
   const groupCwd = path.join(GROUPS_DIR, ctx.groupFolder);
   await initToolRuntime();
   const authStorage = AuthStorage.create();
@@ -139,9 +152,15 @@ async function buildSession(ctx: ExtensionCtx): Promise<PooledSession> {
 
   const model = resolveModel(modelRegistry);
   if (model) log(`using model: ${model.provider}/${model.id}`);
+  const sessionManager =
+    init === 'fresh'
+      ? SessionManager.create(groupCwd)
+      : init && typeof init === 'object'
+        ? SessionManager.open(init.resume, undefined, groupCwd)
+        : SessionManager.continueRecent(groupCwd);
   const { session } = await createAgentSession({
     cwd: groupCwd,
-    sessionManager: SessionManager.continueRecent(groupCwd),
+    sessionManager,
     resourceLoader: loader,
     authStorage,
     modelRegistry,
@@ -262,7 +281,9 @@ export function configureAgent(ports: SharedPorts): void {
       ];
       const streamRef: StreamRef = { current: null };
       const ctx = buildCtx({ groupFolder, chatJid, isMain, ports, streamRef });
-      return buildSession(ctx);
+      const init = pendingSessionInit.get(key);
+      pendingSessionInit.delete(key);
+      return buildSession(ctx, init);
     },
     idleMs: IDLE_MS,
   });
@@ -289,30 +310,47 @@ export async function shutdownAgent(): Promise<void> {
 }
 
 /**
- * Tear down the chat's pooled AgentSession + container, then delete the
- * pi session directory so the next handleMessage spawns a fresh
- * conversation. Preserves `groups/<folder>/.nanoclaw/log.jsonl` and
- * `groups/<folder>/CLAUDE.md` — only the LLM message window is reset.
- *
- * Idempotent: safe to call when no pooled session exists or the dir is
- * already empty.
+ * Start a fresh pi session for this chat. Mirrors pi's `/new` semantics:
+ * the next message opens a brand new session jsonl alongside any prior
+ * ones (which remain on disk and are reachable via `/resume`). The
+ * pooled AgentSession + docker container are torn down so the next
+ * `handleMessage` rebuilds against the new session.
  */
-export async function clearChatSession(
+export async function newChatSession(
   groupFolder: string,
   chatJid: string,
   isMain: boolean,
 ): Promise<void> {
-  if (!pool) return;
+  if (!pool) throw new Error('agent not configured');
   const key = JSON.stringify([groupFolder, chatJid, isMain]);
+  pendingSessionInit.set(key, 'fresh');
   await pool.evict(key);
+}
+
+/** Recent pi sessions on disk for this chat, newest first. */
+export async function listChatSessions(
+  groupFolder: string,
+  limit = 10,
+): Promise<SessionInfo[]> {
   const groupCwd = path.join(GROUPS_DIR, groupFolder);
-  // SessionManager.create() doesn't persist anything; we use it purely
-  // as a path resolver since pi-mono doesn't re-export getDefaultSessionDir.
-  const sessionDir = SessionManager.create(groupCwd).getSessionDir();
-  if (fs.existsSync(sessionDir)) {
-    fs.rmSync(sessionDir, { recursive: true, force: true });
-    log(`cleared session dir for ${groupFolder}: ${sessionDir}`);
-  }
+  const sessions = await SessionManager.list(groupCwd);
+  return sessions.slice(0, limit);
+}
+
+/**
+ * Resume a specific session jsonl. Evicts the pooled session so the next
+ * message rebuilds against the chosen file. Mirrors pi's `/resume`.
+ */
+export async function resumeChatSession(
+  groupFolder: string,
+  chatJid: string,
+  isMain: boolean,
+  sessionFile: string,
+): Promise<void> {
+  if (!pool) throw new Error('agent not configured');
+  const key = JSON.stringify([groupFolder, chatJid, isMain]);
+  pendingSessionInit.set(key, { resume: sessionFile });
+  await pool.evict(key);
 }
 
 /**
@@ -334,30 +372,69 @@ export async function compactChatSession(
   return { tokensBefore: result.tokensBefore, summary: result.summary };
 }
 
+export interface ChatSessionStats {
+  totalMessages: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  totalTokens: number;
+  cost: number;
+  contextWindow?: number;
+  contextPercent?: number;
+  modelProvider?: string;
+  modelId?: string;
+  thinkingLevel?: string;
+}
+
 /**
  * Read-only snapshot of the chat's current context state. Loads / creates
  * the pool entry as a side effect (cheap if already warm).
+ *
+ * Token totals are cumulative across the entire session jsonl (all
+ * branches, including pre-compaction history) to match the pi-coding-agent
+ * interactive footer — see footer.ts:75.
  */
 export async function getChatSessionStats(
   groupFolder: string,
   chatJid: string,
   isMain: boolean,
-): Promise<{
-  totalMessages: number;
-  totalTokens: number;
-  cost: number;
-  contextWindow?: number;
-  contextPercent?: number;
-}> {
+): Promise<ChatSessionStats> {
   if (!pool) throw new Error('agent not configured');
   const key = JSON.stringify([groupFolder, chatJid, isMain]);
   const pooled = await pool.getOrCreate(key);
-  const stats = pooled.session.getSessionStats();
+  const session = pooled.session;
+
+  let input = 0;
+  let output = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  let cost = 0;
+  for (const entry of session.sessionManager.getEntries()) {
+    if (entry.type === 'message' && entry.message.role === 'assistant') {
+      input += entry.message.usage.input;
+      output += entry.message.usage.output;
+      cacheRead += entry.message.usage.cacheRead;
+      cacheWrite += entry.message.usage.cacheWrite;
+      cost += entry.message.usage.cost.total;
+    }
+  }
+
+  const ctx = session.getContextUsage();
+  const state = session.state;
+  const stats = session.getSessionStats();
   return {
     totalMessages: stats.totalMessages,
-    totalTokens: stats.tokens.total,
-    cost: stats.cost,
-    contextWindow: stats.contextUsage?.contextWindow,
-    contextPercent: stats.contextUsage?.percent ?? undefined,
+    inputTokens: input,
+    outputTokens: output,
+    cacheReadTokens: cacheRead,
+    cacheWriteTokens: cacheWrite,
+    totalTokens: input + output + cacheRead + cacheWrite,
+    cost,
+    contextWindow: ctx?.contextWindow ?? state.model?.contextWindow,
+    contextPercent: ctx?.percent ?? undefined,
+    modelProvider: state.model?.provider,
+    modelId: state.model?.id,
+    thinkingLevel: state.model?.reasoning ? state.thinkingLevel : undefined,
   };
 }
