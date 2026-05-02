@@ -140,6 +140,24 @@ npx tsx setup/index.ts --step register -- \
   --is-main
 ```
 
+7. **Install Feishu agent skills** (lark-cli + 20 skill bundles for calendar / im / doc / base / sheets / task / wiki / drive / mail / contact / vc / approval / etc):
+
+```bash
+# Skills (markdown — auto-discovered by ~/.agents/skills/)
+npx skills add larksuite/cli -y -g
+
+# CLI — already preinstalled in the docker tool image (container/Dockerfile).
+# Verify the host install too if you ever want to invoke it manually:
+which lark-cli || npm install -g @larksuite/cli
+```
+
+The first time the agent attempts a Feishu API operation it will run
+`lark-cli auth login --recommend --no-wait`, post the verification URL into
+the chat as a streaming card, and resume after the user clicks through. The
+`FEISHU_APP_ID` / `FEISHU_APP_SECRET` from `.env` are auto-injected into
+each container's lark-cli config on container create — no manual
+`config init` needed.
+
 Rebuild after `.env` changes:
 
 ```bash

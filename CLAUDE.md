@@ -6,6 +6,10 @@ Personal Claude assistant. See [README.md](README.md) for philosophy and setup. 
 
 Single Node.js process with a skill-based channel system. Feishu / Lark is currently the only built-in channel; it self-registers at startup via `src/channels/feishu.ts`. Messages route to `@mariozechner/pi-coding-agent` running in-process on the host. Each group has its own working directory and per-group session state.
 
+**Agent output is streaming-only** — every turn renders into a single Feishu CardKit card edited in place via `src/channels/feishu-stream/` (typewriter via `cardElement.content`, body restructure via `card.update`, terminal `card.update` with footer + reasoning panel + tool-use panel on `agent_end`). Channel exposes `openStream(jid)` from `Channel`; `agent/run.ts` opens it on the first `text_delta` and finalizes on `agent_end`.
+
+**Feishu API operations** are not exposed as native typebox tools (would balloon the system prompt). Instead the docker tool image preinstalls `@larksuite/cli`, and the agent shells out via Bash. Skills live on the host in `~/.agents/skills/lark-*` (installed via `npx skills add larksuite/cli -y -g`) and bind-mount into the per-chat container at the same path. App credentials are forwarded into each container from `FEISHU_APP_ID` / `FEISHU_APP_SECRET` and applied via `lark-cli config init` on container create; user OAuth (UAT) happens lazily — first command that needs it runs `lark-cli auth login --no-wait` and posts the verification URL into the chat.
+
 **Tool isolation.** Agent tool calls are isolated per chat. The runtime is selected in `config/sandbox.default.json` (`runtime: "docker" | "sandbox-exec" | "off"`); default is **docker**. In docker mode each chat gets a dedicated container (`nanoclaw-tool-<group>`) with bind mounts that physically expose only that chat's group folder + global; bash forwards through `docker exec`. Read/Write/Edit/Grep/Find/Ls stay on the host (so binaries / images / NUL bytes work) but are wrapped with a per-chat path-guard that mirrors the container's mount surface. `sandbox-exec` is a fallback for environments without Docker (CI, dev laptops); it sandboxes only bash via `sandbox-exec` / `bubblewrap`.
 
 ## Key Files
@@ -14,7 +18,9 @@ Single Node.js process with a skill-based channel system. Feishu / Lark is curre
 |------|---------|
 | `src/index.ts` | Orchestrator: state, message loop, agent invocation |
 | `src/channels/registry.ts` | Channel registry (self-registration at startup) |
-| `src/router.ts` | Message formatting and outbound routing |
+| `src/channels/feishu.ts` | Feishu channel: WS inbound, sendMessage, openStream factory |
+| `src/channels/feishu-stream/` | CardKit streaming controller (state machine, throttled flush, builder, tool-use display, reasoning) |
+| `src/router.ts` | Message formatting, routeOutbound (one-shot), openStream (turn streaming) |
 | `src/config.ts` | Trigger pattern, paths, intervals |
 | `src/task-scheduler.ts` | Runs scheduled tasks |
 | `src/db.ts` | SQLite operations |

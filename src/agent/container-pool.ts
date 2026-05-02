@@ -89,6 +89,7 @@ export class ContainerPool {
       // (e.g. native Windows).
       ...userArgs(),
       ...hostGatewayArgs(),
+      ...larkCliEnvArgs(),
       ...mounts.flatMap((m) =>
         bindMountArg(m.hostPath, m.containerPath, m.readonly),
       ),
@@ -110,6 +111,7 @@ export class ContainerPool {
     }
 
     log(`created ${name} (mounts: ${mounts.length})`);
+    initLarkCliInContainer(name);
   }
 
   /**
@@ -144,6 +146,90 @@ export class ContainerPool {
   size(): number {
     return this.entries.size;
   }
+}
+
+/**
+ * Forward FEISHU_APP_ID + FEISHU_APP_SECRET into the container so the
+ * lark-cli init step (and any subsequent re-init the agent runs) can pick
+ * them up without the user having to re-type credentials. Empty when the
+ * env vars aren't set — lark-cli falls back to its own interactive flow.
+ */
+function larkCliEnvArgs(): string[] {
+  const out: string[] = [];
+  const appId = process.env.FEISHU_APP_ID;
+  const appSecret = process.env.FEISHU_APP_SECRET;
+  if (appId) out.push('-e', `FEISHU_APP_ID=${appId}`);
+  if (appSecret) out.push('-e', `FEISHU_APP_SECRET=${appSecret}`);
+  // FEISHU_DOMAIN — `lark` for the Lark (international) variant, `feishu`
+  // (default) for mainland China. Match the channel's default.
+  const domain = process.env.FEISHU_DOMAIN;
+  if (domain) out.push('-e', `FEISHU_DOMAIN=${domain}`);
+  return out;
+}
+
+/**
+ * One-shot init inside a freshly created container: writes the Feishu app
+ * credentials into the shared lark-cli config volume so the agent can hit
+ * any lark-cli subcommand without re-entering them. Idempotent — if the
+ * config file already exists (from a prior chat's init or a manual
+ * `lark-cli config init`) we leave it alone so the user's own changes
+ * survive.
+ *
+ * Best-effort: failures here are logged but don't abort container create
+ * — without lark-cli credentials the agent simply can't reach Feishu APIs,
+ * but everything else (bash, agent-browser, etc.) still works.
+ */
+function initLarkCliInContainer(containerName: string): void {
+  const appId = process.env.FEISHU_APP_ID;
+  const appSecret = process.env.FEISHU_APP_SECRET;
+  if (!appId || !appSecret) return;
+
+  // Skip if already initialized (config.json exists in the shared volume).
+  const check = spawnSync(
+    CONTAINER_RUNTIME_BIN,
+    [
+      'exec',
+      containerName,
+      'test',
+      '-f',
+      '/workspace/lark-cli/config/config.json',
+    ],
+    { stdio: 'pipe', timeout: 5000 },
+  );
+  if (check.status === 0) {
+    log(`lark-cli already initialized in ${containerName}`);
+    return;
+  }
+
+  const result = spawnSync(
+    CONTAINER_RUNTIME_BIN,
+    [
+      'exec',
+      '-i',
+      '-e',
+      `FEISHU_APP_SECRET=${appSecret}`,
+      containerName,
+      'bash',
+      '-c',
+      // App secret via stdin (--app-secret-stdin) keeps it out of `ps` and
+      // out of any shell history if the user later docker-execs in.
+      `printf '%s' "$FEISHU_APP_SECRET" | lark-cli config init --app-id ${shellQuote(appId)} --app-secret-stdin`,
+    ],
+    { stdio: 'pipe', timeout: 15000 },
+  );
+  if (result.status === 0) {
+    log(`lark-cli initialized in ${containerName} (appId=${appId})`);
+  } else {
+    const stderr = result.stderr?.toString().trim() ?? '';
+    log(
+      `lark-cli init in ${containerName} failed (exit ${result.status}): ${stderr || '(no stderr)'}`,
+    );
+  }
+}
+
+/** Single-quote a shell argument; embedded single quotes get escaped via close-quote / escape / re-open. */
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
 function userArgs(): string[] {

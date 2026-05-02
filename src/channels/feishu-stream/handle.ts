@@ -230,7 +230,9 @@ export class FeishuStreamHandle implements StreamHandle {
     this.scheduleCardUpdate();
   }
 
-  async finalize(opts?: { reason?: 'normal' | 'aborted' | 'error' }): Promise<void> {
+  async finalize(opts?: {
+    reason?: 'normal' | 'aborted' | 'error';
+  }): Promise<void> {
     const reason = mapReason(opts?.reason);
     if (this.isTerminal) return;
     this.finalElapsedMs = Date.now() - this.startedAt;
@@ -539,7 +541,8 @@ export class FeishuStreamHandle implements StreamHandle {
 
   private sanitizeParams(args: unknown): Record<string, unknown> | undefined {
     if (args == null) return undefined;
-    if (typeof args !== 'object') return { value: args } as Record<string, unknown>;
+    if (typeof args !== 'object')
+      return { value: args } as Record<string, unknown>;
     try {
       // Shallow redact — the trace store does deep redaction at render time
       // anyway, this is just a safety net for top-level secret-shaped keys.

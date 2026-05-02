@@ -98,6 +98,27 @@ RUN --mount=type=cache,target=/root/.cache/pnpm \
     pnpm install -g "agent-browser@${AGENT_BROWSER_VERSION}" && \
     agent-browser --version
 
+# ---- lark-cli (Feishu / Lark official CLI) -----------------------------------
+# Provides the `lark-cli` binary the agent shells out to for any Feishu API
+# operation (calendar, im, doc, base, sheets, task, wiki, drive, mail, ...).
+# Skill markdown lives on the host in ~/.agents/skills/ (installed via
+# `npx skills add larksuite/cli -y -g`) and is bind-mounted in by
+# container-mounts.ts at the same path, so the agent reads them where pi
+# advertised.
+#
+# The lark-cli npm package's postinstall pulls the platform-appropriate Go
+# binary, so installing it once at image build time avoids paying that on
+# every container create.
+RUN --mount=type=cache,target=/root/.cache/pnpm \
+    pnpm install -g @larksuite/cli && \
+    lark-cli --version
+
+# Redirect lark-cli config + secret storage onto the bind-mounted volumes
+# from container-mounts.ts so token state survives container restarts and
+# is shared across per-chat containers (see CONTAINER_PATHS.larkCliState).
+ENV LARKSUITE_CLI_CONFIG_DIR=/workspace/lark-cli/config
+ENV LARKSUITE_CLI_DATA_DIR=/workspace/lark-cli/data
+
 # ---- Workspace + permissions -------------------------------------------------
 # Standard mount targets. /workspace/group is the per-chat working dir;
 # /workspace/global is shared memory; /workspace/project is main-only RO.
@@ -108,6 +129,7 @@ RUN --mount=type=cache,target=/root/.cache/pnpm \
 # passes via `--user $UID:$GID` so bind-mounted writes land owned by the
 # host user, not root.
 RUN mkdir -p /workspace/group /workspace/global /workspace/project \
+                /workspace/lark-cli/config /workspace/lark-cli/data \
     && chown -R node:node /workspace /pnpm \
     && chmod 777 /home/node
 

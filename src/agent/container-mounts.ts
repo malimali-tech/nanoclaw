@@ -30,7 +30,36 @@ export const CONTAINER_PATHS = {
   group: '/workspace/group',
   global: '/workspace/global',
   project: '/workspace/project',
+  /** lark-cli config + secret store — see Dockerfile's
+   *  LARKSUITE_CLI_CONFIG_DIR / LARKSUITE_CLI_DATA_DIR. Shared across all
+   *  per-chat containers via a host-side bind, so a single
+   *  `lark-cli auth login` flow grants every chat the same UAT. */
+  larkCliState: '/workspace/lark-cli',
 } as const;
+
+/**
+ * Host-side directory that backs `CONTAINER_PATHS.larkCliState`. Holds:
+ *   - config/config.json — appId / brand / profile metadata
+ *   - data/lark-cli/     — XDG data dir, encrypted secrets (appSecret + UAT)
+ *
+ * Created on demand by `ensureLarkCliStateDir`. Single global directory
+ * (not per-chat) so all chats share one Feishu identity, matching the
+ * single-account FEISHU_APP_ID/SECRET model nanoclaw uses elsewhere.
+ */
+export function larkCliStateDir(): string {
+  const xdg = process.env.XDG_CONFIG_HOME;
+  const base = xdg
+    ? xdg
+    : path.join(process.env.HOME ?? '', '.config');
+  return path.join(base, 'nanoclaw', 'lark-cli');
+}
+
+export function ensureLarkCliStateDir(): string {
+  const dir = larkCliStateDir();
+  fs.mkdirSync(path.join(dir, 'config'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
+  return dir;
+}
 
 /**
  * Compute the bind mount set for a given chat. The result is what gets
@@ -98,6 +127,17 @@ export function buildVolumeMounts(
   for (const dir of globalSkillsDirs()) {
     mounts.push({ hostPath: dir, containerPath: dir, readonly: true });
   }
+
+  // lark-cli config + secret store — RW so the agent's `lark-cli config
+  // init` / `auth login` writes persist across container restarts and
+  // are visible to every chat's container. Single shared directory; the
+  // app-credential model is single-account.
+  const larkState = ensureLarkCliStateDir();
+  mounts.push({
+    hostPath: larkState,
+    containerPath: CONTAINER_PATHS.larkCliState,
+    readonly: false,
+  });
 
   return mounts;
 }
