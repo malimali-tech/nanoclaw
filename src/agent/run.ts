@@ -1,4 +1,5 @@
 // src/agent/run.ts
+import fs from 'node:fs';
 import path from 'path';
 import {
   AuthStorage,
@@ -285,4 +286,78 @@ export async function shutdownAgent(): Promise<void> {
   if (pool) await pool.disposeAll();
   pool = null;
   await shutdownToolRuntime();
+}
+
+/**
+ * Tear down the chat's pooled AgentSession + container, then delete the
+ * pi session directory so the next handleMessage spawns a fresh
+ * conversation. Preserves `groups/<folder>/.nanoclaw/log.jsonl` and
+ * `groups/<folder>/CLAUDE.md` — only the LLM message window is reset.
+ *
+ * Idempotent: safe to call when no pooled session exists or the dir is
+ * already empty.
+ */
+export async function clearChatSession(
+  groupFolder: string,
+  chatJid: string,
+  isMain: boolean,
+): Promise<void> {
+  if (!pool) return;
+  const key = JSON.stringify([groupFolder, chatJid, isMain]);
+  await pool.evict(key);
+  const groupCwd = path.join(GROUPS_DIR, groupFolder);
+  // SessionManager.create() doesn't persist anything; we use it purely
+  // as a path resolver since pi-mono doesn't re-export getDefaultSessionDir.
+  const sessionDir = SessionManager.create(groupCwd).getSessionDir();
+  if (fs.existsSync(sessionDir)) {
+    fs.rmSync(sessionDir, { recursive: true, force: true });
+    log(`cleared session dir for ${groupFolder}: ${sessionDir}`);
+  }
+}
+
+/**
+ * Manually trigger a compaction on the chat's active AgentSession. If no
+ * session is currently pooled, creates one (which loads existing context
+ * from disk). Returns the pre-compaction token count so the caller can
+ * format a confirmation message.
+ */
+export async function compactChatSession(
+  groupFolder: string,
+  chatJid: string,
+  isMain: boolean,
+  customInstructions?: string,
+): Promise<{ tokensBefore: number; summary: string }> {
+  if (!pool) throw new Error('agent not configured');
+  const key = JSON.stringify([groupFolder, chatJid, isMain]);
+  const pooled = await pool.getOrCreate(key);
+  const result = await pooled.session.compact(customInstructions);
+  return { tokensBefore: result.tokensBefore, summary: result.summary };
+}
+
+/**
+ * Read-only snapshot of the chat's current context state. Loads / creates
+ * the pool entry as a side effect (cheap if already warm).
+ */
+export async function getChatSessionStats(
+  groupFolder: string,
+  chatJid: string,
+  isMain: boolean,
+): Promise<{
+  totalMessages: number;
+  totalTokens: number;
+  cost: number;
+  contextWindow?: number;
+  contextPercent?: number;
+}> {
+  if (!pool) throw new Error('agent not configured');
+  const key = JSON.stringify([groupFolder, chatJid, isMain]);
+  const pooled = await pool.getOrCreate(key);
+  const stats = pooled.session.getSessionStats();
+  return {
+    totalMessages: stats.totalMessages,
+    totalTokens: stats.tokens.total,
+    cost: stats.cost,
+    contextWindow: stats.contextUsage?.contextWindow,
+    contextPercent: stats.contextUsage?.percent ?? undefined,
+  };
 }

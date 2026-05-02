@@ -41,7 +41,7 @@ export class SessionPool<T extends DisposableSession> {
     entry.timer = setTimeout(() => void this.evict(key), this.opts.idleMs);
   }
 
-  private async evict(key: string): Promise<void> {
+  async evict(key: string): Promise<void> {
     const entry = this.entries.get(key);
     if (!entry) return;
     this.entries.delete(key);

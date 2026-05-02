@@ -30,6 +30,7 @@ import {
   writeCursor,
 } from './group-log.js';
 import { findChannel, formatMessages, routeOutbound } from './router.js';
+import { tryHandleSlash } from './slash.js';
 import {
   restoreRemoteControl,
   startRemoteControl,
@@ -55,6 +56,7 @@ import {
   handleMessage,
   shutdownAgent,
 } from './agent/run.js';
+import { reapOrphanContainers } from './agent/tool-runtime.js';
 import type { GroupRegistryPort, RouterPort } from './agent/types.js';
 
 // Re-export for backwards compatibility during refactor
@@ -121,17 +123,9 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
   // Create group folder
   fs.mkdirSync(path.join(groupDir, 'logs'), { recursive: true });
 
-  // Copy CLAUDE.md template into the new group folder so agents have
-  // identity and instructions from the first run.
-  //
-  // Source priority:
-  //   1. The user's own template at `groups/{main,global}/CLAUDE.md` if it
-  //      exists — lets operators tailor onboarding without forking the
-  //      project.
-  //   2. The shipped default at `defaults/group-claude.md` — checked into
-  //      git so a fresh fork works out of the box. The legacy path #1
-  //      depended on `groups/` being seeded, but groups/ is gitignored,
-  //      so a fresh clone would silently skip the copy.
+  // Seed CLAUDE.md from the user's template if present, otherwise from the
+  // shipped default — `groups/` is gitignored so a fresh clone has no user
+  // template.
   const groupMdFile = path.join(groupDir, 'CLAUDE.md');
   if (!fs.existsSync(groupMdFile)) {
     const userTemplate = path.join(
@@ -144,11 +138,9 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
       'defaults',
       'group-claude.md',
     );
-    const templateFile = fs.existsSync(userTemplate)
-      ? userTemplate
-      : fs.existsSync(defaultTemplate)
-        ? defaultTemplate
-        : null;
+    let templateFile: string | null = null;
+    if (fs.existsSync(userTemplate)) templateFile = userTemplate;
+    else if (fs.existsSync(defaultTemplate)) templateFile = defaultTemplate;
     if (templateFile) {
       let content = fs.readFileSync(templateFile, 'utf-8');
       if (ASSISTANT_NAME !== 'Andy') {
@@ -228,6 +220,28 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         (m.is_from_me || isTriggerAllowed(chatJid, m.sender, allowlistCfg)),
     );
     if (!hasTrigger) return true;
+  }
+
+  // Slash command short-circuit. Runs after trigger validation (so sender
+  // ACL is enforced) and before agent invocation. Recognized commands
+  // (e.g. /clear, /compact) reply via channel.sendMessage and skip the
+  // agent entirely; unknown patterns fall through to the agent.
+  const lastMsg = missedMessages[missedMessages.length - 1];
+  const slashHandled = await tryHandleSlash({
+    groupFolder: group.folder,
+    chatJid,
+    isMain: isMainGroup,
+    lastContent: lastMsg.content,
+    trigger: group.trigger,
+    channel,
+  });
+  if (slashHandled) {
+    // Advance cursor so we don't re-process this slash on the next loop.
+    cursors[chatJid] = lastMsg.timestamp;
+    await writeCursor(group.folder, lastMsg.timestamp).catch((err) =>
+      logger.warn({ chatJid, err }, 'writeCursor (slash) failed'),
+    );
+    return true;
   }
 
   const prompt = formatMessages(missedMessages, TIMEZONE);
@@ -363,6 +377,11 @@ async function main(): Promise<void> {
   // loop and the task scheduler rely on the global SandboxManager state +
   // wrapped bash ops being ready before they spawn the first session.
   await ensureSandbox();
+
+  // After registered groups are loaded and the runtime is ready, reap any
+  // docker container left over from a previous run whose chat is no longer
+  // registered (manually removed group, renamed folder, etc.).
+  reapOrphanContainers(Object.values(registeredGroups).map((g) => g.folder));
 
   // Graceful shutdown handlers
   const shutdown = async (signal: string) => {
