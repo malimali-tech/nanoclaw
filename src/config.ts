@@ -55,9 +55,16 @@ export function buildTriggerPattern(trigger: string): RegExp {
 
 export const DEFAULT_TRIGGER = `@${ASSISTANT_NAME}`;
 
+const triggerPatternCache = new Map<string, RegExp>();
+
 export function getTriggerPattern(trigger?: string): RegExp {
-  const normalizedTrigger = trigger?.trim();
-  return buildTriggerPattern(normalizedTrigger || DEFAULT_TRIGGER);
+  const key = trigger?.trim() || DEFAULT_TRIGGER;
+  let pattern = triggerPatternCache.get(key);
+  if (!pattern) {
+    pattern = buildTriggerPattern(key);
+    triggerPatternCache.set(key, pattern);
+  }
+  return pattern;
 }
 
 export const TRIGGER_PATTERN = buildTriggerPattern(DEFAULT_TRIGGER);

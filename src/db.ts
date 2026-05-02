@@ -463,6 +463,11 @@ export function clearInFlightCard(cardId: string): void {
   );
 }
 
+/** Drop every in-flight row. Used at the end of boot reconcile. */
+export function clearAllInFlightCards(): void {
+  db.prepare(`DELETE FROM feishu_in_flight_cards`).run();
+}
+
 /** All cards still considered live. Called once on boot to drive
  *  reconciliation of cards orphaned by a crash or hard kill. */
 export function getInFlightCards(): InFlightCard[] {

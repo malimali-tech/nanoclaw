@@ -30,10 +30,31 @@ function isValidEntry(entry: unknown): entry is ChatAllowlistEntry {
   return validAllow && validMode;
 }
 
+// Cache the parsed config keyed by file path; invalidate by mtime so an
+// edit to sender-allowlist.json takes effect without restarting the process.
+const cache = new Map<
+  string,
+  { mtimeMs: number; cfg: SenderAllowlistConfig }
+>();
+
 export function loadSenderAllowlist(
   pathOverride?: string,
 ): SenderAllowlistConfig {
   const filePath = pathOverride ?? SENDER_ALLOWLIST_PATH;
+
+  let mtimeMs: number;
+  try {
+    mtimeMs = fs.statSync(filePath).mtimeMs;
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return DEFAULT_CONFIG;
+    logger.warn(
+      { err, path: filePath },
+      'sender-allowlist: cannot stat config',
+    );
+    return DEFAULT_CONFIG;
+  }
+  const cached = cache.get(filePath);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.cfg;
 
   let raw: string;
   try {
@@ -81,11 +102,13 @@ export function loadSenderAllowlist(
     }
   }
 
-  return {
+  const cfg: SenderAllowlistConfig = {
     default: obj.default as ChatAllowlistEntry,
     chats,
     logDenied: obj.logDenied !== false,
   };
+  cache.set(filePath, { mtimeMs, cfg });
+  return cfg;
 }
 
 function getEntry(
