@@ -77,7 +77,7 @@ Skills the **agent** sees are loaded per-chat from two directories — `src/agen
 | `groups/global/skills/` | Shared across every chat (the repo's shipped catalog — `lark-*`, `find-skills`, etc.) | ✅ via `.gitignore` exception |
 | `groups/<folder>/skills/` | Private to that one chat — agent or operator can drop a SKILL.md here for chat-specific behavior | ❌ |
 
-**Deliberately not loaded:** the host user's `~/.agents/skills/` and `~/.pi/agent/skills/`. Pulling those in means a feishu agent ends up with the user's personal `frontend-design` / cross-project skills in its system prompt. Bring-your-own-skills users can opt them back in via `NANOCLAW_GLOBAL_SKILLS_DIRS=path1:path2`.
+**Deliberately not loaded:** the host user's `~/.agents/skills/` and `~/.pi/agent/skills/`. Pulling those in means a feishu agent ends up with the user's personal `frontend-design` / cross-project skills in its system prompt. To add a skill, commit it to `groups/global/skills/<name>/SKILL.md` — there is no host-side override knob.
 
 CLI binaries the skills shell out to (`lark-cli`, `agent-browser`, `python3`, `uv`) are installed inside the container image — see `container/Dockerfile`. Image and skills are versioned together: a clone + `./container/build.sh` + start = working agent, no `npx skills add` step.
 
