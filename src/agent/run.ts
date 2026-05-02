@@ -286,7 +286,12 @@ export async function handleMessage(args: {
   }
   const key = JSON.stringify([args.groupFolder, args.chatJid, args.isMain]);
   const pooled = await pool.getOrCreate(key);
-  await pooled.session.prompt(args.text, { streamingBehavior: 'steer' });
+  pool.markActive(key);
+  try {
+    await pooled.session.prompt(args.text, { streamingBehavior: 'steer' });
+  } finally {
+    pool.markIdle(key);
+  }
 }
 
 export async function shutdownAgent(): Promise<void> {

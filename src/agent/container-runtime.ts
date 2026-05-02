@@ -64,6 +64,29 @@ export function containerExists(name: string): boolean {
   return result.status === 0;
 }
 
+/** Read a single label from the container by name. Returns undefined if
+ *  the container is missing, the label is unset, or the inspect call
+ *  fails — callers should treat any of those identically (recreate). */
+export function containerLabel(
+  name: string,
+  label: string,
+): string | undefined {
+  const result = spawnSync(
+    CONTAINER_RUNTIME_BIN,
+    [
+      'inspect',
+      '--format',
+      `{{ index .Config.Labels ${JSON.stringify(label)} }}`,
+      name,
+    ],
+    { stdio: 'pipe', timeout: 5000 },
+  );
+  if (result.status !== 0) return undefined;
+  const out = result.stdout.toString().trim();
+  if (out === '' || out === '<no value>') return undefined;
+  return out;
+}
+
 /** True iff the container exists AND its state is "running". */
 export function containerRunning(name: string): boolean {
   const result = spawnSync(
