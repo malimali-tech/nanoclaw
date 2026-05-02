@@ -56,7 +56,6 @@ const noopPorts: SchedulerDependencies['ports'] = {
     cancel: () => {},
     update: () => {},
   },
-  groupRegistry: { register: () => {} },
 };
 
 describe('task scheduler', () => {

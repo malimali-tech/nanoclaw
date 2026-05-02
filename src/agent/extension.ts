@@ -231,34 +231,6 @@ export function nanoclawExtension(ctx: ExtensionCtx) {
       }),
     );
 
-    pi.registerTool(
-      defineTool({
-        name: 'register_group',
-        label: 'register_group',
-        description: 'Register a new chat/group (main group only).',
-        parameters: Type.Object({
-          jid: Type.String(),
-          name: Type.String(),
-          folder: Type.String(),
-          trigger: Type.String(),
-          requiresTrigger: Type.Optional(Type.Boolean()),
-        }),
-        execute: async (_id, p) => {
-          if (!ctx.isMain) {
-            return errText('Only the main group can register new groups.');
-          }
-          ctx.groupRegistry.register({
-            jid: p.jid,
-            name: p.name,
-            folder: p.folder,
-            trigger: p.trigger,
-            requiresTrigger: p.requiresTrigger ?? false,
-          });
-          return okText(`Group "${p.name}" registered.`);
-        },
-      }),
-    );
-
     // -----------------------------------------------------------------
     // Slash commands. Registered via pi's extension API; handlers run
     // when the user types `/<name>` and short-circuit the LLM call

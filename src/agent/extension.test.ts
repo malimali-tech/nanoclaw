@@ -52,7 +52,6 @@ function makeCtx(over: Partial<ExtensionCtx> = {}): ExtensionCtx {
       cancel: vi.fn(),
       update: vi.fn(),
     },
-    groupRegistry: { register: vi.fn() },
     groupFolder: 'wa_test',
     chatJid: 'jid@s',
     isMain: false,
@@ -198,39 +197,10 @@ describe('nanoclawExtension', () => {
     expect(JSON.stringify(res)).toContain('task-test');
   });
 
-  it('register_group is rejected for non-main groups', async () => {
-    const ctx = makeCtx({ isMain: false });
+  it('does not register a register_group tool (auto-registration via channel discovery handles new chats)', () => {
     const { pi, tools } = makePi();
-    nanoclawExtension(ctx)(pi);
-    const reg = tools.find((t) => t.name === 'register_group')!;
-    const res = await reg.execute('id', {
-      jid: 'g',
-      name: 'n',
-      folder: 'f',
-      trigger: '@a',
-    });
-    expect(JSON.stringify(res)).toMatch(/main group/i);
-    expect(ctx.groupRegistry.register).not.toHaveBeenCalled();
-  });
-
-  it('register_group succeeds for main group', async () => {
-    const ctx = makeCtx({ isMain: true });
-    const { pi, tools } = makePi();
-    nanoclawExtension(ctx)(pi);
-    const reg = tools.find((t) => t.name === 'register_group')!;
-    await reg.execute('id', {
-      jid: 'g',
-      name: 'n',
-      folder: 'f',
-      trigger: '@a',
-    });
-    expect(ctx.groupRegistry.register).toHaveBeenCalledWith({
-      jid: 'g',
-      name: 'n',
-      folder: 'f',
-      trigger: '@a',
-      requiresTrigger: false,
-    });
+    nanoclawExtension(makeCtx())(pi);
+    expect(tools.find((t) => t.name === 'register_group')).toBeUndefined();
   });
 
   it('pause_task / cancel_task each invoke only the matching scheduler method', async () => {
@@ -296,12 +266,7 @@ describe('nanoclawExtension — slash commands', () => {
   it('registers all expected slash commands', () => {
     const { commands } = bind();
     const names = commands.map((c) => c.name).sort();
-    expect(names).toEqual([
-      'context',
-      'help',
-      'new',
-      'resume',
-    ]);
+    expect(names).toEqual(['context', 'help', 'new', 'resume']);
   });
 
   it('/help renders auto-generated list from registered commands', async () => {
@@ -401,5 +366,4 @@ describe('nanoclawExtension — slash commands', () => {
     expect(out).toContain('2.5%');
     expect(out).toContain('$0.0123');
   });
-
 });

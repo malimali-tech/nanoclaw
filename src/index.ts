@@ -61,7 +61,7 @@ import {
   shutdownAgent,
 } from './agent/run.js';
 import { reapOrphanContainers } from './agent/tool-runtime.js';
-import type { GroupRegistryPort, RouterPort } from './agent/types.js';
+import type { RouterPort } from './agent/types.js';
 
 // Re-export for backwards compatibility during refactor
 export { escapeXml, formatMessages } from './router.js';
@@ -575,25 +575,11 @@ async function main(): Promise<void> {
     openStream: (jid) => openChannelStream(channels, jid),
   };
 
-  const groupRegistryPort: GroupRegistryPort = {
-    register: (req) => {
-      const group: RegisteredGroup = {
-        name: req.name,
-        folder: req.folder,
-        trigger: req.trigger,
-        added_at: new Date().toISOString(),
-        requiresTrigger: req.requiresTrigger,
-      };
-      registerGroup(req.jid, group);
-    },
-  };
-
   const taskSchedulerPort = makeTaskSchedulerPort();
 
   const ports = {
     router: routerPort,
     taskScheduler: taskSchedulerPort,
-    groupRegistry: groupRegistryPort,
   };
 
   configureAgent(ports);

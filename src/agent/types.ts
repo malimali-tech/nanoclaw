@@ -9,7 +9,7 @@
 // Shape (deliberately minimal):
 //   - identity:    groupFolder, chatJid, isMain
 //   - capability:  send(text, opts?)
-//   - services:    taskScheduler, groupRegistry
+//   - services:    taskScheduler
 //
 // Streaming output (used by run.ts to render agent-turn output into a
 // CardKit card) is INTERNAL to PooledSession and is not part of this
@@ -43,10 +43,6 @@ export interface TaskSchedulerPort {
   update(req: UpdateTaskRequest): void;
 }
 
-export interface GroupRegistryPort {
-  register(req: RegisterGroupRequest): void;
-}
-
 export type ScheduleType = 'cron' | 'interval' | 'once';
 
 export interface ScheduleTaskRequest {
@@ -78,14 +74,6 @@ export interface ScheduledTaskSummary {
   groupFolder: string;
 }
 
-export interface RegisterGroupRequest {
-  jid: string;
-  name: string;
-  folder: string;
-  trigger: string;
-  requiresTrigger: boolean;
-}
-
 /**
  * Per-chat output capability. Resolved once at construction (the channel
  * that owns this chat is bound at that point); extensions/handlers should
@@ -101,18 +89,15 @@ export interface ExtensionCtx extends ChatSink {
   chatJid: string;
   isMain: boolean;
   taskScheduler: TaskSchedulerPort;
-  groupRegistry: GroupRegistryPort;
 }
 
 /**
  * Process-wide ports — the substrate hosts (run.ts, task-scheduler.ts)
- * use to construct `ExtensionCtx` per chat. The router carries the
- * outbound + logging behavior; the registries are state ports.
+ * use to construct `ExtensionCtx` per chat.
  */
 export interface ExtensionPorts {
   router: RouterPort;
   taskScheduler: TaskSchedulerPort;
-  groupRegistry: GroupRegistryPort;
 }
 
 /** Bind a jid-parameterized router into a per-chat sink. */
@@ -136,6 +121,5 @@ export function buildExtensionCtx(args: {
     isMain: args.isMain,
     send: sink.send,
     taskScheduler: args.ports.taskScheduler,
-    groupRegistry: args.ports.groupRegistry,
   };
 }
